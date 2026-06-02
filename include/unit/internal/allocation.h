@@ -5,7 +5,7 @@
 #include <unit/context.h>
 
 // Enable this for debugging with valgrind
-#if 1
+#if 0
 #include <stdlib.h>
 #include <string.h>
 

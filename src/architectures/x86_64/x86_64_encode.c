@@ -17,20 +17,15 @@ enum {
     OPCODE_JMP_REL32 = 0xE9,
     OPCODE_CMP_RM64_IMM8  = 0x83,
     OPCODE_CMP_RM64_R64 = 0x39,
-    OPCODE_JCC_REL32 = 0x0F, // second byte selects condition
-    OPCODE_JE_REL32 = 0x84, // jump if equal
-    OPCODE_JNE_REL32 = 0x85,  // jump if not equal
-    OPCODE_JL_REL32 = 0x8C,  // jump if less
-    OPCODE_JGE_REL32 = 0x8D,  // jump if greater or equal
-    OPCODE_JLE_REL32 = 0x8E,  // jump if less or equal
-    OPCODE_JG_REL32 = 0x8F,  // jump if greater
+    OPCODE_JCC_REL32 = 0x0F,
+    OPCODE_JE_REL32 = 0x84,
+    OPCODE_JNE_REL32 = 0x85,
+    OPCODE_JL_REL32 = 0x8C,
+    OPCODE_JGE_REL32 = 0x8D,
+    OPCODE_JLE_REL32 = 0x8E,
+    OPCODE_JG_REL32 = 0x8F,
     OPCODE_LEA = 0x8D,
 };
-
-/*
- * The "group" name comes from Intel. They call opcodes like FF and 83 "groups"
- * because the reg field of ModRM selects which instruction it actually is.
- */
 
 // Multi-purpose opcodes (specify the actual thing using ModRM)
 enum {
@@ -65,22 +60,9 @@ enum {
 };
 
 enum {
-    // SIB byte fields: (scale << 6) | (index << 3) | base
-    // RSP as index means "no index"
-    SIB_RSP_BASE = 0x24,  // base=RSP, index=none, scale=1
+    SIB_RSP_BASE = 0x24,
 };
 
-/* REX is a single byte used to access 64-bit features.
- * This is definitely not intuitive.
- *
- * W: Indicates that the operand size is 64-bit.
- * R: Used to access higher registers. When set, the reg field in ModRM starts
- * at r8 instead of r1.
- * X: Just leave this at zero for now. This is apparently useful for something
- * called "SIB".
- * B: Also used to access higher registers. When set, the rm field in ModRM
- * starts at r8.
- */
 static uint8_t
 rex(uint8_t w, uint8_t r, uint8_t x, uint8_t b) {
     return
@@ -92,19 +74,12 @@ rex(uint8_t w, uint8_t r, uint8_t x, uint8_t b) {
 }
 
 typedef enum {
-    MOD_INDIRECT = 0x0, // register is a memory Address
-    MOD_INDIRECT_DISP8 = 0x1, // memory + 8-bit offset
-    MOD_INDIRECT_DISP32 = 0x2, // memory + 32-bit offset
-    MOD_REGISTER = 0x3, // register directly
+    MOD_INDIRECT = 0x0,
+    MOD_INDIRECT_DISP8 = 0x1,
+    MOD_INDIRECT_DISP32 = 0x2,
+    MOD_REGISTER = 0x3,
 } ModRM_Mode;
 
-/* ModRM is a single byte after the opcode that tells the CPU how to
- * interpret the operands.
- *
- * mod: The mode.
- * reg: Either a register or an opcode extension.
- * rm: The other register or the base for a memory Address.
- */
 static uint8_t
 modrm(ModRM_Mode mode, uint8_t reg, uint8_t rm) {
     return
@@ -134,6 +109,16 @@ add_jump(_UNIT_CompileContext *compile_context, UNIT_Size label_index)
     return UNIT_OK;
 }
 
+static inline uint8_t
+needs_rex_r(_UNIT_X86_64_Register reg) {
+    return reg >= 8;
+}
+
+static inline uint8_t
+reg_bits(_UNIT_X86_64_Register reg) {
+    return reg & 0x7;
+}
+
 UNIT_Status
 _UNIT_X86_64_encode_instruction(_UNIT_CompileContext *compile_context,
                                 _UNIT_X86_64_Instruction *instr)
@@ -161,6 +146,12 @@ _UNIT_X86_64_encode_instruction(_UNIT_CompileContext *compile_context,
     }                                                               \
     EMIT32(0x00);
 
+// First argument is the register in the ModRM reg field (REX.R),
+// second argument is the register in ModRM rm field (REX.B).
+// Pass 0 when that field isn't a register.
+#define EMIT_REX(r_reg, b_reg)                                  \
+    EMIT8(rex(1, needs_rex_r(r_reg), 0, needs_rex_r(b_reg)))
+
         case X86_64_RET: {
             EMIT8(OPCODE_RET);
             break;
@@ -176,48 +167,48 @@ _UNIT_X86_64_encode_instruction(_UNIT_CompileContext *compile_context,
             _UNIT_X86_64_Operand dst = instr->operands[0];
             _UNIT_X86_64_Operand src = instr->operands[1];
 
-            // mov reg, imm64
+            // mov reg, imm64 (register encoded in opcode byte, uses REX.B)
             if (dst.kind == OPERAND_REGISTER && src.kind == OPERAND_IMMEDIATE) {
-                EMIT8(rex(1, 0, 0, 0));
-                EMIT8(OPCODE_MOV_R64_IMM64 + dst.reg);
+                EMIT_REX(0, dst.reg);
+                EMIT8(OPCODE_MOV_R64_IMM64 + reg_bits(dst.reg));
                 EMIT64(src.immediate);
             }
-            // mov reg, reg
+            // mov reg, reg (src in reg field, dst in rm field)
             else if (dst.kind == OPERAND_REGISTER && src.kind == OPERAND_REGISTER) {
-                EMIT8(rex(1, 0, 0, 0));
+                EMIT_REX(src.reg, dst.reg);
                 EMIT8(OPCODE_MOV_RM64_R64);
-                EMIT8(modrm(MOD_REGISTER, src.reg, dst.reg));
+                EMIT8(modrm(MOD_REGISTER, reg_bits(src.reg), reg_bits(dst.reg)));
             }
-            // mov [rsp + offset], reg
+            // mov [rsp + offset], reg (src.reg in reg field, RSP in rm)
             else if (dst.kind == OPERAND_STACK && src.kind == OPERAND_REGISTER) {
-                EMIT8(rex(1, 0, 0, 0));
+                EMIT_REX(src.reg, 0);
                 EMIT8(OPCODE_MOV_RM64_R64);
                 if (dst.immediate == 0) {
-                    EMIT8(modrm(MOD_INDIRECT, src.reg, REG_RSP));
+                    EMIT8(modrm(MOD_INDIRECT, reg_bits(src.reg), REG_RSP));
                     EMIT8(SIB_RSP_BASE);
                 } else if (dst.immediate <= 127) {
-                    EMIT8(modrm(MOD_INDIRECT_DISP8, src.reg, REG_RSP));
+                    EMIT8(modrm(MOD_INDIRECT_DISP8, reg_bits(src.reg), REG_RSP));
                     EMIT8(SIB_RSP_BASE);
                     EMIT8((uint8_t)dst.immediate);
                 } else {
-                    EMIT8(modrm(MOD_INDIRECT_DISP32, src.reg, REG_RSP));
+                    EMIT8(modrm(MOD_INDIRECT_DISP32, reg_bits(src.reg), REG_RSP));
                     EMIT8(SIB_RSP_BASE);
                     EMIT32((uint32_t)dst.immediate);
                 }
             }
-            // mov reg, [rsp + offset]
+            // mov reg, [rsp + offset] (dst.reg in reg field, RSP in rm)
             else if (dst.kind == OPERAND_REGISTER && src.kind == OPERAND_STACK) {
-                EMIT8(rex(1, 0, 0, 0));
+                EMIT_REX(dst.reg, 0);
                 EMIT8(OPCODE_MOV_R64_RM64);
                 if (src.immediate == 0) {
-                    EMIT8(modrm(MOD_INDIRECT, dst.reg, REG_RSP));
+                    EMIT8(modrm(MOD_INDIRECT, reg_bits(dst.reg), REG_RSP));
                     EMIT8(SIB_RSP_BASE);
                 } else if (src.immediate <= 127) {
-                    EMIT8(modrm(MOD_INDIRECT_DISP8, dst.reg, REG_RSP));
+                    EMIT8(modrm(MOD_INDIRECT_DISP8, reg_bits(dst.reg), REG_RSP));
                     EMIT8(SIB_RSP_BASE);
                     EMIT8((uint8_t)src.immediate);
                 } else {
-                    EMIT8(modrm(MOD_INDIRECT_DISP32, dst.reg, REG_RSP));
+                    EMIT8(modrm(MOD_INDIRECT_DISP32, reg_bits(dst.reg), REG_RSP));
                     EMIT8(SIB_RSP_BASE);
                     EMIT32((uint32_t)src.immediate);
                 }
@@ -229,19 +220,19 @@ _UNIT_X86_64_encode_instruction(_UNIT_CompileContext *compile_context,
             _UNIT_X86_64_Operand dst = instr->operands[0];
             _UNIT_X86_64_Operand src = instr->operands[1];
 
-            // add reg, reg
+            // add reg, reg (src in reg field, dst in rm field)
             if (dst.kind == OPERAND_REGISTER && src.kind == OPERAND_REGISTER) {
-                EMIT8(rex(1, 0, 0, 0));
+                EMIT_REX(src.reg, dst.reg);
                 EMIT8(OPCODE_ADD_RM64_R64);
-                EMIT8(modrm(MOD_REGISTER, src.reg, dst.reg));
+                EMIT8(modrm(MOD_REGISTER, reg_bits(src.reg), reg_bits(dst.reg)));
             }
-            // add reg, imm32
+            // add reg, imm32 (group opcode, dst in rm field)
             else {
                 assert(src.kind == OPERAND_IMMEDIATE);
                 assert(dst.kind == OPERAND_REGISTER);
-                EMIT8(rex(1, 0, 0, 0));
+                EMIT_REX(0, dst.reg);
                 EMIT8(OPCODE_GROUP1_IMM32);
-                EMIT8(modrm(MOD_REGISTER, GROUP1_ADD, dst.reg));
+                EMIT8(modrm(MOD_REGISTER, GROUP1_ADD, reg_bits(dst.reg)));
                 EMIT32((uint32_t)src.immediate);
             }
             break;
@@ -250,16 +241,14 @@ _UNIT_X86_64_encode_instruction(_UNIT_CompileContext *compile_context,
         case X86_64_CALL_INDIRECT: {
             _UNIT_X86_64_Operand target = instr->operands[0];
             assert(target.kind == OPERAND_REGISTER);
-            EMIT8(rex(1, 0, 0, 0));
+            EMIT_REX(0, target.reg);
             EMIT8(OPCODE_GROUP5);
-            EMIT8(modrm(MOD_REGISTER, GROUP5_CALL, target.reg));
+            EMIT8(modrm(MOD_REGISTER, GROUP5_CALL, reg_bits(target.reg)));
             break;
         }
 
         case X86_64_CALL_SYMBOL: {
             EMIT8(OPCODE_CALL_REL32);
-            // Record the offset where the linker needs to patch
-            // (this is where the 4-byte displacement starts)
             _UNIT_Relocation *relocation = _UNIT_Relocation_NewCall(
                 compile_context->context,
                 INDEX(),
@@ -290,35 +279,33 @@ _UNIT_X86_64_encode_instruction(_UNIT_CompileContext *compile_context,
                                             INDEX()))) {
                 goto error;
             }
-            // Labels are just markers; don't emit anything.
             break;
         }
 
         case X86_64_COMPARE: {
             _UNIT_X86_64_Operand dst = instr->operands[0];
             _UNIT_X86_64_Operand src = instr->operands[1];
-            // cmp reg, imm
+            // cmp reg, imm (group opcode, dst in rm field)
             if (dst.kind == OPERAND_REGISTER && src.kind == OPERAND_IMMEDIATE) {
-                EMIT8(rex(1, 0, 0, 0));
+                EMIT_REX(0, dst.reg);
                 EMIT8(OPCODE_CMP_RM64_IMM8);
-                EMIT8(modrm(MOD_REGISTER, GROUP1_CMP, dst.reg));
+                EMIT8(modrm(MOD_REGISTER, GROUP1_CMP, reg_bits(dst.reg)));
                 EMIT8((uint8_t)src.immediate);
             }
-            // cmp reg, reg
+            // cmp reg, reg (src in reg field, dst in rm field)
             else {
                 assert(src.kind == OPERAND_REGISTER);
                 assert(dst.kind == OPERAND_REGISTER);
-                EMIT8(rex(1, 0, 0, 0));
+                EMIT_REX(src.reg, dst.reg);
                 EMIT8(OPCODE_CMP_RM64_R64);
-                EMIT8(modrm(MOD_REGISTER, src.reg, dst.reg));
+                EMIT8(modrm(MOD_REGISTER, reg_bits(src.reg), reg_bits(dst.reg)));
             }
-
             break;
         }
 
 #define CONDITIONAL_JUMP_CASE(name, condition_opcode)           \
     case name: {                                                \
-        UNIT_Size label_index = instr->operands[0].immediate;   \
+        UNIT_Size label_index = instr->operands[0].immediate;  \
         EMIT8(OPCODE_JCC_REL32);                                \
         EMIT8(condition_opcode);                                \
         EMIT_JUMP(label_index);                                 \
@@ -340,12 +327,13 @@ _UNIT_X86_64_encode_instruction(_UNIT_CompileContext *compile_context,
             _UNIT_SizeMap *string_offsets = &compile_context->string_data.string_offsets;
             UNIT_Size byte_offset = _UNIT_SizeMap_GET(string_offsets, string_index);
 
-            EMIT8(rex(1, 0, 0, 0));
+            // lea reg, [rip + disp32] (dst in reg field, rm=5 for RIP-relative)
+            EMIT_REX(dst.reg, 0);
             EMIT8(OPCODE_LEA);
-            EMIT8(modrm(MOD_INDIRECT, dst.reg, 5));
+            EMIT8(modrm(MOD_INDIRECT, reg_bits(dst.reg), 5));
 
-            _UNIT_Relocation *relocation = _UNIT_Relocation_NewData(compile_context->context, INDEX(),
-                                                                    byte_offset);
+            _UNIT_Relocation *relocation = _UNIT_Relocation_NewData(
+                compile_context->context, INDEX(), byte_offset);
             if (relocation == NULL) {
                 goto error;
             }
@@ -361,22 +349,22 @@ _UNIT_X86_64_encode_instruction(_UNIT_CompileContext *compile_context,
             _UNIT_X86_64_Operand dst = instr->operands[0];
             _UNIT_X86_64_Operand src = instr->operands[1];
 
-            // lea reg, [rsp + offset]
-            if (dst.kind == OPERAND_REGISTER && src.kind == OPERAND_STACK) {
-                EMIT8(rex(1, 0, 0, 0));
-                EMIT8(OPCODE_LEA);
-                if (src.immediate == 0) {
-                    EMIT8(modrm(MOD_INDIRECT, dst.reg, REG_RSP));
-                    EMIT8(SIB_RSP_BASE);
-                } else if (src.immediate <= 127) {
-                    EMIT8(modrm(MOD_INDIRECT_DISP8, dst.reg, REG_RSP));
-                    EMIT8(SIB_RSP_BASE);
-                    EMIT8((uint8_t)src.immediate);
-                } else {
-                    EMIT8(modrm(MOD_INDIRECT_DISP32, dst.reg, REG_RSP));
-                    EMIT8(SIB_RSP_BASE);
-                    EMIT32((uint32_t)src.immediate);
-                }
+            // lea reg, [rsp + offset] (dst in reg field, RSP in rm)
+            assert(dst.kind == OPERAND_REGISTER);
+            assert(src.kind == OPERAND_STACK);
+            EMIT_REX(dst.reg, 0);
+            EMIT8(OPCODE_LEA);
+            if (src.immediate == 0) {
+                EMIT8(modrm(MOD_INDIRECT, reg_bits(dst.reg), REG_RSP));
+                EMIT8(SIB_RSP_BASE);
+            } else if (src.immediate <= 127) {
+                EMIT8(modrm(MOD_INDIRECT_DISP8, reg_bits(dst.reg), REG_RSP));
+                EMIT8(SIB_RSP_BASE);
+                EMIT8((uint8_t)src.immediate);
+            } else {
+                EMIT8(modrm(MOD_INDIRECT_DISP32, reg_bits(dst.reg), REG_RSP));
+                EMIT8(SIB_RSP_BASE);
+                EMIT32((uint32_t)src.immediate);
             }
             break;
         }
@@ -397,7 +385,6 @@ _UNIT_X86_64_PatchPrologue(_UNIT_CompileContext *context,
                         UNIT_Size prologue_offset)
 {
     if (context->frame_size > 0) {
-        // Align to 16 bytes
         if (context->frame_size % 16 != 0) {
             context->frame_size += 16 - (context->frame_size % 16);
         }
@@ -432,8 +419,6 @@ _UNIT_X86_64_PatchJumps(_UNIT_CompileContext *context)
         UNIT_Size label_offset = _UNIT_SizeMap_GET(&context->jump_table.label_offsets,
                                                     jump->label_index);
 
-        // Displacement is relative to the end of the jmp instruction.
-        // The end is 4 bytes after patch_offset (the rel32 field).
         UNIT_Size instruction_end = jump->patch_offset + 4;
         int32_t displacement = (int32_t)(label_offset - instruction_end);
         _UNIT_CodeBuffer_Patch32(&context->buffer, jump->patch_offset,
