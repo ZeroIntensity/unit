@@ -15,7 +15,8 @@ typedef enum {
     LOCATION,
     REGISTER,
     CALL_ARGS,
-    COMPARISON
+    COMPARISON,
+    MEMORY
 } _UNIT_MachineItem_Type;
 
 typedef struct _UNIT_MachineItem {
@@ -50,7 +51,7 @@ typedef enum {
     _UNIT_I_JUMP_IF_GREATER_EQUAL,
     _UNIT_I_JUMP_IF_LESS_EQUAL,
     _UNIT_I_LOAD_STRING,
-    _UNIT_I_ADDRESS_OF
+    _UNIT_I_ADDRESS_OF,
 } _UNIT_MachineInstruction;
 
 typedef struct {
@@ -84,6 +85,7 @@ typedef struct {
     _UNIT_SizeMap symbols;
     _UNIT_Map strings; // UNIT_Size -> char*
     _UNIT_MachineItem *item_list_head; // Head of machine item linked list
+    UNIT_Size num_memory_slots; // Not a huge fan of this but it'll do
 } _UNIT_Translation;
 
 UNIT_Status

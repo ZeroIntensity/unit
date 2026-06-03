@@ -26,7 +26,7 @@ typedef enum {
     UNIT_OP_JUMP_IF_FALSE,
     UNIT_OP_JUMP_IF_TRUE,
     UNIT_OP_COMPARE,
-    UNIT_OP_ADDRESS_OF
+    UNIT_OP_ADDRESS_OF,
 } UNIT_Instruction;
 
 typedef enum {

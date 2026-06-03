@@ -53,10 +53,7 @@ machine_item_to_operand(_UNIT_MachineItem *machine_item)
         printf("cannot use call args as operand");
         abort();
     } else {
-        return (_UNIT_X86_64_Operand) {
-            .kind = OPERAND_MEMORY,
-            .immediate = 0
-        };
+        return stack_slot(machine_item->value * 8);
     }
 }
 
@@ -280,6 +277,9 @@ _UNIT_X86_64_FromTranslation(_UNIT_Translation *translation,
     // Reserve space for the prologue (sub rsp, imm32 = 7 bytes).
     // We'll patch it once we know the final frame size.
     UNIT_Size prologue_offset = _UNIT_CodeBuffer_Reserve(&compile_context->buffer, 7);
+
+    // Reserve space for the stack variables
+    compile_context->frame_size = translation->num_memory_slots * 8;
 
     assert(translation != NULL);
     UNIT_Size blocks_size = _UNIT_Vector_SIZE(&translation->blocks);

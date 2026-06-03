@@ -141,6 +141,8 @@ print_machine_item(_UNIT_MachineItem *item)
                 break;
         }
         print_machine_item(item->comparison.right);
+    } else if (item->type == MEMORY) {
+        printf("stack_address_%d", item->value);
     } else {
         assert(item->type == REGISTER);
         printf("register_%d", item->value);
@@ -524,6 +526,92 @@ create_jump_label_blocks(UNIT_Context *context, _UNIT_Vector *jump_labels)
 
 }
 
+typedef struct {
+    UNIT_Size location_id;
+    // Assigned when address is taken, then location_id becomes invalid
+    UNIT_Size stack_slot;
+} _UNIT_LocalState;
+
+typedef struct {
+    UNIT_Context *context;
+    _UNIT_Map locals_map;
+    UNIT_Size next_stack_slot;
+} _UNIT_LocalVariables;
+
+static bool
+compare_int32_deref(void *ptr_a, void *ptr_b)
+{
+    return *((int32_t *)ptr_a) == *((int32_t *)ptr_b);
+}
+
+static UNIT_Size
+hash_int32_deref(void *key)
+{
+    return (UNIT_Size)(*(int32_t *)key);
+}
+
+static UNIT_Status
+_UNIT_LocalVariables_Init(_UNIT_LocalVariables *locals, UNIT_Context *context)
+{
+    assert(locals != NULL);
+    assert(context != NULL);
+    locals->context = context;
+    locals->next_stack_slot = 0;
+    if (UNIT_FAILED(_UNIT_Map_Init(&locals->locals_map, context, 8, compare_int32_deref,
+                                   hash_int32_deref, _UNIT_Dealloc, _UNIT_Dealloc))) {
+        return UNIT_FAIL;
+    }
+
+    return UNIT_OK;
+}
+
+UNIT_Status
+create_new_local(_UNIT_LocalVariables *locals, int32_t name, UNIT_Size id)
+{
+    assert(locals != NULL);
+    // Technically the name could be negative so we won't assert here.
+    assert(id >= 0);
+    UNIT_Context *context = locals->context;
+    int32_t *copy = _UNIT_Alloc(context, sizeof(int32_t));
+    if (copy == NULL) {
+        return UNIT_FAIL;
+    }
+
+    *copy = name;
+
+    _UNIT_LocalState *local_state = _UNIT_Alloc(context, sizeof(_UNIT_LocalState));
+    if (local_state == NULL) {
+        _UNIT_Dealloc(context, copy);
+        return UNIT_FAIL;
+    }
+
+    local_state->location_id = id;
+    local_state->stack_slot = -1;
+
+    if (UNIT_FAILED(_UNIT_Map_Set(&locals->locals_map, copy, local_state))) {
+        _UNIT_Dealloc(context, copy);
+        _UNIT_Dealloc(context, local_state);
+        return UNIT_FAIL;
+    }
+
+    return UNIT_OK;
+}
+
+_UNIT_LocalState *
+get_local(_UNIT_LocalVariables *locals, int32_t name)
+{
+    assert(locals != NULL);
+    _UNIT_LocalState *local_state = _UNIT_Map_Get(&locals->locals_map, &name);
+    assert(local_state != NULL);
+    return local_state;
+}
+
+void
+_UNIT_LocalVariables_Clear(_UNIT_LocalVariables *locals)
+{
+    _UNIT_Map_Clear(&locals->locals_map);
+}
+
 UNIT_Status
 _UNIT_Translation_InitFromProcedure(_UNIT_Translation *translation,
                                     UNIT_Procedure *procedure)
@@ -539,8 +627,8 @@ _UNIT_Translation_InitFromProcedure(_UNIT_Translation *translation,
         return UNIT_FAIL;
     }
 
-    _UNIT_SizeMap local_to_location;
-    if (UNIT_FAILED(_UNIT_SizeMap_Init(&local_to_location, context, 8))) {
+    _UNIT_LocalVariables locals;
+    if (UNIT_FAILED(_UNIT_LocalVariables_Init(&locals, context))) {
         _UNIT_Vector_Clear(&stack);
         return UNIT_FAIL;
     }
@@ -549,14 +637,14 @@ _UNIT_Translation_InitFromProcedure(_UNIT_Translation *translation,
                       _UNIT_Map_CompareEqual, _UNIT_Map_HashDirect,
                       NULL, _UNIT_Dealloc))) {
         _UNIT_Vector_Clear(&stack);
-        _UNIT_SizeMap_Clear(&local_to_location);
+        _UNIT_LocalVariables_Clear(&locals);
         return UNIT_FAIL;
     }
 
     if (UNIT_FAILED(_UNIT_SizeMap_Init(&translation->symbols, context, 8))) {
         _UNIT_Vector_Clear(&stack);
         _UNIT_Map_Clear(&translation->strings);
-        _UNIT_SizeMap_Clear(&local_to_location);
+        _UNIT_LocalVariables_Clear(&locals);
         return UNIT_FAIL;
     }
 
@@ -565,7 +653,7 @@ _UNIT_Translation_InitFromProcedure(_UNIT_Translation *translation,
         _UNIT_Vector_Clear(&stack);
         _UNIT_SizeMap_Clear(&translation->symbols);
         _UNIT_Map_Clear(&translation->strings);
-        _UNIT_SizeMap_Clear(&local_to_location);
+        _UNIT_LocalVariables_Clear(&locals);
         return UNIT_FAIL;
     }
 
@@ -667,9 +755,7 @@ _UNIT_Translation_InitFromProcedure(_UNIT_Translation *translation,
 
             case UNIT_OP_STORE_LOCAL: {
                 UNIT_Size location_id = UNIQUE_ID();
-                if (UNIT_FAILED(_UNIT_SizeMap_Set(&local_to_location,
-                                                  operation->argument,
-                                                  location_id))) {
+                if (UNIT_FAILED(create_new_local(&locals, operation->argument, location_id))) {
                     return UNIT_FAIL;
                 }
 
@@ -684,12 +770,15 @@ _UNIT_Translation_InitFromProcedure(_UNIT_Translation *translation,
             }
 
             case UNIT_OP_LOAD_LOCAL: {
-                //if (UNIT_FAILED(extend_lifetime(translation, operation->argument))) {
-                //    goto error;
-                //}
-                UNIT_Size location_id = _UNIT_SizeMap_GET(&local_to_location,
-                                                          operation->argument);
-                PUSH_NEW(LOCATION, location_id);
+                _UNIT_LocalState *local_state = get_local(&locals, operation->argument);
+                if (local_state->stack_slot == -1) {
+                    PUSH_NEW(LOCATION, local_state->location_id);
+                } else {
+                    _UNIT_MachineItem *slot = new_machine_item(translation, MEMORY,
+                                                               local_state->stack_slot, NULL);
+                    CREATE_DESTINATION(destination);
+                    EMIT_DEST_ONE(_UNIT_I_MOVE, destination, slot);
+                }
                 break;
             }
 
@@ -869,7 +958,35 @@ _UNIT_Translation_InitFromProcedure(_UNIT_Translation *translation,
             }
 
             case UNIT_OP_ADDRESS_OF: {
-                _UNIT_MachineItem *value = POP();
+                _UNIT_LocalState *local_state = get_local(&locals, operation->argument);
+                // When a variable has its address used, then we can no longer
+                // use it in registers.
+                if (local_state->stack_slot == -1) {
+                    local_state->stack_slot = locals.next_stack_slot++;
+                    _UNIT_MachineItem *variable = new_machine_item(translation, LOCATION,
+                                                                   local_state->location_id, NULL);
+                    if (variable == NULL) {
+                        goto error;
+                    }
+
+                    _UNIT_MachineItem *slot = new_machine_item(translation, MEMORY,
+                                                               local_state->stack_slot, NULL);
+                    EMIT_DEST_ONE(_UNIT_I_MOVE, slot, variable);
+                }
+
+                _UNIT_MachineItem *value;
+                if (local_state->stack_slot == -1) {
+                    value = new_machine_item(translation, LOCATION,
+                                             local_state->location_id, NULL);
+                } else {
+                    value = new_machine_item(translation, MEMORY,
+                                             local_state->stack_slot, NULL);
+                }
+
+                if (value == NULL) {
+                    goto error;
+                }
+
                 CREATE_DESTINATION(destination);
                 EMIT_DEST_ONE(_UNIT_I_ADDRESS_OF, destination, value);
                 break;
@@ -881,11 +998,13 @@ _UNIT_Translation_InitFromProcedure(_UNIT_Translation *translation,
     }
 
     _UNIT_Vector_Clear(&stack);
-    _UNIT_SizeMap_Clear(&local_to_location);
+    _UNIT_LocalVariables_Clear(&locals);
+    // This is so we can determine the size of the frame later
+    translation->num_memory_slots = locals.next_stack_slot;
     return analyze_liveness(translation);
 error:
     _UNIT_Vector_Clear(&stack);
-    _UNIT_SizeMap_Clear(&local_to_location);
+    _UNIT_LocalVariables_Clear(&locals);
     _UNIT_SizeMap_Clear(&translation->symbols);
     _UNIT_Map_Clear(&translation->strings);
     _UNIT_Vector_Clear(&translation->blocks);
