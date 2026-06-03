@@ -568,7 +568,7 @@ _UNIT_LocalVariables_Init(_UNIT_LocalVariables *locals, UNIT_Context *context)
     return UNIT_OK;
 }
 
-UNIT_Status
+_UNIT_LocalState *
 create_new_local(_UNIT_LocalVariables *locals, int32_t name, UNIT_Size id)
 {
     assert(locals != NULL);
@@ -577,7 +577,7 @@ create_new_local(_UNIT_LocalVariables *locals, int32_t name, UNIT_Size id)
     UNIT_Context *context = locals->context;
     int32_t *copy = _UNIT_Alloc(context, sizeof(int32_t));
     if (copy == NULL) {
-        return UNIT_FAIL;
+        return NULL;
     }
 
     *copy = name;
@@ -585,7 +585,7 @@ create_new_local(_UNIT_LocalVariables *locals, int32_t name, UNIT_Size id)
     _UNIT_LocalState *local_state = _UNIT_Alloc(context, sizeof(_UNIT_LocalState));
     if (local_state == NULL) {
         _UNIT_Dealloc(context, copy);
-        return UNIT_FAIL;
+        return NULL;
     }
 
     local_state->location_id = id;
@@ -594,10 +594,10 @@ create_new_local(_UNIT_LocalVariables *locals, int32_t name, UNIT_Size id)
     if (UNIT_FAILED(_UNIT_Map_Set(&locals->locals_map, copy, local_state))) {
         _UNIT_Dealloc(context, copy);
         _UNIT_Dealloc(context, local_state);
-        return UNIT_FAIL;
+        return NULL;
     }
 
-    return UNIT_OK;
+    return local_state;
 }
 
 _UNIT_LocalState *
@@ -658,6 +658,30 @@ _UNIT_Translate(_UNIT_Translation *translation,
         _UNIT_Map_Clear(&translation->strings);
         _UNIT_LocalVariables_Clear(&locals);
         return UNIT_FAIL;
+    }
+
+
+    _UNIT_SizeSet address_taken_locals;
+    if (UNIT_FAILED(_UNIT_SizeSet_Init(&address_taken_locals, context, 8))) {
+        _UNIT_Vector_Clear(&stack);
+        _UNIT_SizeMap_Clear(&translation->symbols);
+        _UNIT_Map_Clear(&translation->strings);
+        _UNIT_LocalVariables_Clear(&locals);
+        _UNIT_Vector_Clear(&translation->blocks);
+        return UNIT_FAIL;
+    }
+
+    UNIT_Size size = _UNIT_Vector_SIZE(&procedure->_instructions);
+
+    // TODO: This is ugly
+    for (UNIT_Size index = 0; index < size; ++index) {
+        _UNIT_Operation *operation = _UNIT_Vector_GET(&procedure->_instructions, index);
+        assert(operation != NULL);
+        if (operation->instruction == UNIT_OP_ADDRESS_OF) {
+            if (UNIT_FAILED(_UNIT_SizeSet_Add(&address_taken_locals, operation->argument))) {
+                goto error;
+            }
+        }
     }
 
 
@@ -752,7 +776,6 @@ _UNIT_Translate(_UNIT_Translation *translation,
 
     START_NEW_BLOCK();
 
-    UNIT_Size size = _UNIT_Vector_SIZE(&procedure->_instructions);
     for (UNIT_Size index = 0; index < size; ++index) {
         _UNIT_Operation *operation = _UNIT_Vector_GET(&procedure->_instructions, index);
         switch (operation->instruction) {
@@ -761,32 +784,49 @@ _UNIT_Translate(_UNIT_Translation *translation,
                 break;
             }
 
-            case UNIT_OP_STORE_LOCAL: {
-                UNIT_Size location_id = UNIQUE_ID();
-                if (UNIT_FAILED(create_new_local(&locals, operation->argument, location_id))) {
-                    return UNIT_FAIL;
-                }
+        case UNIT_OP_STORE_LOCAL: {
+            UNIT_Size location_id = UNIQUE_ID();
+            _UNIT_LocalState *local_state = create_new_local(&locals,
+                                                             operation->argument,
+                                                             location_id);
+            _UNIT_MachineItem *location = create_new_location(translation,
+                                                              CURRENT_BLOCK(),
+                                                              location_id);
+            if (location == NULL) {
+                goto error;
+            }
 
-                _UNIT_MachineItem *location = create_new_location(translation, CURRENT_BLOCK(),
-                                                                  location_id);
-                if (location == NULL) {
+            POP_TO_VAR(item);
+            EMIT_DEST_ONE(_UNIT_I_MOVE, location, item);
+
+            if (_UNIT_SizeSet_Contains(&address_taken_locals, operation->argument)) {
+                local_state->stack_slot = locals.next_stack_slot++;
+                _UNIT_MachineItem *slot = new_machine_item(translation, MEMORY,
+                                                           local_state->stack_slot, NULL);
+                if (slot == NULL) {
                     goto error;
                 }
-                POP_TO_VAR(item);
-                EMIT_DEST_ONE(_UNIT_I_MOVE, location, item);
-                break;
+                // Sharing machine items is probably not a great idea but it's
+                // not causing any problems at the moment. We can easily make
+                // a copy of the location later if we need to.
+                EMIT_DEST_ONE(_UNIT_I_MOVE, slot, location);
             }
+            break;
+        }
 
             case UNIT_OP_LOAD_LOCAL: {
                 _UNIT_LocalState *local_state = get_local(&locals, operation->argument);
-                if (local_state->stack_slot == -1) {
-                    PUSH_NEW(LOCATION, local_state->location_id);
-                } else {
+                if (local_state->stack_slot != -1) {
                     _UNIT_MachineItem *slot = new_machine_item(translation, MEMORY,
                                                                local_state->stack_slot, NULL);
+                    if (slot == NULL) {
+                        goto error;
+                    }
                     CREATE_DESTINATION(destination);
                     EMIT_DEST_ONE(_UNIT_I_MOVE, destination, slot);
                 }
+
+                PUSH_NEW(LOCATION, local_state->location_id);
                 break;
             }
 
@@ -970,20 +1010,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
 
             case UNIT_OP_ADDRESS_OF: {
                 _UNIT_LocalState *local_state = get_local(&locals, operation->argument);
-                // When a variable has its address used, then we can no longer
-                // use it in registers.
-                if (local_state->stack_slot == -1) {
-                    local_state->stack_slot = locals.next_stack_slot++;
-                    _UNIT_MachineItem *variable = new_machine_item(translation, LOCATION,
-                                                                   local_state->location_id, NULL);
-                    if (variable == NULL) {
-                        goto error;
-                    }
-
-                    _UNIT_MachineItem *slot = new_machine_item(translation, MEMORY,
-                                                               local_state->stack_slot, NULL);
-                    EMIT_DEST_ONE(_UNIT_I_MOVE, slot, variable);
-                }
+                assert(local_state->stack_slot != -1);
 
                 _UNIT_MachineItem *value;
                 if (local_state->stack_slot == -1) {

@@ -68,8 +68,10 @@ error:
 }
 
 static void
-potentially_rewrite_item(_UNIT_SizeMap *assignments, _UNIT_MachineItem *item)
+potentially_rewrite_item(_UNIT_Translation *translation,
+                         _UNIT_SizeMap *assignments, _UNIT_MachineItem *item)
 {
+    assert(translation != NULL);
     assert(assignments != NULL);
     if (item == NULL) {
         return;
@@ -82,28 +84,34 @@ potentially_rewrite_item(_UNIT_SizeMap *assignments, _UNIT_MachineItem *item)
                                            &register_id))) {
             item->type = REGISTER;
             item->value = register_id;
+        } else {
+            // Spill :(
+            item->type = MEMORY;
+            item->value = ++translation->num_memory_slots;
         }
     } else if (item->type == CALL_ARGS) {
         UNIT_Size count = _UNIT_Vector_SIZE(item->call_args);
         for (UNIT_Size i = 0; i < count; ++i) {
-            potentially_rewrite_item(assignments,
+            potentially_rewrite_item(translation, assignments,
                                      _UNIT_Vector_GET(item->call_args, i));
         }
     }
 }
 
 static void
-rewrite_block_locations(_UNIT_BasicBlock *block, _UNIT_SizeMap *assignments)
+rewrite_block_locations(_UNIT_Translation *translation,
+                        _UNIT_BasicBlock *block, _UNIT_SizeMap *assignments)
 {
     assert(block != NULL);
     assert(assignments != NULL);
+    assert(translation != NULL);
     UNIT_Size size = _UNIT_Vector_SIZE(&block->instructions);
     for (UNIT_Size index = 0; index < size; ++index) {
         _UNIT_MachineOperation *operation = _UNIT_Vector_GET(&block->instructions,
                                                              index);
-        potentially_rewrite_item(assignments, operation->destination);
-        potentially_rewrite_item(assignments, operation->argument_1);
-        potentially_rewrite_item(assignments, operation->argument_2);
+        potentially_rewrite_item(translation, assignments, operation->destination);
+        potentially_rewrite_item(translation, assignments, operation->argument_1);
+        potentially_rewrite_item(translation, assignments, operation->argument_2);
     }
 }
 
@@ -130,11 +138,11 @@ _UNIT_Translation_AllocateRegisters(_UNIT_Translation *translation,
         }
     }
 
-    // Now rewrite all LOCATION items to REGISTER using assignments
+    // Now rewrite all LOCATION items
     for (UNIT_Size index = 0; index < size; ++index) {
         _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks, index);
         assert(block != NULL);
-        rewrite_block_locations(block, &assignments);
+        rewrite_block_locations(translation, block, &assignments);
     }
 
     _UNIT_SizeMap_Clear(&assignments);
