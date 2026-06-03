@@ -616,8 +616,8 @@ _UNIT_LocalVariables_Clear(_UNIT_LocalVariables *locals)
 }
 
 UNIT_Status
-_UNIT_Translation_InitFromProcedure(_UNIT_Translation *translation,
-                                    UNIT_Procedure *procedure)
+_UNIT_Translate(_UNIT_Translation *translation,
+                UNIT_Procedure *procedure)
 {
     assert(translation != NULL);
     assert(procedure != NULL);
@@ -717,7 +717,7 @@ _UNIT_Translation_InitFromProcedure(_UNIT_Translation *translation,
         if (varname == NULL) {                                                          \
             goto error;                                                                 \
         }
-    
+
     #define ARGUMENT_TO_ITEM(name, type)                                                            \
         _UNIT_MachineItem *name = new_machine_item(translation, type, operation->argument, NULL);   \
         if (name == NULL) {                                                                         \

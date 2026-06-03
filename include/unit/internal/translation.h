@@ -89,8 +89,8 @@ typedef struct {
 } _UNIT_Translation;
 
 UNIT_Status
-_UNIT_Translation_InitFromProcedure(_UNIT_Translation *translation,
-                                    UNIT_Procedure *procedure);
+_UNIT_Translate(_UNIT_Translation *translation,
+                UNIT_Procedure *procedure);
 
 void
 _UNIT_Translation_Clear(_UNIT_Translation *translation);

@@ -1,9 +1,11 @@
+#include <string.h>
+
+#include <unit/compilation.h>
+
 #include <unit/internal/architectures.h>
 #include <unit/internal/translation.h>
 #include <unit/internal/formats/elf.h>
 #include <unit/internal/compile_context.h>
-
-#include <string.h>
 
 _UNIT_Relocation *
 new_relocation(UNIT_Context *context, UNIT_Size offset, UNIT_Size symbol_index,
@@ -216,42 +218,80 @@ _UNIT_CompileContext_AllocateStackSlot(_UNIT_CompileContext *context)
     return offset;
 }
 
-UNIT_Status
-UNIT_CompileProcedure(UNIT_Procedure *procedure)
+
+void
+UNIT_CompiledProcedure_Free(UNIT_CompiledProcedure *compiled)
 {
-    _UNIT_Translation translation;
-    if (UNIT_FAILED(_UNIT_Translation_InitFromProcedure(&translation, procedure))) {
-        return UNIT_FAIL;
+    assert(compiled != NULL);
+    _UNIT_CompileContext_Clear(&compiled->_compile_context);
+    _UNIT_Translation_Clear(&compiled->_translation);
+    _UNIT_Dealloc(compiled->context, compiled);
+}
+
+
+UNIT_CompiledProcedure *
+UNIT_Compile(UNIT_Procedure *procedure, UNIT_Architecture architecture)
+{
+    assert(procedure != NULL);
+    UNIT_Context *context = procedure->context;
+    UNIT_CompiledProcedure *compiled_procedure = _UNIT_Alloc(context,
+                                                             sizeof(UNIT_CompiledProcedure));
+    if (compiled_procedure == NULL) {
+        return NULL;
+    }
+    compiled_procedure->context = context;
+
+    if (UNIT_FAILED(_UNIT_Translate(&compiled_procedure->_translation, procedure))) {
+        _UNIT_Dealloc(context, compiled_procedure);
+        return NULL;
     }
 
-    _UNIT_CompileContext context;
-    if (UNIT_FAILED(_UNIT_CompileContext_Init(&context, procedure->context,
+    if (UNIT_FAILED(_UNIT_CompileContext_Init(&compiled_procedure->_compile_context, procedure->context,
                                               &procedure->_symbols))) {
-        _UNIT_Translation_Clear(&translation);
-        return UNIT_FAIL;
+        _UNIT_Translation_Clear(&compiled_procedure->_translation);
+        _UNIT_Dealloc(context, compiled_procedure);
+        return NULL;
     }
 
-    if (UNIT_FAILED(_UNIT_Translation_AllocateRegisters(&translation, 8))) {
+    if (UNIT_FAILED(_UNIT_Translation_AllocateRegisters(&compiled_procedure->_translation, 8))) {
         goto error;
     }
 
-    _UNIT_Translation_PrintInstructions(&translation);
+    _UNIT_Translation_PrintInstructions(&compiled_procedure->_translation);
 
-    if (UNIT_FAILED(build_constant_data(&context.string_data,
+    if (UNIT_FAILED(build_constant_data(&compiled_procedure->_compile_context.string_data,
                                         &procedure->_global_strings))) {
         goto error;
     }
 
-    if (UNIT_FAILED(_UNIT_AMD64_FromTranslation(&translation, &context))) {
+    UNIT_Status result;
+    switch (architecture) {
+        case UNIT_ARCH_AMD64:
+            result = _UNIT_AMD64_FromTranslation(&compiled_procedure->_translation,
+                                                 &compiled_procedure->_compile_context);
+            break;
+        // TODO: Add more architectures here as we add them
+    }
+
+    if (UNIT_FAILED(result)) {
         goto error;
     }
 
-    UNIT_Status result = _UNIT_ELF_WriteObjectFile(&context, "test.o");
-    _UNIT_CompileContext_Clear(&context);
-    _UNIT_Translation_Clear(&translation);
-    return result;
+    return compiled_procedure;
 error:
-    _UNIT_CompileContext_Clear(&context);
-    _UNIT_Translation_Clear(&translation);
-    return UNIT_FAIL;
+    UNIT_CompiledProcedure_Free(compiled_procedure);
+    return NULL;
+}
+
+UNIT_Status
+UNIT_CompiledProcedure_WriteObjectFile(UNIT_CompiledProcedure *compiled,
+                                       const char *path,
+                                       UNIT_ExecutableFormat format)
+{
+    assert(compiled != NULL);
+    assert(path != NULL);
+    switch (format) {
+        case UNIT_FORMAT_ELF:
+            return _UNIT_ELF_WriteObjectFile(&compiled->_compile_context, path);
+    }
 }

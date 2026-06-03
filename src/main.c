@@ -111,10 +111,18 @@ int main(void)
 
     //ADDOP_INT(UNIT_OP_EXIT, 0);
 
-    if (UNIT_FAILED(UNIT_CompileProcedure(&procedure))) {
+    UNIT_CompiledProcedure *compiled = UNIT_Compile(&procedure, UNIT_ARCH_AMD64);
+    if (compiled == NULL) {
         goto error;
     }
 
+    if (UNIT_FAILED(UNIT_CompiledProcedure_WriteObjectFile(compiled,
+                                                           "test.o", UNIT_FORMAT_ELF))) {
+        UNIT_CompiledProcedure_Free(compiled);
+        goto error;
+    }
+
+    UNIT_CompiledProcedure_Free(compiled);
     UNIT_Procedure_Clear(&procedure);
     UNIT_Context_Clear(&context);
     return 0;
