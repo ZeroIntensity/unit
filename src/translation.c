@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <unit/errors.h>
 #include <unit/internal/allocation.h>
 #include <unit/internal/size_vector.h>
 #include <unit/internal/translation.h>
@@ -302,8 +303,10 @@ stack_pop(_UNIT_BasicBlock *block, _UNIT_Vector *stack,
     assert(operation != NULL);
     assert(_UNIT_Vector_SIZE(stack) >= 0);
     if (_UNIT_Vector_SIZE(stack) == 0) {
-        printf("stack underflow at %s\n", instruction_name(operation->instruction));
-        abort();
+        _UNIT_SetErrorFormat(block->context, UNIT_ERROR_INVALID_USAGE,
+                             "stack underflow at %s\n",
+                             instruction_name(operation->instruction));
+        return NULL;
     }
     _UNIT_MachineItem *result = _UNIT_Vector_Pop(stack);
     assert(result != NULL);
@@ -709,7 +712,12 @@ _UNIT_Translation_InitFromProcedure(_UNIT_Translation *translation,
         }                                                                       \
         PUSH_ITEM(item);
 
-    #define POP() stack_pop(CURRENT_BLOCK(), &stack, operation)
+    #define POP_TO_VAR(varname)                                                         \
+        _UNIT_MachineItem *varname = stack_pop(CURRENT_BLOCK(), &stack, operation);     \
+        if (varname == NULL) {                                                          \
+            goto error;                                                                 \
+        }
+    
     #define ARGUMENT_TO_ITEM(name, type)                                                            \
         _UNIT_MachineItem *name = new_machine_item(translation, type, operation->argument, NULL);   \
         if (name == NULL) {                                                                         \
@@ -764,7 +772,7 @@ _UNIT_Translation_InitFromProcedure(_UNIT_Translation *translation,
                 if (location == NULL) {
                     goto error;
                 }
-                _UNIT_MachineItem *item = POP();
+                POP_TO_VAR(item);
                 EMIT_DEST_ONE(_UNIT_I_MOVE, location, item);
                 break;
             }
@@ -783,8 +791,8 @@ _UNIT_Translation_InitFromProcedure(_UNIT_Translation *translation,
             }
 
             case UNIT_OP_ADD: {
-                _UNIT_MachineItem *left = POP();
-                _UNIT_MachineItem *right = POP();
+                POP_TO_VAR(left);
+                POP_TO_VAR(right);
 
                 CREATE_DESTINATION(destination);
                 EMIT_DEST_TWO(_UNIT_I_ADD, destination, left, right);
@@ -794,9 +802,11 @@ _UNIT_Translation_InitFromProcedure(_UNIT_Translation *translation,
             case UNIT_OP_CALL_NAME: {
                 ARGUMENT_TO_ITEM(symbol, CONSTANT);
                 symbol->hint = _UNIT_Vector_GET(&procedure->_symbols, operation->argument);
-                _UNIT_MachineItem *args = POP();
+                POP_TO_VAR(args);
                 if (args->type != CALL_ARGS) {
-                    // TODO: free(symbol);
+                    // TODO: Display machine item here
+                    _UNIT_SetError(context, UNIT_ERROR_INVALID_USAGE,
+                                   "CALL_NAME popped item of non-args type");
                     goto error;
                 }
 
@@ -819,13 +829,13 @@ _UNIT_Translation_InitFromProcedure(_UNIT_Translation *translation,
             }
 
             case UNIT_OP_EXIT: {
-                _UNIT_MachineItem *exit_code = POP();
+                POP_TO_VAR(exit_code);
                 EMIT_DEST(_UNIT_I_EXIT, exit_code);
                 break;
             }
 
             case UNIT_OP_POP_TOP: {
-                POP();
+                POP_TO_VAR(_unused);
                 break;
             }
 
@@ -836,7 +846,7 @@ _UNIT_Translation_InitFromProcedure(_UNIT_Translation *translation,
                     goto error;
                 }
                 for (UNIT_Size index = 0; index < operation->argument; ++index) {
-                    _UNIT_MachineItem *item = POP();
+                    POP_TO_VAR(item);
                     _UNIT_Vector_APPEND(vector, item);
                 }
                 _UNIT_MachineItem *args = _UNIT_Alloc(context, sizeof(_UNIT_MachineItem));
@@ -853,14 +863,14 @@ _UNIT_Translation_InitFromProcedure(_UNIT_Translation *translation,
             }
 
             case UNIT_OP_RETURN_VALUE: {
-                _UNIT_MachineItem *value = POP();
+                POP_TO_VAR(value);
                 EMIT_DEST(_UNIT_I_RETURN_VALUE, value);
                 START_NEW_BLOCK();
                 break;
             }
             case UNIT_OP_COMPARE: {
-                _UNIT_MachineItem *left = POP();
-                _UNIT_MachineItem *right = POP();
+                POP_TO_VAR(left);
+                POP_TO_VAR(right);
                 UNIT_ComparisonType type = operation->argument;
                 CREATE_DESTINATION(destination);
 
@@ -909,9 +919,10 @@ _UNIT_Translation_InitFromProcedure(_UNIT_Translation *translation,
 
             case UNIT_OP_JUMP_IF_TRUE:
             case UNIT_OP_JUMP_IF_FALSE: {
-                _UNIT_MachineItem *value = POP();
+                POP_TO_VAR(value);
                 if (value->type != COMPARISON) {
-                    printf("JUMP_IF_FALSE/JUMP_IF_TRUE got non comparison");
+                    _UNIT_SetError(context, UNIT_ERROR_INVALID_USAGE,
+                                   "JUMP_IF_FALSE/JUMP_IF_TRUE got non-comparison");
                     goto error;
                 }
                 UNIT_JumpLabel *label;

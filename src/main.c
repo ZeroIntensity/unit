@@ -112,15 +112,15 @@ int main(void)
     //ADDOP_INT(UNIT_OP_EXIT, 0);
 
     if (UNIT_FAILED(UNIT_CompileProcedure(&procedure))) {
-        UNIT_Procedure_Clear(&procedure);
-        return 1;
+        goto error;
     }
 
     UNIT_Procedure_Clear(&procedure);
     UNIT_Context_Clear(&context);
     return 0;
 error:
+    UNIT_Error_Print(&context, stderr);
     UNIT_Procedure_Clear(&procedure);
     UNIT_Context_Clear(&context);
-    return 0;
+    return 1;
 }

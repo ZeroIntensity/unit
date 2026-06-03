@@ -3,6 +3,7 @@
 
 #include <unit/base.h>
 #include <unit/context.h>
+#include <unit/errors.h>
 
 static void *
 freelist_pop(_UNIT_Freelist **freelist)
@@ -30,10 +31,13 @@ typedef struct {
 } UNIT_FreelistHeader;
 
 static inline void *
-malloc_with_header(UNIT_Size size)
+malloc_with_header(UNIT_Context *context, UNIT_Size size)
 {
-    UNIT_FreelistHeader *header = malloc(size + sizeof(UNIT_FreelistHeader));
+    UNIT_Size actual_size = size + sizeof(UNIT_FreelistHeader);
+    UNIT_FreelistHeader *header = malloc(actual_size);
     if (header == NULL) {
+        _UNIT_SetErrorFormat(context, UNIT_ERROR_NO_MEMORY, "failed to allocate %ld bytes",
+                             actual_size);
         return NULL;
     }
 
@@ -48,7 +52,7 @@ freelist_pop_or_malloc(UNIT_Context *context, _UNIT_Freelist **freelist,
     assert(freelist != NULL);
     void *ptr = freelist_pop(freelist);
     if (ptr == NULL) {
-        return malloc_with_header(size);
+        return malloc_with_header(context, size);
     }
     // Restore the size class since freelist_push overwrote it
     UNIT_FreelistHeader *header = ptr;
@@ -98,7 +102,7 @@ _UNIT_Alloc(UNIT_Context *context, UNIT_Size raw_size)
 
 #undef SIZE_CLASS
     default:
-        return malloc_with_header(size);
+        return malloc_with_header(context, size);
     }
 }
 

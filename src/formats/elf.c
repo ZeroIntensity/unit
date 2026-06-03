@@ -78,6 +78,7 @@
 #include <string.h>
 
 #include <unit/base.h>
+#include <unit/errors.h>
 #include <unit/internal/code_buffer.h>
 #include <unit/internal/compile_context.h>
 #include <unit/internal/size_map.h>
@@ -502,6 +503,7 @@ write_object_to_file(_UNIT_ELF_Object *object, const char *path)
 {
     FILE *file = fopen(path, "wb");
     if (!file) {
+        _UNIT_SetOSError(object->context, "writing ELF object");
         return UNIT_FAIL;
     }
 

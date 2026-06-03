@@ -246,7 +246,7 @@ UNIT_CompileProcedure(UNIT_Procedure *procedure)
         goto error;
     }
 
-    UNIT_Status result = _UNIT_ELF_WriteObjectFile(&context, "/home/peter/develop/unit/test.o");
+    UNIT_Status result = _UNIT_ELF_WriteObjectFile(&context, "test.o");
     _UNIT_CompileContext_Clear(&context);
     _UNIT_Translation_Clear(&translation);
     return result;
