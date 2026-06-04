@@ -47,6 +47,17 @@ int main(void)
         goto error;                                                         \
     }
 
+#define ADDOP_STORE_NAME(name)                                                  \
+    UNIT_Local name;                                                            \
+    if (UNIT_FAILED(UNIT_Procedure_AddStoreLocal(&procedure, #name, &name))) {  \
+        goto error;                                                             \
+    }
+
+#define ADDOP_LOAD_NAME(name)                                           \
+    if (UNIT_FAILED(UNIT_Procedure_AddLoadLocal(&procedure, name))) {   \
+        goto error;                                                     \
+    }
+
     NEW_JUMP_LABEL(loop);
     NEW_JUMP_LABEL(win);
     NEW_JUMP_LABEL(greater);
@@ -58,28 +69,32 @@ int main(void)
 
     //ADDOP_CALL("rand", 0);
     ADDOP_INT(UNIT_OP_LOAD_INTEGER, 35);
-    ADDOP_INT(UNIT_OP_STORE_LOCAL, 0);
+    ADDOP_STORE_NAME(number);
 
-    ADDOP_STR("Debug; number is %d\n");
-    ADDOP_INT(UNIT_OP_LOAD_LOCAL, 0);
+    ADDOP_STR("Debug: number is %d\n");
+    ADDOP_LOAD_NAME(number);
     ADDOP_CALL("printf", 2);
 
     USE_LABEL(loop);
     ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
-    ADDOP_INT(UNIT_OP_STORE_LOCAL, 1);
+    ADDOP_STORE_NAME(guess);
 
     ADDOP_STR("%d");
-    ADDOP_INT(UNIT_OP_ADDRESS_OF, 1);
+    ADDOP_INT(UNIT_OP_ADDRESS_OF, guess.id);
     ADDOP_CALL("scanf", 2);
     ADDOP(UNIT_OP_POP_TOP);
 
-    ADDOP_INT(UNIT_OP_LOAD_LOCAL, 1);
-    ADDOP_INT(UNIT_OP_LOAD_LOCAL, 0);
+    ADDOP_STR("Debug: guess was %d\n");
+    ADDOP_LOAD_NAME(guess);
+    ADDOP_CALL("printf", 2);
+
+    ADDOP_LOAD_NAME(guess);
+    ADDOP_LOAD_NAME(number);
     ADDOP_INT(UNIT_OP_COMPARE, UNIT_COMPARE_EQUAL);
     ADDOP_JUMP(UNIT_OP_JUMP_IF_TRUE, win);
 
-    ADDOP_INT(UNIT_OP_LOAD_LOCAL, 1);
-    ADDOP_INT(UNIT_OP_LOAD_LOCAL, 0);
+    ADDOP_LOAD_NAME(guess);
+    ADDOP_LOAD_NAME(number);
     ADDOP_INT(UNIT_OP_COMPARE, UNIT_COMPARE_GREATER_THAN);
     ADDOP_JUMP(UNIT_OP_JUMP_IF_TRUE, greater);
     ADDOP_JUMP(UNIT_OP_JUMP_TO, less);

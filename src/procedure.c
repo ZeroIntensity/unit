@@ -180,8 +180,8 @@ UNIT_Procedure_AddStringLoad(UNIT_Procedure *procedure, const char *str)
 }
 
 UNIT_Status
-UNIT_Procedure_AddLocal(UNIT_Procedure *procedure, const char *name,
-                        UNIT_Local *local_ptr)
+UNIT_Procedure_AddStoreLocal(UNIT_Procedure *procedure, const char *name,
+                             UNIT_Local *local_ptr)
 {
     UNIT_Size index = _UNIT_Vector_SIZE(&procedure->_local_variables);
     char *copy = _UNIT_StrDup(procedure->context, name);
@@ -196,5 +196,13 @@ UNIT_Procedure_AddLocal(UNIT_Procedure *procedure, const char *name,
 
     local_ptr->id = index;
 
-    return UNIT_OK;
+    return UNIT_Procedure_AddOperation(procedure, _UNIT_OP_STORE_LOCAL_NAME, index);
+}
+
+UNIT_Status
+UNIT_Procedure_AddLoadLocal(UNIT_Procedure *procedure, UNIT_Local local)
+{
+    assert(procedure != NULL);
+    assert(_UNIT_Vector_GET(&procedure->_local_variables, local.id) != NULL);
+    return UNIT_Procedure_AddOperation(procedure, _UNIT_OP_LOAD_LOCAL_NAME, local.id);
 }

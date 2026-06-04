@@ -15,6 +15,8 @@ instruction_name(UNIT_Instruction instruction)
     switch (instruction) {
         NAME(UNIT_OP_LOAD_INTEGER);
         NAME(UNIT_OP_LOAD_STRING);
+        NAME(_UNIT_OP_LOAD_LOCAL_NAME);
+        NAME(_UNIT_OP_STORE_LOCAL_NAME);
         NAME(UNIT_OP_LOAD_LOCAL);
         NAME(UNIT_OP_STORE_LOCAL);
         NAME(UNIT_OP_ADD);
@@ -785,7 +787,14 @@ _UNIT_Translate(_UNIT_Translation *translation,
                 break;
             }
 
+        case _UNIT_OP_STORE_LOCAL_NAME:
         case UNIT_OP_STORE_LOCAL: {
+            const char *hint = NULL;
+            if (operation->instruction == _UNIT_OP_STORE_LOCAL_NAME) {
+                hint = _UNIT_Vector_GET(&procedure->_local_variables,
+                                        operation->argument);
+            }
+
             UNIT_Size location_id = UNIQUE_ID();
             _UNIT_LocalState *local_state = create_new_local(&locals,
                                                              operation->argument,
@@ -796,6 +805,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
             if (location == NULL) {
                 goto error;
             }
+            location->hint = hint;
 
             POP_TO_VAR(item);
             EMIT_DEST_ONE(_UNIT_I_MOVE, location, item);
@@ -803,7 +813,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
             if (_UNIT_SizeSet_Contains(&address_taken_locals, operation->argument)) {
                 local_state->stack_slot = locals.next_stack_slot++;
                 _UNIT_MachineItem *slot = new_machine_item(translation, _UNIT_TYPE_MEMORY,
-                                                           local_state->stack_slot, NULL);
+                                                           local_state->stack_slot, hint);
                 if (slot == NULL) {
                     goto error;
                 }
@@ -815,11 +825,19 @@ _UNIT_Translate(_UNIT_Translation *translation,
             break;
         }
 
+            case _UNIT_OP_LOAD_LOCAL_NAME:
             case UNIT_OP_LOAD_LOCAL: {
                 _UNIT_LocalState *local_state = get_local(&locals, operation->argument);
+
+                const char *hint = NULL;
+                if (operation->instruction == _UNIT_OP_LOAD_LOCAL_NAME) {
+                    hint = _UNIT_Vector_GET(&procedure->_local_variables,
+                                            operation->argument);
+                }
+
                 if (local_state->stack_slot != -1) {
                     _UNIT_MachineItem *slot = new_machine_item(translation, _UNIT_TYPE_MEMORY,
-                                                               local_state->stack_slot, NULL);
+                                                               local_state->stack_slot, hint);
                     if (slot == NULL) {
                         goto error;
                     }
@@ -827,7 +845,13 @@ _UNIT_Translate(_UNIT_Translation *translation,
                     EMIT_DEST_ONE(_UNIT_I_MOVE, destination, slot);
                 }
 
-                PUSH_NEW(_UNIT_TYPE_LOCATION, local_state->location_id);
+                _UNIT_MachineItem *item = new_machine_item(translation, _UNIT_TYPE_LOCATION,
+                                                           local_state->location_id, hint);
+                if (item == NULL) {
+                    goto error;
+                }
+
+                PUSH_ITEM(item);
                 break;
             }
 

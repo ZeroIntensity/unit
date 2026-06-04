@@ -10,6 +10,8 @@
 typedef enum {
     UNIT_OP_LOAD_LOCAL,
     UNIT_OP_STORE_LOCAL,
+    _UNIT_OP_LOAD_LOCAL_NAME,
+    _UNIT_OP_STORE_LOCAL_NAME,
     UNIT_OP_LOAD_STRING,
     UNIT_OP_LOAD_INTEGER,
     UNIT_OP_ADD,
@@ -103,5 +105,12 @@ UNIT_Procedure_AddCall(UNIT_Procedure *procedure,
 
 UNIT_Status
 UNIT_Procedure_AddStringLoad(UNIT_Procedure *procedure, const char *str);
+
+UNIT_Status
+UNIT_Procedure_AddStoreLocal(UNIT_Procedure *procedure, const char *name,
+                             UNIT_Local *local_ptr);
+
+UNIT_Status
+UNIT_Procedure_AddLoadLocal(UNIT_Procedure *procedure, UNIT_Local local);
 
 #endif
