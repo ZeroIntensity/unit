@@ -151,9 +151,9 @@ _UNIT_StackFrame_AllocateSlot(_UNIT_StackFrame *frame)
     assert(frame != NULL);
     assert(frame->free_slot_count < _UNIT_StackFrame_MAX_FREE_SLOTS);
     if (frame->free_slot_count > 0) {
-        return frame->free_slots[--frame->free_slot_count];
+        return frame->free_slots[--frame->free_slot_count] * 8;
     }
-    return frame->next_slot++;
+    return (frame->next_slot++) * 8;
 }
 
 void
@@ -162,7 +162,8 @@ _UNIT_StackFrame_FreeSlot(_UNIT_StackFrame *frame, UNIT_Size slot)
     assert(frame != NULL);
     assert(slot >= frame->reserved_slots);  // can't free memory variable slots
     assert(frame->free_slot_count < _UNIT_StackFrame_MAX_FREE_SLOTS);
-    frame->free_slots[frame->free_slot_count++] = slot;
+    assert(slot % 8 == 0);
+    frame->free_slots[frame->free_slot_count++] = (slot / 8);
 }
 
 UNIT_Size

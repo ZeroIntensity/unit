@@ -170,6 +170,7 @@ translate_operation(_UNIT_CompileContext *compile_context,
             UNIT_Size save_slots[6];
             for (UNIT_Size argument = 0; argument < num_arguments; ++argument) {
                 save_slots[argument] = _UNIT_StackFrame_AllocateSlot(&compile_context->stack_frame);
+                assert(save_slots[argument] % 8 == 0);
                 AMD64_Register argument_register = argument_registers[argument];
                 EMIT(mov(ctx, stack_slot(save_slots[argument]), reg(argument_register)));
             }
