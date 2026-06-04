@@ -835,23 +835,22 @@ _UNIT_Translate(_UNIT_Translation *translation,
                                             operation->argument);
                 }
 
+                _UNIT_MachineItem *location = new_machine_item(translation, _UNIT_TYPE_LOCATION,
+                                                           local_state->location_id, hint);
+                if (location == NULL) {
+                    goto error;
+                }
+
                 if (local_state->stack_slot != -1) {
                     _UNIT_MachineItem *slot = new_machine_item(translation, _UNIT_TYPE_MEMORY,
                                                                local_state->stack_slot, hint);
                     if (slot == NULL) {
                         goto error;
                     }
-                    CREATE_DESTINATION(destination);
-                    EMIT_DEST_ONE(_UNIT_I_MOVE, destination, slot);
+                    EMIT_DEST_ONE(_UNIT_I_MOVE, location, slot);
                 }
 
-                _UNIT_MachineItem *item = new_machine_item(translation, _UNIT_TYPE_LOCATION,
-                                                           local_state->location_id, hint);
-                if (item == NULL) {
-                    goto error;
-                }
-
-                PUSH_ITEM(item);
+                PUSH_ITEM(location);
                 break;
             }
 
