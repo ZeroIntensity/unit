@@ -25,6 +25,8 @@ _UNIT_AMD64_Operand
 stack_slot(uint64_t offset) {
     return (_UNIT_AMD64_Operand) {
         .kind = OPERAND_STACK,
+        // This is kind of cheating, but a stack_offset field would complicate
+        // things and would be a uint64_t anyway.
         .immediate = offset
     };
 }

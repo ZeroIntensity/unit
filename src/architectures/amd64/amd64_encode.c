@@ -327,6 +327,7 @@ _UNIT_AMD64_encode_instruction(_UNIT_CompileContext *compile_context,
             _UNIT_SizeMap *string_offsets = &compile_context->string_data.string_offsets;
             UNIT_Size byte_offset = _UNIT_SizeMap_GET(string_offsets, string_index);
 
+            assert(dst.kind == OPERAND_REGISTER);
             // lea reg, [rip + disp32] (dst in reg field, rm=5 for RIP-relative)
             EMIT_REX(dst.reg, 0);
             EMIT8(OPCODE_LEA);
