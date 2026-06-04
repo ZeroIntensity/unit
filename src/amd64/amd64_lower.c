@@ -263,9 +263,7 @@ translate_operation(_UNIT_CompileContext *compile_context,
         }
 
         case _UNIT_I_ADDRESS_OF: {
-            UNIT_Size slot = _UNIT_CompileContext_AllocateStackSlot(compile_context);
-            EMIT(mov(ctx, stack_slot(slot), OP(argument_1)));
-            EMIT(lea(ctx, OP(destination), stack_slot(slot)));
+            EMIT(lea(ctx, OP(destination), OP(argument_1)));
             break;
         }
     }
