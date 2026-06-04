@@ -58,6 +58,12 @@ int main(void)
         goto error;                                                     \
     }
 
+    NEW_JUMP_LABEL(correct);
+    NEW_JUMP_LABEL(end);
+
+    ADDOP_INT(UNIT_OP_LOAD_INTEGER, 42);
+    ADDOP_STORE_NAME(number);
+
     ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
     ADDOP_STORE_NAME(guess);
 
@@ -69,6 +75,24 @@ int main(void)
     ADDOP_STR("Debug: guess was %d\n");
     ADDOP_LOAD_NAME(guess);
     ADDOP_CALL("printf", 2);
+    ADDOP(UNIT_OP_POP_TOP);
+
+    ADDOP_LOAD_NAME(guess)
+    ADDOP_LOAD_NAME(number)
+    ADDOP_INT(UNIT_OP_COMPARE, UNIT_COMPARE_EQUAL);
+    ADDOP_JUMP(UNIT_OP_JUMP_IF_TRUE, correct);
+    ADDOP_STR("wrong");
+    ADDOP_CALL("puts", 1);
+    ADDOP(UNIT_OP_POP_TOP);
+
+    ADDOP_JUMP(UNIT_OP_JUMP_TO, end);
+
+    USE_LABEL(correct);
+    ADDOP_STR("correct");
+    ADDOP_CALL("puts", 1);
+    ADDOP(UNIT_OP_POP_TOP);
+
+    USE_LABEL(end);
 
     ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
     ADDOP(UNIT_OP_RETURN_VALUE);

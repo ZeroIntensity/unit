@@ -163,6 +163,9 @@ translate_operation(_UNIT_CompileContext *compile_context,
             UNIT_Size num_arguments = _UNIT_Vector_SIZE(arguments);
             assert(num_arguments <= 6);
 
+            UNIT_Size rax_slot = _UNIT_CompileContext_AllocateStackSlot(compile_context);
+            EMIT(mov(ctx, stack_slot(rax_slot), reg(REG_RAX)));
+
             // Save argument registers into stack frame slots
             UNIT_Size save_slots[6];
             for (UNIT_Size argument = 0; argument < num_arguments; ++argument) {
@@ -182,13 +185,14 @@ translate_operation(_UNIT_CompileContext *compile_context,
 
             EMIT(mov(ctx, reg(REG_RAX), immediate(0)));
             EMIT(call_symbol(ctx, OP(argument_1)));
-            EMIT(mov(ctx, OP(destination), reg(REG_RAX)));
 
             // Restore argument registers from stack frame slots
             for (UNIT_Size argument = 0; argument < num_arguments; ++argument) {
                 AMD64_Register argument_register = argument_registers[argument];
                 EMIT(mov(ctx, reg(argument_register), stack_slot(save_slots[argument])));
             }
+
+            EMIT(mov(ctx, reg(REG_RAX), stack_slot(rax_slot)));
 
             break;
         }
