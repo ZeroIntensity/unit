@@ -1,5 +1,3 @@
-#include <assert.h>
-
 #include <unit/internal/allocation.h>
 #include <unit/internal/vector.h>
 

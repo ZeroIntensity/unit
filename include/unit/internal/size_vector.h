@@ -1,9 +1,8 @@
 #ifndef _UNIT_SIZE_VECTOR_H
 #define _UNIT_SIZE_VECTOR_H
 
-#include <assert.h>
-
 #include <unit/base.h>
+
 #include <unit/internal/structure.h>
 
 typedef struct {

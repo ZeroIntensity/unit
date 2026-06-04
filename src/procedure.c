@@ -1,7 +1,8 @@
 #include <stdbool.h>
 
-#include <unit/internal/allocation.h>
 #include <unit/procedure.h>
+
+#include <unit/internal/allocation.h>
 
 UNIT_Status
 UNIT_Procedure_Init(UNIT_Procedure *procedure,

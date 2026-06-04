@@ -1,10 +1,9 @@
 #ifndef _UNIT_VECTOR_H
 #define _UNIT_VECTOR_H
 
-#include <assert.h>
-
 #include <unit/base.h>
 #include <unit/context.h>
+
 #include <unit/internal/structure.h>
 
 typedef struct {

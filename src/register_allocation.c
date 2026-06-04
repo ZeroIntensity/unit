@@ -1,7 +1,6 @@
 #include <unit/internal/translation.h>
 #include <unit/internal/size_vector.h>
 
-
 static UNIT_Status
 allocate_registers_for_block(_UNIT_BasicBlock *block,
                              _UNIT_SizeMap *assignments, int8_t num_registers)
