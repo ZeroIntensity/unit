@@ -103,11 +103,11 @@ void
 print_machine_item(_UNIT_MachineItem *item)
 {
     assert(item != NULL);
-    if (item->type == CONSTANT) {
+    if (item->type == _UNIT_TYPE_CONSTANT) {
         printf("%d", item->value);
-    } else if (item->type == LOCATION) {
+    } else if (item->type == _UNIT_TYPE_LOCATION) {
         printf("loc_%d", item->value);
-    } else if (item->type == CALL_ARGS) {
+    } else if (item->type == _UNIT_TYPE_CALL_ARGS) {
         printf("[");
         UNIT_Size size = _UNIT_Vector_SIZE(item->call_args);
         for (UNIT_Size index = 0; index < size; ++index) {
@@ -119,7 +119,7 @@ print_machine_item(_UNIT_MachineItem *item)
             }
         }
         printf("]");
-    } else if (item->type == COMPARISON) {
+    } else if (item->type == _UNIT_TYPE_COMPARISON) {
         print_machine_item(item->comparison.left);
         switch (item->comparison.type) {
             case UNIT_COMPARE_EQUAL:
@@ -142,10 +142,10 @@ print_machine_item(_UNIT_MachineItem *item)
                 break;
         }
         print_machine_item(item->comparison.right);
-    } else if (item->type == MEMORY) {
+    } else if (item->type == _UNIT_TYPE_MEMORY) {
         printf("stack_address_%d", item->value);
     } else {
-        assert(item->type == REGISTER);
+        assert(item->type == _UNIT_TYPE_REGISTER);
         printf("register_%d", item->value);
     }
 
@@ -259,7 +259,7 @@ get_jump_target_item(_UNIT_Translation *translation, const UNIT_Procedure *proce
     if (jump_label_ptr != NULL) {
         *jump_label_ptr = label;
     }
-    _UNIT_MachineItem *item = new_machine_item(translation, CONSTANT, label->id, label->name);
+    _UNIT_MachineItem *item = new_machine_item(translation, _UNIT_TYPE_CONSTANT, label->id, label->name);
     if (item == NULL) {
         return NULL;
     }
@@ -279,7 +279,7 @@ extend_lifetime(_UNIT_Translation *translation, int32_t location)
 static _UNIT_MachineItem *
 create_new_location(_UNIT_Translation *translation, _UNIT_BasicBlock *block, int32_t value)
 {
-    _UNIT_MachineItem *item = new_machine_item(translation, LOCATION, value, NULL);
+    _UNIT_MachineItem *item = new_machine_item(translation, _UNIT_TYPE_LOCATION, value, NULL);
     if (item == NULL) {
         return NULL;
     }
@@ -311,7 +311,7 @@ stack_pop(_UNIT_BasicBlock *block, _UNIT_Vector *stack,
     _UNIT_MachineItem *result = _UNIT_Vector_Pop(stack);
     assert(result != NULL);
 
-    if (result->type == LOCATION) {
+    if (result->type == _UNIT_TYPE_LOCATION) {
         if (UNIT_FAILED(_UNIT_SizeSet_Add(&block->liveness.used_locations,
                                           result->value))) {
             return NULL;
@@ -780,7 +780,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
         _UNIT_Operation *operation = _UNIT_Vector_GET(&procedure->_instructions, index);
         switch (operation->instruction) {
             case UNIT_OP_LOAD_CONSTANT_INTEGER: {
-                PUSH_NEW(CONSTANT, operation->argument);
+                PUSH_NEW(_UNIT_TYPE_CONSTANT, operation->argument);
                 break;
             }
 
@@ -801,7 +801,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
 
             if (_UNIT_SizeSet_Contains(&address_taken_locals, operation->argument)) {
                 local_state->stack_slot = locals.next_stack_slot++;
-                _UNIT_MachineItem *slot = new_machine_item(translation, MEMORY,
+                _UNIT_MachineItem *slot = new_machine_item(translation, _UNIT_TYPE_MEMORY,
                                                            local_state->stack_slot, NULL);
                 if (slot == NULL) {
                     goto error;
@@ -817,7 +817,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
             case UNIT_OP_LOAD_LOCAL: {
                 _UNIT_LocalState *local_state = get_local(&locals, operation->argument);
                 if (local_state->stack_slot != -1) {
-                    _UNIT_MachineItem *slot = new_machine_item(translation, MEMORY,
+                    _UNIT_MachineItem *slot = new_machine_item(translation, _UNIT_TYPE_MEMORY,
                                                                local_state->stack_slot, NULL);
                     if (slot == NULL) {
                         goto error;
@@ -826,7 +826,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
                     EMIT_DEST_ONE(_UNIT_I_MOVE, destination, slot);
                 }
 
-                PUSH_NEW(LOCATION, local_state->location_id);
+                PUSH_NEW(_UNIT_TYPE_LOCATION, local_state->location_id);
                 break;
             }
 
@@ -840,10 +840,10 @@ _UNIT_Translate(_UNIT_Translation *translation,
             }
 
             case UNIT_OP_CALL_NAME: {
-                ARGUMENT_TO_ITEM(symbol, CONSTANT);
+                ARGUMENT_TO_ITEM(symbol, _UNIT_TYPE_CONSTANT);
                 symbol->hint = _UNIT_Vector_GET(&procedure->_symbols, operation->argument);
                 POP_TO_VAR(args);
-                if (args->type != CALL_ARGS) {
+                if (args->type != _UNIT_TYPE_CALL_ARGS) {
                     // TODO: Display machine item here
                     _UNIT_SetError(context, UNIT_ERROR_INVALID_USAGE,
                                    "CALL_NAME popped item of non-args type");
@@ -858,7 +858,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
             case UNIT_OP_LOAD_CONSTANT_STRING: {
                 const char *text = _UNIT_Vector_GET(&procedure->_global_strings, operation->argument);
                 assert(text != NULL);
-                _UNIT_MachineItem *result = new_machine_item(translation, CONSTANT,
+                _UNIT_MachineItem *result = new_machine_item(translation, _UNIT_TYPE_CONSTANT,
                                                              operation->argument, text);
                 if (result == NULL) {
                     goto error;
@@ -895,7 +895,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
                     goto error;
                 }
                 args->call_args = vector;
-                args->type = CALL_ARGS;
+                args->type = _UNIT_TYPE_CALL_ARGS;
                 args->hint = NULL;
                 attach_item_to_translation(translation, args);
                 PUSH_ITEM(args);
@@ -914,7 +914,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
                 UNIT_ComparisonType type = operation->argument;
                 CREATE_DESTINATION(destination);
 
-                destination->type = COMPARISON;
+                destination->type = _UNIT_TYPE_COMPARISON;
                 destination->comparison.type = type;
                 destination->comparison.left = left;
                 destination->comparison.right = right;
@@ -960,7 +960,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
             case UNIT_OP_JUMP_IF_TRUE:
             case UNIT_OP_JUMP_IF_FALSE: {
                 POP_TO_VAR(value);
-                if (value->type != COMPARISON) {
+                if (value->type != _UNIT_TYPE_COMPARISON) {
                     _UNIT_SetError(context, UNIT_ERROR_INVALID_USAGE,
                                    "JUMP_IF_FALSE/JUMP_IF_TRUE got non-comparison");
                     goto error;
@@ -1014,10 +1014,10 @@ _UNIT_Translate(_UNIT_Translation *translation,
 
                 _UNIT_MachineItem *value;
                 if (local_state->stack_slot == -1) {
-                    value = new_machine_item(translation, LOCATION,
+                    value = new_machine_item(translation, _UNIT_TYPE_LOCATION,
                                              local_state->location_id, NULL);
                 } else {
-                    value = new_machine_item(translation, MEMORY,
+                    value = new_machine_item(translation, _UNIT_TYPE_MEMORY,
                                              local_state->stack_slot, NULL);
                 }
 
@@ -1060,7 +1060,7 @@ _UNIT_Translation_Clear(_UNIT_Translation *translation)
     _UNIT_MachineItem *head = translation->item_list_head;
     while (head != NULL) {
         _UNIT_MachineItem *next = head->next;
-        if (head->type == CALL_ARGS) {
+        if (head->type == _UNIT_TYPE_CALL_ARGS) {
             _UNIT_Vector_Free(head->call_args);
         }
         _UNIT_Dealloc(translation->context, head);

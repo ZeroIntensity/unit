@@ -11,12 +11,12 @@
 #include <unit/internal/vector.h>
 
 typedef enum {
-    CONSTANT,
-    LOCATION,
-    REGISTER,
-    CALL_ARGS,
-    COMPARISON,
-    MEMORY
+    _UNIT_TYPE_CONSTANT,
+    _UNIT_TYPE_LOCATION,
+    _UNIT_TYPE_REGISTER,
+    _UNIT_TYPE_CALL_ARGS,
+    _UNIT_TYPE_COMPARISON,
+    _UNIT_TYPE_MEMORY
 } _UNIT_MachineItem_Type;
 
 typedef struct _UNIT_MachineItem {

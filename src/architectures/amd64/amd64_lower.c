@@ -46,11 +46,11 @@ _UNIT_AMD64_Operand
 machine_item_to_operand(_UNIT_MachineItem *machine_item)
 {
     assert(machine_item != NULL);
-    if (machine_item->type == REGISTER) {
+    if (machine_item->type == _UNIT_TYPE_REGISTER) {
         return reg(register_map[machine_item->value]);
-    } else if (machine_item->type == CONSTANT) {
+    } else if (machine_item->type == _UNIT_TYPE_CONSTANT) {
         return immediate(machine_item->value);
-    } else if (machine_item->type == CALL_ARGS) {
+    } else if (machine_item->type == _UNIT_TYPE_CALL_ARGS) {
         // TODO: Gracefully fail here
         printf("cannot use call args as operand");
         abort();
@@ -156,7 +156,7 @@ translate_operation(_UNIT_CompileContext *compile_context,
         }
 
         case _UNIT_I_CALL_SYMBOL: {
-            assert(operation->argument_2->type == CALL_ARGS);
+            assert(operation->argument_2->type == _UNIT_TYPE_CALL_ARGS);
             _UNIT_Vector *arguments = operation->argument_2->call_args;
             UNIT_Size num_arguments = _UNIT_Vector_SIZE(arguments);
             assert(num_arguments <= 6);

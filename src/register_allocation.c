@@ -31,7 +31,7 @@ allocate_registers_for_block(_UNIT_BasicBlock *block,
 
         if (operation->instruction == _UNIT_I_JUMP_LABEL
             || operation->destination == NULL
-            || operation->destination->type != LOCATION) {
+            || operation->destination->type != _UNIT_TYPE_LOCATION) {
             continue;
         }
 
@@ -77,19 +77,19 @@ potentially_rewrite_item(_UNIT_Translation *translation,
         return;
     }
 
-    assert(item->type != COMPARISON);
-    if (item->type == LOCATION) {
+    assert(item->type != _UNIT_TYPE_COMPARISON);
+    if (item->type == _UNIT_TYPE_LOCATION) {
         UNIT_Size register_id;
         if (!UNIT_FAILED(_UNIT_SizeMap_Get(assignments, item->value,
                                            &register_id))) {
-            item->type = REGISTER;
+            item->type = _UNIT_TYPE_REGISTER;
             item->value = register_id;
         } else {
             // Spill :(
-            item->type = MEMORY;
+            item->type = _UNIT_TYPE_MEMORY;
             item->value = ++translation->num_memory_slots;
         }
-    } else if (item->type == CALL_ARGS) {
+    } else if (item->type == _UNIT_TYPE_CALL_ARGS) {
         UNIT_Size count = _UNIT_Vector_SIZE(item->call_args);
         for (UNIT_Size i = 0; i < count; ++i) {
             potentially_rewrite_item(translation, assignments,
@@ -138,7 +138,7 @@ _UNIT_Translation_AllocateRegisters(_UNIT_Translation *translation,
         }
     }
 
-    // Now rewrite all LOCATION items
+    // Now rewrite all _UNIT_TYPE_LOCATION items
     for (UNIT_Size index = 0; index < size; ++index) {
         _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks, index);
         assert(block != NULL);
