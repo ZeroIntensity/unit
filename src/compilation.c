@@ -267,7 +267,7 @@ UNIT_Compile(const UNIT_Procedure *procedure, UNIT_Architecture architecture)
     UNIT_Status result;
     switch (architecture) {
         case UNIT_ARCH_AMD64:
-            result = _UNIT_AMD64_FromTranslation(&compiled_procedure->_translation,
+            result = _UNIT_AMD64_Compile(&compiled_procedure->_translation,
                                                  &compiled_procedure->_compile_context);
             break;
         // TODO: Add more architectures here as we add them

@@ -1,7 +1,10 @@
 #include <unit/base.h>
+
 #include <unit/internal/architectures.h>
 #include <unit/internal/code_buffer.h>
 #include <unit/internal/compile_context.h>
+
+#include "amd64_local.h"
 
 // Actual opcodes
 enum {
@@ -110,18 +113,18 @@ add_jump(_UNIT_CompileContext *compile_context, UNIT_Size label_index)
 }
 
 static inline uint8_t
-needs_rex_r(_UNIT_AMD64_Register reg) {
+needs_rex_r(AMD64_Register reg) {
     return reg >= 8;
 }
 
 static inline uint8_t
-reg_bits(_UNIT_AMD64_Register reg) {
+reg_bits(AMD64_Register reg) {
     return reg & 0x7;
 }
 
 UNIT_Status
-_UNIT_AMD64_encode_instruction(_UNIT_CompileContext *compile_context,
-                                _UNIT_AMD64_Instruction *instr)
+AMD64_encode_instruction(_UNIT_CompileContext *compile_context,
+                         AMD64_Instruction *instr)
 {
     assert(compile_context != NULL);
     assert(instr != NULL);
@@ -164,8 +167,8 @@ _UNIT_AMD64_encode_instruction(_UNIT_CompileContext *compile_context,
         }
 
         case AMD64_MOV: {
-            _UNIT_AMD64_Operand dst = instr->operands[0];
-            _UNIT_AMD64_Operand src = instr->operands[1];
+            AMD64_Operand dst = instr->operands[0];
+            AMD64_Operand src = instr->operands[1];
 
             // mov reg, imm64 (register encoded in opcode byte, uses REX.B)
             if (dst.kind == OPERAND_REGISTER && src.kind == OPERAND_IMMEDIATE) {
@@ -217,8 +220,8 @@ _UNIT_AMD64_encode_instruction(_UNIT_CompileContext *compile_context,
         }
 
         case AMD64_ADD: {
-            _UNIT_AMD64_Operand dst = instr->operands[0];
-            _UNIT_AMD64_Operand src = instr->operands[1];
+            AMD64_Operand dst = instr->operands[0];
+            AMD64_Operand src = instr->operands[1];
 
             // add reg, reg (src in reg field, dst in rm field)
             if (dst.kind == OPERAND_REGISTER && src.kind == OPERAND_REGISTER) {
@@ -239,7 +242,7 @@ _UNIT_AMD64_encode_instruction(_UNIT_CompileContext *compile_context,
         }
 
         case AMD64_CALL_INDIRECT: {
-            _UNIT_AMD64_Operand target = instr->operands[0];
+            AMD64_Operand target = instr->operands[0];
             assert(target.kind == OPERAND_REGISTER);
             EMIT_REX(0, target.reg);
             EMIT8(OPCODE_GROUP5);
@@ -283,8 +286,8 @@ _UNIT_AMD64_encode_instruction(_UNIT_CompileContext *compile_context,
         }
 
         case AMD64_COMPARE: {
-            _UNIT_AMD64_Operand dst = instr->operands[0];
-            _UNIT_AMD64_Operand src = instr->operands[1];
+            AMD64_Operand dst = instr->operands[0];
+            AMD64_Operand src = instr->operands[1];
             // cmp reg, imm (group opcode, dst in rm field)
             if (dst.kind == OPERAND_REGISTER && src.kind == OPERAND_IMMEDIATE) {
                 EMIT_REX(0, dst.reg);
@@ -322,7 +325,7 @@ _UNIT_AMD64_encode_instruction(_UNIT_CompileContext *compile_context,
 #undef CONDITIONAL_JUMP_CASE
 
         case AMD64_LOAD_STRING: {
-            _UNIT_AMD64_Operand dst = instr->operands[0];
+            AMD64_Operand dst = instr->operands[0];
             UNIT_Size string_index = instr->operands[1].immediate;
             _UNIT_SizeMap *string_offsets = &compile_context->string_data.string_offsets;
             UNIT_Size byte_offset = _UNIT_SizeMap_GET(string_offsets, string_index);
@@ -347,8 +350,8 @@ _UNIT_AMD64_encode_instruction(_UNIT_CompileContext *compile_context,
         }
 
         case AMD64_LOAD_ADDRESS: {
-            _UNIT_AMD64_Operand dst = instr->operands[0];
-            _UNIT_AMD64_Operand src = instr->operands[1];
+            AMD64_Operand dst = instr->operands[0];
+            AMD64_Operand src = instr->operands[1];
 
             // lea reg, [rsp + offset] (dst in reg field, RSP in rm)
             assert(dst.kind == OPERAND_REGISTER);
@@ -382,8 +385,8 @@ error:
 }
 
 void
-_UNIT_AMD64_PatchPrologue(_UNIT_CompileContext *context,
-                        UNIT_Size prologue_offset)
+AMD64_PatchPrologue(_UNIT_CompileContext *context,
+                    UNIT_Size prologue_offset)
 {
     if (context->frame_size > 0) {
         if (context->frame_size % 16 != 0) {
@@ -409,7 +412,7 @@ _UNIT_AMD64_PatchPrologue(_UNIT_CompileContext *context,
 }
 
 void
-_UNIT_AMD64_PatchJumps(_UNIT_CompileContext *context)
+AMD64_PatchJumps(_UNIT_CompileContext *context)
 {
     assert(context != NULL);
     UNIT_Size count = _UNIT_Vector_SIZE(&context->jump_table.pending_jumps);
