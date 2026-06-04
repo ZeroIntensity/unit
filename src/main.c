@@ -58,11 +58,14 @@ int main(void)
         goto error;                                                     \
     }
 
+    NEW_JUMP_LABEL(loop);
     NEW_JUMP_LABEL(correct);
-    NEW_JUMP_LABEL(end);
+    NEW_JUMP_LABEL(greater);
 
     ADDOP_INT(UNIT_OP_LOAD_INTEGER, 42);
     ADDOP_STORE_NAME(number);
+
+    USE_LABEL(loop);
 
     ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
     ADDOP_STORE_NAME(guess);
@@ -81,18 +84,30 @@ int main(void)
     ADDOP_LOAD_NAME(number)
     ADDOP_INT(UNIT_OP_COMPARE, UNIT_COMPARE_EQUAL);
     ADDOP_JUMP(UNIT_OP_JUMP_IF_TRUE, correct);
-    ADDOP_STR("wrong");
+
+    ADDOP_LOAD_NAME(guess)
+    ADDOP_LOAD_NAME(number)
+    ADDOP_INT(UNIT_OP_COMPARE, UNIT_COMPARE_GREATER_THAN);
+    ADDOP_JUMP(UNIT_OP_JUMP_IF_TRUE, greater);
+
+    ADDOP_STR("Lower");
     ADDOP_CALL("puts", 1);
     ADDOP(UNIT_OP_POP_TOP);
 
-    ADDOP_JUMP(UNIT_OP_JUMP_TO, end);
+    ADDOP_JUMP(UNIT_OP_JUMP_TO, loop);
+
+    USE_LABEL(greater);
+    // String load isn't working here right now because stack spilling
+    // isn't correctly implemented
+    ADDOP_INT(UNIT_OP_LOAD_INTEGER, 97);
+    ADDOP_CALL("putchar", 1);
+    ADDOP(UNIT_OP_POP_TOP);
+    ADDOP_JUMP(UNIT_OP_JUMP_TO, loop);
 
     USE_LABEL(correct);
-    ADDOP_STR("correct");
+    ADDOP_STR("You win!");
     ADDOP_CALL("puts", 1);
     ADDOP(UNIT_OP_POP_TOP);
-
-    USE_LABEL(end);
 
     ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
     ADDOP(UNIT_OP_RETURN_VALUE);
