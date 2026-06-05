@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <unit/internal/basic_block.h>
 #include <unit/internal/compile_context.h>
 #include <unit/internal/translation.h>
 #include <unit/internal/architectures.h>
@@ -143,7 +144,6 @@ TWO_ARG_HELPER(add, AMD64_ADD)
 TWO_ARG_HELPER(sub, AMD64_SUB)
 TWO_ARG_HELPER(imul, AMD64_MUL)
 ONE_ARG_HELPER(idiv, AMD64_DIV)
-TWO_ARG_HELPER(mod, AMD64_MOD)
 
 static const AMD64_Register argument_registers[] = {
     REG_RDI,

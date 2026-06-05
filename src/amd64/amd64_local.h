@@ -45,7 +45,6 @@ typedef enum {
     AMD64_SUB,
     AMD64_MUL,
     AMD64_DIV,
-    AMD64_MOD,
     AMD64_CQO
 } AMD64_Opcode;
 

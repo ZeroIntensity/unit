@@ -4,6 +4,7 @@
 #include <unit/errors.h>
 
 #include <unit/internal/allocation.h>
+#include <unit/internal/basic_block.h>
 #include <unit/internal/size_vector.h>
 #include <unit/internal/translation.h>
 
@@ -274,15 +275,46 @@ get_jump_target_item(_UNIT_Translation *translation, const UNIT_Procedure *proce
     return item;
 }
 
-/*
-static UNIT_Status
-extend_lifetime(_UNIT_Translation *translation, int32_t location)
+UNIT_Status
+analyze_liveness(_UNIT_Translation *translation)
 {
-    UNIT_Size current_index = _UNIT_Vector_SIZE(&translation->instructions);
-    assert(_UNIT_SizeMap_GET(&translation->variables.created_at, location) >= 0);
-    return _UNIT_SizeMap_Set(&translation->variables.destroyed_at,
-                             location, current_index);
-}*/
+    assert(translation != NULL);
+    UNIT_Size block_count = _UNIT_Vector_SIZE(&translation->blocks);
+
+    int8_t changed = 1;
+    while (changed) {
+        changed = 0;
+        for (UNIT_Size index = block_count; index > 0; --index) {
+            _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks,
+                                                       index - 1);
+            assert(block != NULL);
+            if (UNIT_FAILED(_UNIT_BasicBlock_PopulateLivenessStep(block, &changed))) {
+                return UNIT_FAIL;
+            }
+        }
+    }
+
+    return UNIT_OK;
+}
+
+_UNIT_BasicBlock *
+push_new_block(_UNIT_Translation *translation, UNIT_Size *block_id)
+{
+    assert(translation != NULL);
+    _UNIT_BasicBlock *block = _UNIT_BasicBlock_New(translation->context, *block_id);
+    if (block == NULL) {
+        return NULL;
+    }
+    ++(*block_id);
+
+    if (UNIT_FAILED(_UNIT_Vector_Append(&translation->blocks,
+                                        block))) {
+        return NULL;
+    }
+
+    return block;
+}
+
 
 static _UNIT_MachineItem *
 create_new_location(_UNIT_Translation *translation, _UNIT_BasicBlock *block, int32_t value)
@@ -326,193 +358,6 @@ stack_pop(_UNIT_BasicBlock *block, _UNIT_Vector *stack,
         }
     }
     return result;
-}
-
-UNIT_Status
-_UNIT_LivenessInfo_Init(_UNIT_LivenessInfo *liveness, UNIT_Context *context)
-{
-    assert(liveness != NULL);
-    assert(context != NULL);
-    if (UNIT_FAILED(_UNIT_SizeSet_Init(&liveness->created_locations, context, 8))) {
-        return UNIT_FAIL;
-    }
-
-    if (UNIT_FAILED(_UNIT_SizeSet_Init(&liveness->used_locations, context, 8))) {
-        _UNIT_SizeSet_Clear(&liveness->created_locations);
-        return UNIT_FAIL;
-    }
-
-    if (UNIT_FAILED(_UNIT_SizeSet_Init(&liveness->alive_at_start, context, 8))) {
-        _UNIT_SizeSet_Clear(&liveness->created_locations);
-        _UNIT_SizeSet_Clear(&liveness->used_locations);
-        return UNIT_FAIL;
-    }
-
-    if (UNIT_FAILED(_UNIT_SizeSet_Init(&liveness->alive_at_end, context, 8))) {
-        _UNIT_SizeSet_Clear(&liveness->created_locations);
-        _UNIT_SizeSet_Clear(&liveness->used_locations);
-        _UNIT_SizeSet_Clear(&liveness->alive_at_start);
-        return UNIT_FAIL;
-    }
-
-    return UNIT_OK;
-}
-
-static UNIT_Status
-set_add_and_track(_UNIT_SizeSet *set, UNIT_Size value, int8_t *changed)
-{
-    if (!_UNIT_SizeSet_Contains(set, value)) {
-        if (UNIT_FAILED(_UNIT_SizeSet_Add(set, value))) {
-            return UNIT_FAIL;
-        }
-        *changed = 1;
-    }
-    return UNIT_OK;
-}
-
-static UNIT_Status
-populate_liveness_info(_UNIT_Vector *successors,
-                       _UNIT_LivenessInfo *liveness,
-                       int8_t *changed)
-{
-    assert(successors != NULL);
-    assert(liveness != NULL);
-    assert(changed != NULL);
-
-    // alive_at_end = union of alive_at_start of all successors
-    UNIT_Size size = _UNIT_Vector_SIZE(successors);
-    for (UNIT_Size index = 0; index < size; ++index) {
-        _UNIT_BasicBlock *successor = _UNIT_Vector_GET(successors, index);
-        _UNIT_SizeSet_ITER(&successor->liveness.alive_at_start, location);
-            if (UNIT_FAILED(set_add_and_track(&liveness->alive_at_end,
-                                              location, changed))) {
-                return UNIT_FAIL;
-            }
-        _UNIT_SizeSet_END_ITER();
-    }
-
-    // alive_at_start = used_locations + (alive_at_end - created_locations)
-
-    // Everything this block uses must be alive at its start
-    _UNIT_SizeSet_ITER(&liveness->used_locations, location);
-        if (UNIT_FAILED(set_add_and_track(&liveness->alive_at_start,
-                                          location, changed))) {
-            return UNIT_FAIL;
-        }
-    _UNIT_SizeSet_END_ITER();
-
-    // Everything alive at the end that this block didn't create
-    // must also be alive at the start
-    _UNIT_SizeSet_ITER(&liveness->alive_at_end, location);
-        if (!_UNIT_SizeSet_Contains(&liveness->created_locations, location)) {
-            if (UNIT_FAILED(set_add_and_track(&liveness->alive_at_start,
-                                              location, changed))) {
-                return UNIT_FAIL;
-            }
-        }
-    _UNIT_SizeSet_END_ITER();
-
-    return UNIT_OK;
-}
-
-UNIT_Status
-analyze_liveness(_UNIT_Translation *translation)
-{
-    assert(translation != NULL);
-    UNIT_Size block_count = _UNIT_Vector_SIZE(&translation->blocks);
-
-    int8_t changed = 1;
-    while (changed) {
-        changed = 0;
-        for (UNIT_Size index = block_count; index > 0; --index) {
-            _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks,
-                                                       index - 1);
-            assert(block != NULL);
-            if (UNIT_FAILED(populate_liveness_info(&block->successors,
-                                                   &block->liveness,
-                                                   &changed))) {
-                return UNIT_FAIL;
-            }
-        }
-    }
-
-    return UNIT_OK;
-}
-
-
-void
-_UNIT_LivenessInfo_Clear(_UNIT_LivenessInfo *liveness)
-{
-    assert(liveness != NULL);
-    _UNIT_SizeSet_Clear(&liveness->created_locations);
-    _UNIT_SizeSet_Clear(&liveness->used_locations);
-    _UNIT_SizeSet_Clear(&liveness->alive_at_start);
-    _UNIT_SizeSet_Clear(&liveness->alive_at_end);
-}
-
-_UNIT_BasicBlock *
-_UNIT_BasicBlock_New(UNIT_Context *context, UNIT_Size id)
-{
-    assert(context != NULL);
-    assert(id >= 0);
-    _UNIT_BasicBlock *block = _UNIT_Alloc(context, sizeof(_UNIT_BasicBlock));
-    if (block == NULL) {
-        return NULL;
-    }
-    block->context = context;
-
-    if (UNIT_FAILED(_UNIT_Vector_Init(&block->instructions, context,
-                                      32, _UNIT_Dealloc))) {
-        _UNIT_Dealloc(context, block);
-        return NULL;
-    }
-
-    if (UNIT_FAILED(_UNIT_Vector_Init(&block->successors, context,
-                                      4, NULL))) {
-        _UNIT_Dealloc(context, block);
-        _UNIT_Vector_Clear(&block->instructions);
-        return NULL;
-    }
-
-    if (UNIT_FAILED(_UNIT_LivenessInfo_Init(&block->liveness, context))) {
-        _UNIT_Dealloc(context, block);
-        _UNIT_Vector_Clear(&block->instructions);
-        _UNIT_Vector_Clear(&block->successors);
-        return NULL;
-    }
-
-    block->id = id;
-    block->label_id = _UNIT_BasicBlock_NO_LABEL; // Can be set later
-    return block;
-}
-
-void
-_UNIT_BasicBlock_Free(UNIT_Context *context, void *ptr)
-{
-    assert(ptr != NULL);
-    _UNIT_BasicBlock *block = (_UNIT_BasicBlock *)ptr;
-    _UNIT_Vector_Clear(&block->instructions);
-    _UNIT_Vector_Clear(&block->successors);
-    _UNIT_LivenessInfo_Clear(&block->liveness);
-    _UNIT_Dealloc(block->context, block);
-}
-
-_UNIT_BasicBlock *
-push_new_block(_UNIT_Translation *translation, UNIT_Size *block_id)
-{
-    assert(translation != NULL);
-    _UNIT_BasicBlock *block = _UNIT_BasicBlock_New(translation->context, *block_id);
-    if (block == NULL) {
-        return NULL;
-    }
-    ++(*block_id);
-
-    if (UNIT_FAILED(_UNIT_Vector_Append(&translation->blocks,
-                                        block))) {
-        return NULL;
-    }
-
-    return block;
 }
 
 // Eagerly create basic blocks for every jump label.
@@ -691,7 +536,6 @@ _UNIT_Translate(_UNIT_Translation *translation,
             }
         }
     }
-
 
     // We need to eagerly assign blocks for each jump label so we can resolve
     // successors immediately

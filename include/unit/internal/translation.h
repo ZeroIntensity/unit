@@ -65,24 +65,6 @@ typedef struct {
     _UNIT_MachineItem *argument_2;
 } _UNIT_MachineOperation;
 
-static const UNIT_Size _UNIT_BasicBlock_NO_LABEL = -1;
-
-typedef struct {
-    _UNIT_SizeSet created_locations;
-    _UNIT_SizeSet used_locations;
-    _UNIT_SizeSet alive_at_start;
-    _UNIT_SizeSet alive_at_end;
-} _UNIT_LivenessInfo;
-
-typedef struct {
-    UNIT_Context *context;
-    UNIT_Size id;
-    UNIT_Size label_id; // or _UNIT_BasicBlock_NO_LABEL
-    _UNIT_Vector instructions; // Holds _UNIT_MachineOperation*
-    _UNIT_Vector successors; // Holds (unowned) _UNIT_BasicBlock*
-    _UNIT_LivenessInfo liveness;
-} _UNIT_BasicBlock;
-
 typedef struct {
     UNIT_Context *context;
     _UNIT_Vector blocks; // Holds _UNIT_BasicBlock
