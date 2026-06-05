@@ -280,22 +280,22 @@ translate_operation(_UNIT_CompileContext *compile_context,
             PRESERVE_REGISTER(REG_RAX);
 
             // Save argument registers into stack frame slots
-            UNIT_Size save_slots[6];
-            for (UNIT_Size argument = 0; argument < num_arguments; ++argument) {
-                AMD64_Register argument_register = argument_registers[argument];
+            UNIT_Size save_slots[8];
+            for (UNIT_Size index = 0; index < 8; ++index) {
+                AMD64_Register saved_register = register_map[index];
                 // We don't want to preserve registers that are our own target
                 if (OP(destination).kind == OPERAND_REGISTER
-                    && argument_register == OP(destination).reg) {
-                    save_slots[argument] = -1;
+                    && saved_register == OP(destination).reg) {
+                    save_slots[index] = -1;
                     continue;
                 }
 
-                save_slots[argument] = _UNIT_StackFrame_AllocateSlot(&compile_context->stack_frame);
-                assert(save_slots[argument] % 8 == 0);
-                EMIT(mov(ctx, stack_slot(save_slots[argument]), reg(argument_register)));
+                save_slots[index] = _UNIT_StackFrame_AllocateSlot(&compile_context->stack_frame);
+                assert(save_slots[index] % 8 == 0);
+                EMIT(mov(ctx, stack_slot(save_slots[index]), reg(saved_register)));
             }
 
-            // Set up arguments
+            // TODO: Handle when there are more than six args
             for (UNIT_Size argument = 0; argument < num_arguments; ++argument) {
                 AMD64_Register argument_register = argument_registers[argument];
                 AMD64_Operand value = machine_item_to_operand(
@@ -308,14 +308,13 @@ translate_operation(_UNIT_CompileContext *compile_context,
             EMIT(call_symbol(ctx, OP(argument_1)));
             EMIT(mov(ctx, OP(destination), reg(REG_RAX)));
 
-            // Restore argument registers from stack frame slots
-            for (UNIT_Size argument = 0; argument < num_arguments; ++argument) {
-                if (save_slots[argument] == -1) {
+            for (UNIT_Size index = 0; index < 8; ++index) {
+                if (save_slots[index] == -1) {
                     continue;
                 }
-                AMD64_Register argument_register = argument_registers[argument];
-                EMIT(mov(ctx, reg(argument_register), stack_slot(save_slots[argument])));
-                _UNIT_StackFrame_FreeSlot(&compile_context->stack_frame, save_slots[argument]);
+                AMD64_Register saved_register = register_map[index];
+                EMIT(mov(ctx, reg(saved_register), stack_slot(save_slots[index])));
+                _UNIT_StackFrame_FreeSlot(&compile_context->stack_frame, save_slots[index]);
             }
 
             RESTORE_REGISTER(REG_RAX);
