@@ -101,6 +101,12 @@ void
 _UNIT_StackFrame_FreeSlot(_UNIT_StackFrame *frame, UNIT_Size slot);
 
 UNIT_Size
+_UNIT_StackFrame_AllocateSlotID(_UNIT_StackFrame *frame);
+
+void
+_UNIT_StackFrame_FreeSlotID(_UNIT_StackFrame *frame, UNIT_Size slot_id);
+
+UNIT_Size
 _UNIT_StackFrame_ComputeSize(_UNIT_StackFrame *frame);
 
 typedef struct {

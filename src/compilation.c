@@ -5,6 +5,7 @@
 #include <unit/internal/architectures.h>
 #include <unit/internal/compile_context.h>
 #include <unit/internal/executable_formats.h>
+#include <unit/internal/register_allocation.h>
 #include <unit/internal/translation.h>
 
 _UNIT_Relocation *
@@ -146,24 +147,39 @@ init_stack_frame(_UNIT_StackFrame *frame, UNIT_Size reserved_slots)
 }
 
 UNIT_Size
-_UNIT_StackFrame_AllocateSlot(_UNIT_StackFrame *frame)
+_UNIT_StackFrame_AllocateSlotID(_UNIT_StackFrame *frame)
 {
     assert(frame != NULL);
     assert(frame->free_slot_count < _UNIT_StackFrame_MAX_FREE_SLOTS);
     if (frame->free_slot_count > 0) {
-        return frame->free_slots[--frame->free_slot_count] * 8;
+        return frame->free_slots[--frame->free_slot_count];
     }
-    return (frame->next_slot++) * 8;
+    return (frame->next_slot++);
+}
+
+UNIT_Size
+_UNIT_StackFrame_AllocateSlot(_UNIT_StackFrame *frame)
+{
+    assert(frame != NULL);
+    return _UNIT_StackFrame_AllocateSlotID(frame) * 8;
 }
 
 void
-_UNIT_StackFrame_FreeSlot(_UNIT_StackFrame *frame, UNIT_Size slot)
+_UNIT_StackFrame_FreeSlotID(_UNIT_StackFrame *frame, UNIT_Size slot_id)
 {
     assert(frame != NULL);
-    assert(slot >= frame->reserved_slots);  // can't free memory variable slots
+    assert(slot_id >= frame->reserved_slots); // can't free memory variable slots
     assert(frame->free_slot_count < _UNIT_StackFrame_MAX_FREE_SLOTS);
-    assert(slot % 8 == 0);
-    frame->free_slots[frame->free_slot_count++] = (slot / 8);
+    frame->free_slots[frame->free_slot_count++] = slot_id;
+}
+
+void
+_UNIT_StackFrame_FreeSlot(_UNIT_StackFrame *frame, UNIT_Size slot_id)
+{
+    assert(frame != NULL);
+    assert(slot_id >= 0);
+    assert(slot_id % 8 == 0);
+    _UNIT_StackFrame_FreeSlotID(frame, slot_id / 8);
 }
 
 UNIT_Size
@@ -291,7 +307,8 @@ UNIT_Compile(const UNIT_Procedure *procedure, UNIT_Architecture architecture)
         return NULL;
     }
 
-    if (UNIT_FAILED(_UNIT_Translation_AllocateRegisters(&compiled_procedure->_translation, 8))) {
+    if (UNIT_FAILED(_UNIT_Translation_AllocateRegisters(&compiled_procedure->_translation,
+                                                        &compiled_procedure->_compile_context, 8))) {
         goto error;
     }
 
