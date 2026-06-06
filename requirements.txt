@@ -1,3 +1,4 @@
 # Requirements for Netlify
-sphinx>=7.0
+sphinx~=7.0
 shibuya>=2026.5.19
+sphinx-copybutton~=0.5

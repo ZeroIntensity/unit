@@ -33,6 +33,8 @@ So, using our prior knowledge about how we initialize structures
 (``Init`` and ``New`` functions), let's create a new context:
 
 .. code-block:: c
+   :linenos:
+   :caption: main.c
 
     #include <unit/unit.h>
 
@@ -66,9 +68,10 @@ find UNIT's header files and link against it.
 So, let's save the above as ``main.c`` and run it:
 
 .. code-block:: bash
+   :caption: bash
 
-   gcc main.c -o out -lunit
-   ./out
+   $ gcc main.c -o out -lunit
+   $ ./out
 
 
 Creating a procedure
@@ -84,6 +87,9 @@ memory:
 
 .. code-block:: c
    :emphasize-lines: 10-15
+   :linenos:
+   :caption: main.c
+
 
     #include <unit/unit.h>
 
@@ -115,6 +121,8 @@ some idea of what went wrong if something were to fail:
 
 .. code-block:: c
    :emphasize-lines: 12-13
+   :linenos:
+   :caption: main.c
 
     #include <unit/unit.h>
 
@@ -184,6 +192,8 @@ Now, if we apply this to our code:
 
 .. code-block:: c
    :emphasize-lines: 17-29
+   :linenos:
+   :caption: main.c
 
     #include <unit/unit.h>
 
@@ -228,6 +238,8 @@ We can clean this up by adding some macros tailored to our function, like so:
 
 .. code-block:: c
    :emphasize-lines: 17-28
+   :linenos:
+   :caption: main.c
 
     #include <unit/unit.h>
 
@@ -315,6 +327,8 @@ our code is running:
 
 .. code-block:: c
    :emphasize-lines: 14
+   :linenos:
+   :caption: main.c
 
     int main(void) {
         /* ... */
@@ -339,10 +353,11 @@ our code is running:
     }
 
 .. code-block:: bash
+   :caption: bash
 
-   gcc main.c -o out -lunit
-   ./out
-   echo $?
+   $ gcc main.c -o out -lunit
+   $ ./out
+   $ echo $?
    0
 
 Huh? 0 again? What's going on?
@@ -351,4 +366,4 @@ In the above code, all did was *create* the procedure -- not actually compile
 or execute it. Forgetting to actually run the code can be a common mistake
 when developing a code generator.
 
-So, how do we actually run our instructions? We'll talk about that next.
+So, how do we actually execute our instructions? We'll talk about that next.
