@@ -13,4 +13,6 @@ IR.
    :maxdepth: 2
    :caption: Contents:
 
-   installation
+   getting-started/index
+   concepts/index
+   reference/index
