@@ -24,19 +24,19 @@ _UNIT_RegisterAllocator_Init(_UNIT_RegisterAllocator *allocator,
     assert(context != NULL);
     if (UNIT_FAILED(_UNIT_SizeMap_Init(&allocator->assignments, context,
                                        num_registers))) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     if (UNIT_FAILED(_UNIT_SizeMap_Init(&allocator->spills, context, 8))) {
         _UNIT_SizeMap_Clear(&allocator->assignments);
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     allocator->translation = translation;
     allocator->stack_frame = &compile_context->stack_frame;
     allocator->num_registers = num_registers;
 
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 static void
@@ -56,7 +56,7 @@ allocate_registers_for_block(_UNIT_RegisterAllocator *allocator, _UNIT_BasicBloc
 
     _UNIT_SizeSet registers_in_use;
     if (UNIT_FAILED(_UNIT_SizeSet_Init(&registers_in_use, block->context, allocator->num_registers))) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     _UNIT_SizeSet_ITER(&block->liveness.alive_at_start, location);
@@ -105,10 +105,10 @@ allocate_registers_for_block(_UNIT_RegisterAllocator *allocator, _UNIT_BasicBloc
     }
 
     _UNIT_SizeSet_Clear(&registers_in_use);
-    return UNIT_OK;
+    return _UNIT_OK;
 error:
     _UNIT_SizeSet_Clear(&registers_in_use);
-    return UNIT_FAIL;
+    return _UNIT_FAIL;
 }
 
 static UNIT_Status
@@ -117,7 +117,7 @@ potentially_rewrite_item(_UNIT_RegisterAllocator *allocator,
 {
     assert(allocator != NULL);
     if (item == NULL) {
-        return UNIT_OK;
+        return _UNIT_OK;
     }
 
     _UNIT_Translation *translation = allocator->translation;
@@ -141,7 +141,7 @@ potentially_rewrite_item(_UNIT_RegisterAllocator *allocator,
             item->type = _UNIT_TYPE_MEMORY;
             UNIT_Size new_slot_id = _UNIT_StackFrame_AllocateSlotID(allocator->stack_frame);
             if (UNIT_FAILED(_UNIT_SizeMap_Set(spills, item->value, new_slot_id))) {
-                return UNIT_FAIL;
+                return _UNIT_FAIL;
             }
 
             item->value = new_slot_id;
@@ -152,12 +152,12 @@ potentially_rewrite_item(_UNIT_RegisterAllocator *allocator,
             _UNIT_MachineItem *arg = _UNIT_Vector_GET(item->call_args, index);
             assert(arg != NULL);
             if (UNIT_FAILED(potentially_rewrite_item(allocator, arg))) {
-                return UNIT_FAIL;
+                return _UNIT_FAIL;
             }
         }
     }
 
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 static UNIT_Status
@@ -172,7 +172,7 @@ rewrite_block_locations(_UNIT_RegisterAllocator *allocator,
                                                              index);
 #define POTENTIALLY_REWRITE(name)                                                   \
         if (UNIT_FAILED(potentially_rewrite_item(allocator, operation->name))) {    \
-            return UNIT_FAIL;                                                       \
+            return _UNIT_FAIL;                                                       \
         }
 
         POTENTIALLY_REWRITE(destination);
@@ -182,7 +182,7 @@ rewrite_block_locations(_UNIT_RegisterAllocator *allocator,
 #undef POTENTIALLY_REWRITE
     }
 
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 UNIT_Status
@@ -195,7 +195,7 @@ _UNIT_Translation_AllocateRegisters(_UNIT_Translation *translation,
     assert(num_registers > 0);
     _UNIT_RegisterAllocator allocator;
     if (UNIT_FAILED(_UNIT_RegisterAllocator_Init(&allocator, translation, compile_context, num_registers))) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     UNIT_Size size = _UNIT_Vector_SIZE(&translation->blocks);
@@ -203,7 +203,7 @@ _UNIT_Translation_AllocateRegisters(_UNIT_Translation *translation,
         _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks, index);
         if (UNIT_FAILED(allocate_registers_for_block(&allocator, block))) {
             _UNIT_RegisterAllocator_Clear(&allocator);
-            return UNIT_FAIL;
+            return _UNIT_FAIL;
         }
     }
 
@@ -212,10 +212,10 @@ _UNIT_Translation_AllocateRegisters(_UNIT_Translation *translation,
         assert(block != NULL);
         if (UNIT_FAILED(rewrite_block_locations(&allocator, block))) {
             _UNIT_RegisterAllocator_Clear(&allocator);
-            return UNIT_FAIL;
+            return _UNIT_FAIL;
         }
     }
 
     _UNIT_RegisterAllocator_Clear(&allocator);
-    return UNIT_OK;
+    return _UNIT_OK;
 }

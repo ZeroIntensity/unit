@@ -117,9 +117,9 @@ _UNIT_Map_Init(_UNIT_Map *map, UNIT_Context *context,
     map->hash_key = hash_key;
     map->items = _UNIT_Calloc(context, inital_capacity, sizeof(_UNIT_MapPair));
     if (UNLIKELY(map->items == NULL)) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 static int8_t
@@ -172,7 +172,7 @@ expand(_UNIT_Map *map) {
     _UNIT_MapPair *new_items = _UNIT_Calloc(map->context, new_capacity,
                                             sizeof(_UNIT_MapPair));
     if (UNLIKELY(new_items == NULL)) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     for (UNIT_Size index = 0; index < map->capacity; index++) {
@@ -195,7 +195,7 @@ expand(_UNIT_Map *map) {
     _UNIT_Dealloc(map->context, map->items);
     map->items = new_items;
     map->capacity = new_capacity;
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 void *
@@ -230,7 +230,7 @@ _UNIT_Map_Set(_UNIT_Map *map, void *key, void *value) {
     assert(map->len <= map->capacity);
     if (map->len == map->capacity) {
         if (UNIT_FAILED(expand(map))) {
-            return UNIT_FAIL;
+            return _UNIT_FAIL;
         }
     }
 
@@ -248,7 +248,7 @@ _UNIT_Map_Set(_UNIT_Map *map, void *key, void *value) {
         ++map->len;
     }
 
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 void

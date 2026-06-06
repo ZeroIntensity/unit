@@ -161,7 +161,7 @@ int main(void)
     UNIT_Context_Clear(&context);
     return 0;
 error:
-    UNIT_Error_Print(&context, stderr);
+    UNIT_PrintError(&context, stderr);
     UNIT_Procedure_Clear(&procedure);
     UNIT_Context_Clear(&context);
     return 1;

@@ -12,8 +12,8 @@ typedef struct {
     int8_t _status;
 } UNIT_Status;
 
-#define UNIT_OK ((UNIT_Status){ ._status = 0 })
-#define UNIT_FAIL ((UNIT_Status){ ._status = -1 })
+#define _UNIT_OK ((UNIT_Status){ ._status = 0 })
+#define _UNIT_FAIL ((UNIT_Status){ ._status = -1 })
 #define UNIT_FAILED(status) (((UNIT_Status)(status))._status == -1)
 
 #if defined(__GNUC__) || defined(__clang__)

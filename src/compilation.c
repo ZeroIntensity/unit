@@ -51,10 +51,10 @@ _UNIT_SymbolTable_Init(_UNIT_SymbolTable *symbol_table, UNIT_Context *context,
 {
     assert(symbol_table != NULL);
     if (UNIT_FAILED(_UNIT_Vector_Init(&symbol_table->relocations, context, 16, _UNIT_Dealloc))) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
     symbol_table->names = names;
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 void
@@ -94,15 +94,15 @@ _UNIT_JumpTable_Init(_UNIT_JumpTable *jump_table, UNIT_Context *context)
     if (UNIT_FAILED(_UNIT_Vector_Init(&jump_table->pending_jumps,
                                       context, 4,
                                       (UNIT_Destructor)_UNIT_PendingJump_Free))) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     if (UNIT_FAILED(_UNIT_SizeMap_Init(&jump_table->label_offsets, context, 4))) {
         _UNIT_Vector_Clear(&jump_table->pending_jumps);
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 void
@@ -118,15 +118,15 @@ _UNIT_StringData_Init(_UNIT_StringData *string_data, UNIT_Context *context)
 {
     assert(string_data != NULL);
     if (UNIT_FAILED(_UNIT_SizeMap_Init(&string_data->string_offsets, context, 8))) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     if (UNIT_FAILED(_UNIT_CodeBuffer_Init(&string_data->constant_buffer, context))) {
         _UNIT_SizeMap_Clear(&string_data->string_offsets);
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 void
@@ -209,31 +209,31 @@ _UNIT_CompileContext_Init(_UNIT_CompileContext *compile_context,
     compile_context->context = context;
     if (UNIT_FAILED(_UNIT_CodeBuffer_Init(&compile_context->buffer,
                                           context))) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     if (UNIT_FAILED(_UNIT_StringData_Init(&compile_context->string_data,
                                           context))) {
         _UNIT_CodeBuffer_Clear(&compile_context->buffer);
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     if (UNIT_FAILED(_UNIT_SymbolTable_Init(&compile_context->symbol_table,
                                            context, &procedure->_symbols))) {
         _UNIT_CodeBuffer_Clear(&compile_context->buffer);
         _UNIT_StringData_Clear(&compile_context->string_data);
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     if (UNIT_FAILED(_UNIT_JumpTable_Init(&compile_context->jump_table, context))) {
         _UNIT_CodeBuffer_Clear(&compile_context->buffer);
         _UNIT_StringData_Clear(&compile_context->string_data);
         _UNIT_SymbolTable_Clear(&compile_context->symbol_table);
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     init_stack_frame(&compile_context->stack_frame, translation->num_memory_slots);
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 void
@@ -259,18 +259,18 @@ build_constant_data(_UNIT_StringData *string_data, const _UNIT_Vector *strings)
         if (UNIT_FAILED(_UNIT_SizeMap_Set(&string_data->string_offsets,
                                           index,
                                           buffer_index))) {
-            return UNIT_FAIL;
+            return _UNIT_FAIL;
         }
 
         for (UNIT_Size byte = 0; byte < length; ++byte) {
             if (UNIT_FAILED(_UNIT_CodeBuffer_Emit8(&string_data->constant_buffer,
                                    string[byte]))) {
-                return UNIT_FAIL;
+                return _UNIT_FAIL;
             }
         }
     }
 
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 void

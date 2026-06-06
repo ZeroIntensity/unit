@@ -14,5 +14,6 @@ IR.
    :caption: Contents:
 
    getting-started/index
+   tutorial/index
    concepts/index
    reference/index

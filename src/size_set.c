@@ -11,9 +11,9 @@ _UNIT_SizeSet_Init(_UNIT_SizeSet *size_set, UNIT_Context *context,
     size_set->capacity = inital_capacity;
     size_set->items = _UNIT_Calloc(context, inital_capacity, sizeof(_UNIT_SizeSetItem));
     if (size_set->items == NULL) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 static int8_t
@@ -53,7 +53,7 @@ expand(_UNIT_SizeSet *size_set) {
     _UNIT_SizeSetItem *new_items = _UNIT_Calloc(size_set->context,
                                                 new_capacity, sizeof(_UNIT_SizeSetItem));
     if (new_items == NULL) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     _UNIT_SizeSetItem *old_items = size_set->items;
@@ -69,7 +69,7 @@ expand(_UNIT_SizeSet *size_set) {
     }
     _UNIT_Dealloc(size_set->context, old_items);
 
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 UNIT_Status
@@ -80,7 +80,7 @@ _UNIT_SizeSet_Add(_UNIT_SizeSet *size_set, UNIT_Size value)
     // 75% load factor
     if (size_set->len * 4 >= size_set->capacity * 3) {
         if (UNIT_FAILED(expand(size_set))) {
-            return UNIT_FAIL;
+            return _UNIT_FAIL;
         }
     }
 
@@ -89,7 +89,7 @@ _UNIT_SizeSet_Add(_UNIT_SizeSet *size_set, UNIT_Size value)
         ++size_set->len;
     }
 
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 int8_t

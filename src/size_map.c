@@ -14,9 +14,9 @@ _UNIT_SizeMap_Init(_UNIT_SizeMap *size_map, UNIT_Context *context,
     size_map->items = _UNIT_Calloc(context, inital_capacity,
                                    sizeof(_UNIT_SizeMapPair));
     if (size_map->items == NULL) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 static int8_t
@@ -57,7 +57,7 @@ expand(_UNIT_SizeMap *size_map) {
     _UNIT_SizeMapPair *new_items = _UNIT_Calloc(size_map->context,
                                                 new_capacity, sizeof(_UNIT_SizeMapPair));
     if (new_items == NULL) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     _UNIT_SizeMapPair *old_items = size_map->items;
@@ -73,7 +73,7 @@ expand(_UNIT_SizeMap *size_map) {
     }
     _UNIT_Dealloc(size_map->context, old_items);
 
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 UNIT_Status
@@ -84,7 +84,7 @@ _UNIT_SizeMap_Set(_UNIT_SizeMap *size_map, UNIT_Size key, UNIT_Size value)
     // 75% load factor
     if (size_map->len * 4 >= size_map->capacity * 3) {
         if (UNIT_FAILED(expand(size_map))) {
-            return UNIT_FAIL;
+            return _UNIT_FAIL;
         }
     }
 
@@ -94,7 +94,7 @@ _UNIT_SizeMap_Set(_UNIT_SizeMap *size_map, UNIT_Size key, UNIT_Size value)
         ++size_map->len;
     }
 
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 UNIT_Status
@@ -107,11 +107,11 @@ _UNIT_SizeMap_Get(const _UNIT_SizeMap *size_map, UNIT_Size key, UNIT_Size *value
     do {
         _UNIT_SizeMapPair *pair = &size_map->items[current_index];
         if (!pair->is_populated) {
-            return UNIT_FAIL;
+            return _UNIT_FAIL;
         }
         if (pair->key == key) {
             *value = pair->value;
-            return UNIT_OK;
+            return _UNIT_OK;
         }
         current_index++;
         if (current_index == size_map->capacity) {

@@ -92,7 +92,7 @@ emit_machine_instruction(UNIT_Context *context,
         if (arg2 != NULL) {
             _UNIT_Dealloc(context, arg2);
         }
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     operation->instruction = instruction;
@@ -102,10 +102,10 @@ emit_machine_instruction(UNIT_Context *context,
 
     if (UNIT_FAILED(_UNIT_Vector_Append(instructions,
                                         operation))) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 void
@@ -289,12 +289,12 @@ analyze_liveness(_UNIT_Translation *translation)
                                                        index - 1);
             assert(block != NULL);
             if (UNIT_FAILED(_UNIT_BasicBlock_PopulateLivenessStep(block, &changed))) {
-                return UNIT_FAIL;
+                return _UNIT_FAIL;
             }
         }
     }
 
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 _UNIT_BasicBlock *
@@ -372,13 +372,13 @@ create_jump_label_blocks(UNIT_Context *context, const _UNIT_Vector *jump_labels)
         assert(label != NULL);
         _UNIT_BasicBlock *label_block = _UNIT_BasicBlock_New(context, block_id++);
         if (label_block == NULL) {
-            return UNIT_FAIL;
+            return _UNIT_FAIL;
         }
         assert(label->_block == NULL);
         label->_block = label_block;
     }
 
-    return UNIT_OK;
+    return _UNIT_OK;
 
 }
 
@@ -415,10 +415,10 @@ _UNIT_LocalVariables_Init(_UNIT_LocalVariables *locals, UNIT_Context *context)
     locals->next_stack_slot = 0;
     if (UNIT_FAILED(_UNIT_Map_Init(&locals->locals_map, context, 8, compare_int32_deref,
                                    hash_int32_deref, _UNIT_Dealloc, _UNIT_Dealloc))) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 _UNIT_LocalState *
@@ -480,13 +480,13 @@ _UNIT_Translate(_UNIT_Translation *translation,
 
     _UNIT_Vector stack;
     if (UNIT_FAILED(_UNIT_Vector_Init(&stack, context, 16, NULL))) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     _UNIT_LocalVariables locals;
     if (UNIT_FAILED(_UNIT_LocalVariables_Init(&locals, context))) {
         _UNIT_Vector_Clear(&stack);
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     if (UNIT_FAILED(_UNIT_Map_Init(&translation->strings, context, 8,
@@ -494,14 +494,14 @@ _UNIT_Translate(_UNIT_Translation *translation,
                       NULL, _UNIT_Dealloc))) {
         _UNIT_Vector_Clear(&stack);
         _UNIT_LocalVariables_Clear(&locals);
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     if (UNIT_FAILED(_UNIT_SizeMap_Init(&translation->symbols, context, 8))) {
         _UNIT_Vector_Clear(&stack);
         _UNIT_Map_Clear(&translation->strings);
         _UNIT_LocalVariables_Clear(&locals);
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     if (UNIT_FAILED(_UNIT_Vector_Init(&translation->blocks, context, 16,
@@ -510,7 +510,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
         _UNIT_SizeMap_Clear(&translation->symbols);
         _UNIT_Map_Clear(&translation->strings);
         _UNIT_LocalVariables_Clear(&locals);
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
 
@@ -521,7 +521,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
         _UNIT_Map_Clear(&translation->strings);
         _UNIT_LocalVariables_Clear(&locals);
         _UNIT_Vector_Clear(&translation->blocks);
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     UNIT_Size size = _UNIT_Vector_SIZE(&procedure->_instructions);
@@ -925,7 +925,7 @@ error:
     _UNIT_SizeMap_Clear(&translation->symbols);
     _UNIT_Map_Clear(&translation->strings);
     _UNIT_Vector_Clear(&translation->blocks);
-    return UNIT_FAIL;
+    return _UNIT_FAIL;
 }
 
 void

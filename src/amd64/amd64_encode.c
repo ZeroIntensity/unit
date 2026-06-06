@@ -107,15 +107,15 @@ add_jump(_UNIT_CompileContext *compile_context, UNIT_Size label_index)
         label_index
     );
     if (jump == NULL) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     if (UNIT_FAILED(_UNIT_Vector_Append(&compile_context->jump_table.pending_jumps,
                                         jump))) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 static inline uint8_t
@@ -451,10 +451,10 @@ AMD64_encode_instruction(_UNIT_CompileContext *compile_context,
     }
 
     _UNIT_Dealloc(compile_context->context, instr);
-    return UNIT_OK;
+    return _UNIT_OK;
 error:
     _UNIT_Dealloc(compile_context->context, instr);
-    return UNIT_FAIL;
+    return _UNIT_FAIL;
 }
 
 void

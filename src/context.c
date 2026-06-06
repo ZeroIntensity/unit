@@ -11,7 +11,7 @@ UNIT_Context_Init(UNIT_Context *context)
 {
     assert(context != NULL);
     memset(context, 0, sizeof(UNIT_Context));
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 UNIT_Context *

@@ -173,9 +173,9 @@ add_null_symbol(_UNIT_ELF_Object *object)
     assert(_UNIT_Vector_SIZE(&object->symbols) == 0);
     ELF_Symbol *symbol = create_and_store_symbol(object);
     if (symbol == NULL) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 /* Adds a local section symbol for .rodata at index 1. Relocations
@@ -188,12 +188,12 @@ add_rodata_section_symbol(_UNIT_ELF_Object *object)
     assert(_UNIT_Vector_SIZE(&object->symbols) == 1);
     ELF_Symbol *symbol = create_and_store_symbol(object);
     if (symbol == NULL) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
     symbol->info = ELF_SYMBOL_INFO(ELF_SYMBOL_BINDING_LOCAL,
                                    ELF_SYMBOL_TYPE_SECTION);
     symbol->section_index = SECTION_RODATA;
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 /* Adds the entry point symbol. */
@@ -204,17 +204,17 @@ add_start_symbol(_UNIT_ELF_Object *object)
     assert(_UNIT_Vector_SIZE(symbols) == 2);
     ELF_Symbol *symbol = create_and_store_symbol(object);
     if (symbol == NULL) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
     symbol->name = append_string(object, "main");
     if (symbol->name == -1) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
     symbol->info = ELF_SYMBOL_INFO(ELF_SYMBOL_BINDING_GLOBAL,
                                    ELF_SYMBOL_TYPE_FUNCTION);
     symbol->section_index = SECTION_TEXT;
     symbol->size = _UNIT_CodeBuffer_CurrentIndex(object->text);
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 /* Adds undefined symbols for each external function referenced
@@ -234,11 +234,11 @@ add_external_symbols(_UNIT_ELF_Object *object,
         char *name = _UNIT_Vector_GET(symbol_names, index);
         ELF_Symbol *symbol = create_and_store_symbol(object);
         if (symbol == NULL) {
-            return UNIT_FAIL;
+            return _UNIT_FAIL;
         }
         symbol->name = append_string(object, name);
         if (symbol->name == -1) {
-            return UNIT_FAIL;
+            return _UNIT_FAIL;
         }
         symbol->info = ELF_SYMBOL_INFO(ELF_SYMBOL_BINDING_GLOBAL,
                                        ELF_SYMBOL_TYPE_NONE);
@@ -246,11 +246,11 @@ add_external_symbols(_UNIT_ELF_Object *object,
 
         if (UNIT_FAILED(_UNIT_SizeMap_Set(&object->symtab_indices, index,
                                           symtab_index++))) {
-            return UNIT_FAIL;
+            return _UNIT_FAIL;
         }
     }
 
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 /* Converts our internal relocations into ELF relocations.
@@ -269,7 +269,7 @@ build_relocation_table(_UNIT_ELF_Object *object,
 
         ELF_RelocationAddend *entry = _UNIT_Alloc(object->context, sizeof(ELF_RelocationAddend));
         if (entry == NULL) {
-            return UNIT_FAIL;
+            return _UNIT_FAIL;
         }
         memset(entry, 0, sizeof(ELF_RelocationAddend));
 
@@ -291,11 +291,11 @@ build_relocation_table(_UNIT_ELF_Object *object,
         }
 
         if (UNIT_FAILED(_UNIT_Vector_Append(&object->relocations_table, entry))) {
-            return UNIT_FAIL;
+            return _UNIT_FAIL;
         }
     }
 
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 /* Fills in the section header table. Computes file offsets for
@@ -391,22 +391,22 @@ static UNIT_Status
 build_symbol_table(_UNIT_ELF_Object *object, const _UNIT_CompileContext *context)
 {
     if (UNIT_FAILED(add_null_symbol(object))) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     if (UNIT_FAILED(add_rodata_section_symbol(object))) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     if (UNIT_FAILED(add_start_symbol(object))) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     if (UNIT_FAILED(add_external_symbols(object, context))) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 static void
@@ -453,28 +453,28 @@ build_elf_object(_UNIT_ELF_Object *object, const _UNIT_CompileContext *compile_c
     if (UNIT_FAILED(_UNIT_Vector_Init(&object->string_table,
                                       compile_context->context,
                                       8, _UNIT_Dealloc))) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     if (UNIT_FAILED(_UNIT_Vector_Init(&object->symbols,
                                       compile_context->context,
                                       16, _UNIT_Dealloc))) {
         _UNIT_Vector_Clear(&object->string_table);
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     if (UNIT_FAILED(_UNIT_Vector_Init(&object->relocations_table,
                                       compile_context->context, 16, _UNIT_Dealloc))) {
         _UNIT_Vector_Clear(&object->string_table);
         _UNIT_Vector_Clear(&object->symbols);
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     if (UNIT_FAILED(_UNIT_SizeMap_Init(&object->symtab_indices,
                                        compile_context->context, 8))) {
         _UNIT_Vector_Clear(&object->string_table);
         _UNIT_Vector_Clear(&object->symbols);
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     // String table starts with a null byte
@@ -492,12 +492,12 @@ build_elf_object(_UNIT_ELF_Object *object, const _UNIT_CompileContext *compile_c
 
     populate_elf_data(object, compile_context);
 
-    return UNIT_OK;
+    return _UNIT_OK;
 error:
     _UNIT_Vector_Clear(&object->string_table);
     _UNIT_Vector_Clear(&object->symbols);
     _UNIT_SizeMap_Clear(&object->symtab_indices);
-    return UNIT_FAIL;
+    return _UNIT_FAIL;
 }
 
 static UNIT_Status
@@ -506,7 +506,7 @@ write_object_to_file(const _UNIT_ELF_Object *object, const char *path)
     FILE *file = fopen(path, "wb");
     if (!file) {
         _UNIT_SetOSError(object->context, "writing ELF object");
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     // ELF header
@@ -550,7 +550,7 @@ write_object_to_file(const _UNIT_ELF_Object *object, const char *path)
            object->section_string_table_size, file);
 
     fclose(file);
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 UNIT_Status
@@ -560,11 +560,11 @@ _UNIT_ELF_WriteObjectFile(const _UNIT_CompileContext *context, const char *path)
     assert(path != NULL);
     _UNIT_ELF_Object elf_object;
     if (UNIT_FAILED(build_elf_object(&elf_object, context))) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     if (UNIT_FAILED(write_object_to_file(&elf_object, path))) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     _UNIT_SizeMap_Clear(&elf_object.symtab_indices);
@@ -572,5 +572,5 @@ _UNIT_ELF_WriteObjectFile(const _UNIT_CompileContext *context, const char *path)
     _UNIT_Vector_Clear(&elf_object.string_table);
     _UNIT_Vector_Clear(&elf_object.symbols);
 
-    return UNIT_OK;
+    return _UNIT_OK;
 }

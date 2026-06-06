@@ -9,3 +9,4 @@ This section contains technical reference for UNIT's APIs.
 
    context
    procedure
+   errors

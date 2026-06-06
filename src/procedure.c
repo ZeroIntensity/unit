@@ -14,20 +14,20 @@ UNIT_Procedure_Init(UNIT_Procedure *procedure,
     procedure->context = context;
     if (UNIT_FAILED(_UNIT_Vector_Init(&procedure->_instructions,
                                       context, 64, _UNIT_Dealloc))) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     if (UNIT_FAILED(_UNIT_Vector_Init(&procedure->_global_strings,
                                       context, 4, _UNIT_Dealloc))) {
         _UNIT_Vector_Clear(&procedure->_instructions);
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     if (UNIT_FAILED(_UNIT_Vector_Init(&procedure->_jump_labels,
                                       context, 4, _UNIT_Dealloc))) {
         _UNIT_Vector_Clear(&procedure->_instructions);
         _UNIT_Vector_Clear(&procedure->_global_strings);
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     if (UNIT_FAILED(_UNIT_Vector_Init(&procedure->_symbols,
@@ -35,7 +35,7 @@ UNIT_Procedure_Init(UNIT_Procedure *procedure,
         _UNIT_Vector_Clear(&procedure->_instructions);
         _UNIT_Vector_Clear(&procedure->_global_strings);
         _UNIT_Vector_Clear(&procedure->_jump_labels);
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     if (UNIT_FAILED(_UNIT_Vector_Init(&procedure->_local_variables,
@@ -44,11 +44,11 @@ UNIT_Procedure_Init(UNIT_Procedure *procedure,
         _UNIT_Vector_Clear(&procedure->_global_strings);
         _UNIT_Vector_Clear(&procedure->_jump_labels);
         _UNIT_Vector_Clear(&procedure->_symbols);
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     procedure->name = name;
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 void
@@ -80,7 +80,7 @@ UNIT_Procedure_AddOperation(UNIT_Procedure *procedure,
     _UNIT_Operation *operation = _UNIT_Alloc(procedure->context,
                                              sizeof(_UNIT_Operation));
     if (operation == NULL) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
     operation->instruction = instruction;
     operation->argument = argument;
@@ -116,10 +116,10 @@ UNIT_Procedure_UseLabel(UNIT_Procedure *procedure,
     assert(jump_label != NULL);
 
     if (UNIT_FAILED(UNIT_Procedure_AddOperation(procedure, _UNIT_OP_JUMP_MARKER, jump_label->id))) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 UNIT_Status
@@ -141,19 +141,19 @@ UNIT_Procedure_AddCall(UNIT_Procedure *procedure,
     assert(name != NULL);
     char *copied = _UNIT_StrDup(procedure->context, name);
     if (copied == NULL) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     UNIT_Size index = _UNIT_Vector_SIZE(&procedure->_symbols);
     if (UNIT_FAILED(_UNIT_Vector_Append(&procedure->_symbols,
                                         copied))) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     if (UNIT_FAILED(UNIT_Procedure_AddOperation(procedure,
                                                 UNIT_OP_PREPARE_CALL,
                                                 num_arguments))) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     return UNIT_Procedure_AddOperation(procedure, UNIT_OP_CALL_NAME, index);
@@ -166,13 +166,13 @@ UNIT_Procedure_AddStringLoad(UNIT_Procedure *procedure, const char *str)
     assert(str != NULL);
     char *copied = _UNIT_StrDup(procedure->context, str);
     if (copied == NULL) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     UNIT_Size index = _UNIT_Vector_SIZE(&procedure->_global_strings);
     if (UNIT_FAILED(_UNIT_Vector_Append(&procedure->_global_strings,
                                         copied))) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     return UNIT_Procedure_AddOperation(procedure, UNIT_OP_LOAD_STRING,
@@ -186,12 +186,12 @@ UNIT_Procedure_AddStoreLocal(UNIT_Procedure *procedure, const char *name,
     UNIT_Size index = _UNIT_Vector_SIZE(&procedure->_local_variables);
     char *copy = _UNIT_StrDup(procedure->context, name);
     if (copy == NULL) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     if (UNIT_FAILED(_UNIT_Vector_Append(&procedure->_local_variables,
                                         copy))) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     local_ptr->id = index;

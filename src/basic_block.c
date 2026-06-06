@@ -7,28 +7,28 @@ _UNIT_LivenessInfo_Init(_UNIT_LivenessInfo *liveness, UNIT_Context *context)
     assert(liveness != NULL);
     assert(context != NULL);
     if (UNIT_FAILED(_UNIT_SizeSet_Init(&liveness->created_locations, context, 8))) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     if (UNIT_FAILED(_UNIT_SizeSet_Init(&liveness->used_locations, context, 8))) {
         _UNIT_SizeSet_Clear(&liveness->created_locations);
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     if (UNIT_FAILED(_UNIT_SizeSet_Init(&liveness->alive_at_start, context, 8))) {
         _UNIT_SizeSet_Clear(&liveness->created_locations);
         _UNIT_SizeSet_Clear(&liveness->used_locations);
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
     if (UNIT_FAILED(_UNIT_SizeSet_Init(&liveness->alive_at_end, context, 8))) {
         _UNIT_SizeSet_Clear(&liveness->created_locations);
         _UNIT_SizeSet_Clear(&liveness->used_locations);
         _UNIT_SizeSet_Clear(&liveness->alive_at_start);
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
 
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 void
@@ -46,11 +46,11 @@ set_add_and_track(_UNIT_SizeSet *set, UNIT_Size value, int8_t *changed)
 {
     if (!_UNIT_SizeSet_Contains(set, value)) {
         if (UNIT_FAILED(_UNIT_SizeSet_Add(set, value))) {
-            return UNIT_FAIL;
+            return _UNIT_FAIL;
         }
         *changed = 1;
     }
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 _UNIT_BasicBlock *
@@ -116,7 +116,7 @@ populate_liveness_info(_UNIT_Vector *successors,
         _UNIT_SizeSet_ITER(&successor->liveness.alive_at_start, location);
             if (UNIT_FAILED(set_add_and_track(&liveness->alive_at_end,
                                               location, changed))) {
-                return UNIT_FAIL;
+                return _UNIT_FAIL;
             }
         _UNIT_SizeSet_END_ITER();
     }
@@ -127,7 +127,7 @@ populate_liveness_info(_UNIT_Vector *successors,
     _UNIT_SizeSet_ITER(&liveness->used_locations, location);
         if (UNIT_FAILED(set_add_and_track(&liveness->alive_at_start,
                                           location, changed))) {
-            return UNIT_FAIL;
+            return _UNIT_FAIL;
         }
     _UNIT_SizeSet_END_ITER();
 
@@ -137,12 +137,12 @@ populate_liveness_info(_UNIT_Vector *successors,
         if (!_UNIT_SizeSet_Contains(&liveness->created_locations, location)) {
             if (UNIT_FAILED(set_add_and_track(&liveness->alive_at_start,
                                               location, changed))) {
-                return UNIT_FAIL;
+                return _UNIT_FAIL;
             }
         }
     _UNIT_SizeSet_END_ITER();
 
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 UNIT_Status

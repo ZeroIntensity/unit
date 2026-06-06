@@ -14,12 +14,12 @@ _UNIT_Vector_Init(_UNIT_Vector *vector, UNIT_Context *context,
     vector->items = _UNIT_Calloc(context,
                                  sizeof(void *), initial_capacity);
     if (vector->items == NULL) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
     vector->length = 0;
     vector->capacity = initial_capacity;
     vector->dealloc = dealloc;
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 void
@@ -48,12 +48,12 @@ _UNIT_Vector_Append(_UNIT_Vector *vector, void *item)
             if (vector->dealloc != NULL) {
                 vector->dealloc(vector->context, item);
             }
-            return UNIT_FAIL;
+            return _UNIT_FAIL;
         }
         vector->items = new_items;
     }
     vector->items[vector->length++] = item;
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 void *

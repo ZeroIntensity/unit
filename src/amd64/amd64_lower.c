@@ -156,7 +156,7 @@ static const AMD64_Register argument_registers[] = {
 
 #define EMIT(op)                                                             \
     if (UNIT_FAILED(AMD64_encode_instruction(compile_context, op))) {        \
-        return UNIT_FAIL;                                                    \
+        return _UNIT_FAIL;                                                    \
     }
 
 static UNIT_Status
@@ -169,12 +169,12 @@ ensure_register(_UNIT_CompileContext *compile_context,
     AMD64_Operand in_operand = machine_item_to_operand(item);
     if (in_operand.kind == OPERAND_REGISTER) {
         *out_operand = in_operand;
-        return UNIT_OK;
+        return _UNIT_OK;
     }
 
     EMIT(mov(compile_context->context, reg(REG_R11), in_operand));
     *out_operand = reg(REG_R11);
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 static UNIT_Status
@@ -187,7 +187,7 @@ flush_register(_UNIT_CompileContext *compile_context,
         EMIT(mov(compile_context->context, original, actual));
     }
 
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 static UNIT_Status
@@ -203,7 +203,7 @@ preserve_register(_UNIT_CompileContext *compile_context,
         && operation->name->type == _UNIT_TYPE_REGISTER             \
         && register_map[operation->name->value] == to_preserve) {   \
         *slot_ptr = -1;                                             \
-        return UNIT_OK;                                             \
+        return _UNIT_OK;                                             \
     }
 
     IGNORE_IF_TARGET(destination);
@@ -214,7 +214,7 @@ preserve_register(_UNIT_CompileContext *compile_context,
     EMIT(mov(compile_context->context, stack_slot(slot), reg(to_preserve)));
     *slot_ptr = slot;
 
-    return UNIT_OK;
+    return _UNIT_OK;
 
 #undef IGNORE_IF_TARGET
 }
@@ -225,12 +225,12 @@ restore_register(_UNIT_CompileContext *compile_context, AMD64_Register preserved
 {
     assert(compile_context != NULL);
     if (slot == -1) {
-        return UNIT_OK;
+        return _UNIT_OK;
     }
 
     EMIT(mov(compile_context->context, reg(preserved), stack_slot(slot)));
     _UNIT_StackFrame_FreeSlot(&compile_context->stack_frame, slot);
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 static UNIT_Status
@@ -246,23 +246,23 @@ translate_operation(_UNIT_CompileContext *compile_context,
 #define ENSURE_IN_REGISTER(name)                                                            \
     AMD64_Operand name;                                                                     \
     if (UNIT_FAILED(ensure_register(compile_context, operation->name, &name))) {            \
-        return UNIT_FAIL;                                                                   \
+        return _UNIT_FAIL;                                                                   \
     }
 
 #define FLUSH_REGISTER(name)                                                        \
     if (UNIT_FAILED(flush_register(compile_context, operation->name, name))) {      \
-        return UNIT_FAIL;                                                           \
+        return _UNIT_FAIL;                                                           \
     }
 
 #define PRESERVE_REGISTER(name)                                                             \
     UNIT_Size slot_ ##name;                                                                 \
     if (UNIT_FAILED(preserve_register(compile_context, operation, name, &slot_ ##name))) {  \
-        return UNIT_FAIL;                                                                   \
+        return _UNIT_FAIL;                                                                   \
     }
 
 #define RESTORE_REGISTER(name)                                                              \
     if (UNIT_FAILED(restore_register(compile_context, name, slot_ ##name))) {               \
-        return UNIT_FAIL;                                                                   \
+        return _UNIT_FAIL;                                                                   \
     }
 
     switch (operation->instruction) {
@@ -439,7 +439,7 @@ translate_operation(_UNIT_CompileContext *compile_context,
         }
     }
 
-    return UNIT_OK;
+    return _UNIT_OK;
 #undef OP
 }
 
@@ -462,7 +462,7 @@ _UNIT_AMD64_Compile(_UNIT_Translation *translation,
                                                                 index);
             assert(operation != NULL);
             if (UNIT_FAILED(translate_operation(compile_context, operation))) {
-                return UNIT_FAIL;
+                return _UNIT_FAIL;
             }
         }
     }
@@ -477,5 +477,5 @@ _UNIT_AMD64_Compile(_UNIT_Translation *translation,
 
     AMD64_PatchPrologue(compile_context, prologue_offset, frame_size);
     AMD64_PatchJumps(compile_context);
-    return UNIT_OK;
+    return _UNIT_OK;
 }

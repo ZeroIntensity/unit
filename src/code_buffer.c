@@ -12,12 +12,12 @@ _UNIT_CodeBuffer_Init(_UNIT_CodeBuffer *buffer, UNIT_Context *context)
     assert(context != NULL);
     buffer->data = _UNIT_Alloc(context, CODE_BUFFER_INITIAL_SIZE);
     if (buffer->data == NULL) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
     buffer->capacity = CODE_BUFFER_INITIAL_SIZE;
     buffer->size = 0;
     buffer->context = context;
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 void
@@ -38,17 +38,17 @@ ensure_buffer_capacity(_UNIT_CodeBuffer *buffer, uint8_t amount_to_add)
     assert(buffer->capacity >= CODE_BUFFER_INITIAL_SIZE);
     assert(buffer->size < buffer->capacity);
     if ((amount_to_add + buffer->size) < buffer->capacity) {
-        return UNIT_OK;
+        return _UNIT_OK;
     }
 
     uint8_t *new_buffer = _UNIT_Realloc(buffer->context, buffer->data,
                                         buffer->capacity * 2);
     if (new_buffer == NULL) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
     buffer->data = new_buffer;
     buffer->capacity *= 2;
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 UNIT_Status
@@ -56,10 +56,10 @@ _UNIT_CodeBuffer_Emit8(_UNIT_CodeBuffer *buffer, uint8_t value)
 {
     assert(buffer != NULL);
     if (UNIT_FAILED(ensure_buffer_capacity(buffer, 1))) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
     buffer->data[buffer->size++] = value;
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 UNIT_Status
@@ -67,11 +67,11 @@ _UNIT_CodeBuffer_Emit32(_UNIT_CodeBuffer *buffer, uint32_t value)
 {
     assert(buffer != NULL);
     if (UNIT_FAILED(ensure_buffer_capacity(buffer, 4))) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
     memcpy(buffer->data + buffer->size, &value, 4);
     buffer->size += 4;
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 UNIT_Status
@@ -79,11 +79,11 @@ _UNIT_CodeBuffer_Emit64(_UNIT_CodeBuffer *buffer, uint64_t value)
 {
     assert(buffer != NULL);
     if (UNIT_FAILED(ensure_buffer_capacity(buffer, 8))) {
-        return UNIT_FAIL;
+        return _UNIT_FAIL;
     }
     memcpy(buffer->data + buffer->size, &value, 8);
     buffer->size += 8;
-    return UNIT_OK;
+    return _UNIT_OK;
 }
 
 void
