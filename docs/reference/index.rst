@@ -8,5 +8,6 @@ This section contains technical reference for UNIT's APIs.
    :caption: Contents:
 
    context
-   procedure
    errors
+   procedure
+   instructions

@@ -1,5 +1,5 @@
-``UNIT`` reference
-==================
+Errors
+======
 
 .. c:struct:: UNIT_Status
 

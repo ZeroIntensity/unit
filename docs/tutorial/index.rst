@@ -8,3 +8,4 @@ This section teaches you how to use UNIT.
    :caption: Contents:
 
    the-api
+   procedure-basics

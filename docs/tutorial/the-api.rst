@@ -45,7 +45,7 @@ the error status (similar to ``errno``), is stored here.
 
 Generally speaking, you don't need to care much about what is actually stored
 on the context, but you do always need to have one. A context can be constructed
-using :c:function:`UNIT_Context_Init` or :c:function:`UNIT_Context_New`, like
+using :c:func:`UNIT_Context_Init` or :c:func:`UNIT_Context_New`, like
 we learned above.
 
 
@@ -75,7 +75,7 @@ always be set. The error indicator has two parts: the status code and the messag
 
 As an example, let's call some function that sets an error and returns ``NULL``
 upon failure. For our purposes, let's simply print out the error message.
-We can do this using a function called :c:function:`UNIT_PrintError`:
+We can do this using a function called :c:func:`UNIT_PrintError`, like so:
 
 
 .. code-block:: c

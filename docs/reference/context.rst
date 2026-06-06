@@ -1,5 +1,5 @@
-``UNIT_Context`` reference
-==========================
+Contexts
+========
 
 
 .. c:type:: UNIT_Context
@@ -11,7 +11,8 @@
 
    Initialize a context.
 
-   .. important:: Quirk
+   .. admonition:: Quirk
+      :class: important
 
       If this function fails, there will *not* be any error indicator set,
       because there's no context to store it on.
@@ -21,7 +22,8 @@
 
    Create a new context.
 
-   .. important:: Quirk
+   .. admonition:: Quirk
+      :class: important
 
       If this function fails, there will *not* be any error indicator set,
       because there's no context to store it on.

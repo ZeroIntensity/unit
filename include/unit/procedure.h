@@ -93,7 +93,7 @@ UNIT_Procedure_CreateJumpLabel(UNIT_Procedure *procedure, const char *name);
 
 UNIT_Status
 UNIT_Procedure_UseLabel(UNIT_Procedure *procedure,
-                         UNIT_JumpLabel *jump_label);
+                        UNIT_JumpLabel *jump_label);
 
 UNIT_Status
 UNIT_Procedure_AddJump(UNIT_Procedure *procedure, UNIT_Instruction instruction,
