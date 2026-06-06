@@ -1,16 +1,16 @@
-.. UNIT documentation master file, created by
-   sphinx-quickstart on Sat Jun  6 11:17:25 2026.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
-
 UNIT documentation
 ==================
 
-Add your content using ``reStructuredText`` syntax. See the
-`reStructuredText <https://www.sphinx-doc.org/en/master/usage/restructuredtext/index.html>`_
-documentation for details.
+Introduction
+------------
+
+UNIT ("Unified Native Instruction Translator") is a compiler backend library
+written in C. It enables developers to emit machine code using a stack-based
+IR.
 
 
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
+
+   installation
