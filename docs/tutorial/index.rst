@@ -9,3 +9,4 @@ This section teaches you how to use UNIT.
 
    the-api
    procedure-basics
+   compilation
