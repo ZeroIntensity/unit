@@ -33,6 +33,10 @@ typedef struct _UNIT_MachineItem {
     const char *hint;
     // Next node in the machine item linked list
     struct _UNIT_MachineItem *next;
+    struct {
+        const char *name;
+        UNIT_Size index;
+    } created_by;
 } _UNIT_MachineItem;
 
 typedef enum {

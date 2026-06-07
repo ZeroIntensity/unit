@@ -47,6 +47,30 @@ _UNIT_RegisterAllocator_Clear(_UNIT_RegisterAllocator *allocator)
     _UNIT_SizeMap_Clear(&allocator->spills);
 }
 
+static void
+free_dead_registers(_UNIT_RegisterAllocator *allocator, _UNIT_BasicBlock *block,
+                    UNIT_Size index, _UNIT_SizeSet *registers_in_use)
+{
+    assert(allocator != NULL);
+    assert(block != NULL);
+    _UNIT_SizeMap *assignments = &allocator->assignments;
+    assert(assignments != NULL);
+
+    _UNIT_SizeMap_ITER(assignments, location, register_id);
+        if (_UNIT_SizeSet_Contains(&block->liveness.alive_at_end, location)) {
+            continue;
+        }
+
+        // Check if last use is at or before current instruction
+        UNIT_Size last;
+        if (!UNIT_FAILED(_UNIT_SizeMap_Get(&block->liveness.last_uses, location, &last))) {
+            if (last <= index) {
+                _UNIT_SizeSet_Remove(registers_in_use, register_id);
+            }
+        }
+    _UNIT_SizeMap_END_ITER();
+}
+
 static UNIT_Status
 allocate_registers_for_block(_UNIT_RegisterAllocator *allocator, _UNIT_BasicBlock *block)
 {
@@ -79,10 +103,11 @@ allocate_registers_for_block(_UNIT_RegisterAllocator *allocator, _UNIT_BasicBloc
             continue;
         }
 
+        free_dead_registers(allocator, block, index, &registers_in_use);
+
         // Assign register to destination if it's a new location
         UNIT_Size location = operation->destination->value;
         UNIT_Size existing;
-
 
         if (!UNIT_FAILED(_UNIT_SizeMap_Get(assignments, location, &existing))) {
             // Location already assigned a register

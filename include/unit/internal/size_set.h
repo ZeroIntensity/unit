@@ -34,6 +34,9 @@ _UNIT_Structure_CLEAR_AND_FREE(_UNIT_SizeSet)
 int8_t
 _UNIT_SizeSet_Contains(const _UNIT_SizeSet *size_set, UNIT_Size value);
 
+void
+_UNIT_SizeSet_Remove(_UNIT_SizeSet *size_set, UNIT_Size value);
+
 UNIT_Status
 _UNIT_SizeSet_Add(_UNIT_SizeSet *size_set, UNIT_Size value);
 

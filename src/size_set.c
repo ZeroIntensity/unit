@@ -122,3 +122,43 @@ _UNIT_SizeSet_Clear(_UNIT_SizeSet *size_set)
     assert(size_set != NULL);
     _UNIT_Dealloc(size_set->context, size_set->items);
 }
+
+void
+_UNIT_SizeSet_Remove(_UNIT_SizeSet *size_set, UNIT_Size value)
+{
+    assert(size_set != NULL);
+    UNIT_Size index = (UNIT_Size)(value & (uint64_t)(size_set->capacity - 1));
+    UNIT_Size current = index;
+
+    do {
+        _UNIT_SizeSetItem *item = &size_set->items[current];
+        if (!item->is_populated) {
+            return;
+        }
+        if (item->value == value) {
+            break;
+        }
+        current++;
+        if (current == size_set->capacity) {
+            current = 0;
+        }
+    } while (current != index);
+
+    size_set->items[current].is_populated = 0;
+    size_set->len--;
+
+    UNIT_Size next = current + 1;
+    if (next == size_set->capacity) {
+        next = 0;
+    }
+
+    while (size_set->items[next].is_populated) {
+        _UNIT_SizeSetItem item = size_set->items[next];
+        size_set->items[next].is_populated = 0;
+        set_size_set_entry(size_set, item.value);
+        next++;
+        if (next == size_set->capacity) {
+            next = 0;
+        }
+    }
+}

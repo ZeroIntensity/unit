@@ -3,6 +3,7 @@
 
 #include <unit/base.h>
 
+#include <unit/internal/size_map.h>
 #include <unit/internal/size_set.h>
 #include <unit/internal/vector.h>
 
@@ -13,6 +14,7 @@ typedef struct {
     _UNIT_SizeSet used_locations;
     _UNIT_SizeSet alive_at_start;
     _UNIT_SizeSet alive_at_end;
+    _UNIT_SizeMap last_uses;
 } _UNIT_LivenessInfo;
 
 UNIT_Status

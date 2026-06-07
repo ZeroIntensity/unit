@@ -83,9 +83,33 @@ machine_instruction_name(_UNIT_MachineInstruction machine_instruction)
 
 #undef NAME
 
+static UNIT_Status
+mark_last_use(_UNIT_BasicBlock *block, _UNIT_MachineItem *item)
+{
+    assert(block != NULL);
+    _UNIT_SizeMap *last_uses = &block->liveness.last_uses;
+    UNIT_Size index = _UNIT_Vector_SIZE(&block->instructions) - 1;
+
+    assert(last_uses != NULL);
+    assert(item != NULL);
+    assert(index >= 0);
+    if (item->type == _UNIT_TYPE_LOCATION) {
+        return _UNIT_SizeMap_Set(last_uses, item->value, index);
+    } else if (item->type == _UNIT_TYPE_CALL_ARGS) {
+        UNIT_Size count = _UNIT_Vector_SIZE(item->call_args);
+        for (UNIT_Size i = 0; i < count; ++i) {
+            if (UNIT_FAILED(mark_last_use(block, _UNIT_Vector_GET(item->call_args, i)))) {
+                return _UNIT_FAIL;
+            }
+        }
+    }
+
+    return _UNIT_OK;
+}
+
 UNIT_Status
 emit_machine_instruction(UNIT_Context *context,
-                         _UNIT_Vector *instructions,
+                         _UNIT_BasicBlock *block,
                          _UNIT_MachineInstruction instruction,
                          _UNIT_MachineItem *destination,
                          _UNIT_MachineItem *arg1,
@@ -94,15 +118,6 @@ emit_machine_instruction(UNIT_Context *context,
     _UNIT_MachineOperation *operation = _UNIT_Alloc(context,
                                                     sizeof(_UNIT_MachineOperation));
     if (operation == NULL) {
-        if (destination != NULL) {
-            _UNIT_Dealloc(context, destination);
-        }
-        if (arg1 != NULL) {
-            _UNIT_Dealloc(context, arg1);
-        }
-        if (arg2 != NULL) {
-            _UNIT_Dealloc(context, arg2);
-        }
         return _UNIT_FAIL;
     }
 
@@ -111,9 +126,21 @@ emit_machine_instruction(UNIT_Context *context,
     operation->argument_1 = arg1;
     operation->argument_2 = arg2;
 
-    if (UNIT_FAILED(_UNIT_Vector_Append(instructions,
+    if (UNIT_FAILED(_UNIT_Vector_Append(&block->instructions,
                                         operation))) {
         return _UNIT_FAIL;
+    }
+
+    if (arg1 != NULL) {
+        if (UNIT_FAILED(mark_last_use(block, arg1))) {
+            return _UNIT_FAIL;
+        }
+    }
+
+    if (arg2 != NULL) {
+        if (UNIT_FAILED(mark_last_use(block, arg2))) {
+            return _UNIT_FAIL;
+        }
     }
 
     return _UNIT_OK;
@@ -617,22 +644,22 @@ _UNIT_Translate(_UNIT_Translation *translation,
         }
 
     #define EMIT_EMPTY(inst)                                                                            \
-        if (UNIT_FAILED(emit_machine_instruction(context, INSTRUCTIONS(), inst, NULL, NULL, NULL))) {   \
+        if (UNIT_FAILED(emit_machine_instruction(context, CURRENT_BLOCK(), inst, NULL, NULL, NULL))) {  \
             goto error;                                                                                 \
         }
 
     #define EMIT_DEST(inst, dest)                                                                       \
-        if (UNIT_FAILED(emit_machine_instruction(context, INSTRUCTIONS(), inst, dest, NULL, NULL))) {   \
+        if (UNIT_FAILED(emit_machine_instruction(context, CURRENT_BLOCK(), inst, dest, NULL, NULL))) {  \
             goto error;                                                                                 \
         }
 
     #define EMIT_DEST_ONE(inst, dest, arg1)                                                             \
-        if (UNIT_FAILED(emit_machine_instruction(context, INSTRUCTIONS(), inst, dest, arg1, NULL))) {   \
+        if (UNIT_FAILED(emit_machine_instruction(context, CURRENT_BLOCK(), inst, dest, arg1, NULL))) {  \
             goto error;                                                                                 \
         }
 
     #define EMIT_DEST_TWO(inst, dest, arg1, arg2)                                                       \
-        if (UNIT_FAILED(emit_machine_instruction(context, INSTRUCTIONS(), inst, dest, arg1, arg2))) {   \
+        if (UNIT_FAILED(emit_machine_instruction(context, CURRENT_BLOCK(), inst, dest, arg1, arg2))) {  \
             goto error;                                                                                 \
         }
     #define CREATE_DESTINATION(name)                                                                \

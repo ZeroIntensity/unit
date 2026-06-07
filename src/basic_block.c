@@ -28,6 +28,14 @@ _UNIT_LivenessInfo_Init(_UNIT_LivenessInfo *liveness, UNIT_Context *context)
         return _UNIT_FAIL;
     }
 
+    if (UNIT_FAILED(_UNIT_SizeMap_Init(&liveness->last_uses, context, 8))) {
+        _UNIT_SizeSet_Clear(&liveness->created_locations);
+        _UNIT_SizeSet_Clear(&liveness->used_locations);
+        _UNIT_SizeSet_Clear(&liveness->alive_at_start);
+        _UNIT_SizeSet_Clear(&liveness->alive_at_end);
+        return _UNIT_FAIL;
+    }
+
     return _UNIT_OK;
 }
 
@@ -39,6 +47,7 @@ _UNIT_LivenessInfo_Clear(_UNIT_LivenessInfo *liveness)
     _UNIT_SizeSet_Clear(&liveness->used_locations);
     _UNIT_SizeSet_Clear(&liveness->alive_at_start);
     _UNIT_SizeSet_Clear(&liveness->alive_at_end);
+    _UNIT_SizeMap_Clear(&liveness->last_uses);
 }
 
 static UNIT_Status
