@@ -35,7 +35,14 @@ instruction_name(UNIT_Instruction instruction)
         NAME(UNIT_OP_POP_TOP);
         NAME(UNIT_OP_RETURN_VALUE);
         NAME(UNIT_OP_EXIT);
-        NAME(UNIT_OP_COMPARE);
+        NAME(UNIT_OP_COMPARE_EQUAL);
+        NAME(UNIT_OP_COMPARE_NOT_EQUAL);
+        NAME(UNIT_OP_COMPARE_GREATER);
+        NAME(UNIT_OP_COMPARE_GREATER_EQUAL);
+        NAME(UNIT_OP_COMPARE_LESS);
+        NAME(UNIT_OP_COMPARE_LESS_EQUAL);
+        NAME(UNIT_OP_COPY);
+        NAME(UNIT_OP_SWAP);
     }
     fprintf(stderr, "unknown machine instruction\n");
     abort();
@@ -131,24 +138,26 @@ print_machine_item(_UNIT_MachineItem *item)
     } else if (item->type == _UNIT_TYPE_COMPARISON) {
         print_machine_item(item->comparison.left);
         switch (item->comparison.type) {
-            case UNIT_COMPARE_EQUAL:
+            case UNIT_OP_COMPARE_EQUAL:
                 printf(" == ");
                 break;
-            case UNIT_COMPARE_NOT_EQUAL:
+            case UNIT_OP_COMPARE_NOT_EQUAL:
                 printf(" != ");
                 break;
-            case UNIT_COMPARE_LESS_THAN:
+            case UNIT_OP_COMPARE_LESS:
                 printf(" < ");
                 break;
-            case UNIT_COMPARE_LESS_EQUAL:
+            case UNIT_OP_COMPARE_LESS_EQUAL:
                 printf(" <= ");
                 break;
-            case UNIT_COMPARE_GREATER_THAN:
+            case UNIT_OP_COMPARE_GREATER:
                 printf(" > ");
                 break;
-            case UNIT_COMPARE_GREATER_EQUAL:
+            case UNIT_OP_COMPARE_GREATER_EQUAL:
                 printf(" >= ");
                 break;
+            default:
+                _UNIT_Unreachable();
         }
         print_machine_item(item->comparison.right);
     } else if (item->type == _UNIT_TYPE_MEMORY) {
@@ -256,7 +265,6 @@ get_jump_label(const UNIT_Procedure *procedure, int32_t id)
     assert(procedure != NULL);
     assert(id >= 0);
     UNIT_JumpLabel *label = _UNIT_Vector_GET(&procedure->_jump_labels, id);
-    assert(label != NULL);
     return label;
 }
 
@@ -265,6 +273,11 @@ get_jump_target_item(_UNIT_Translation *translation, const UNIT_Procedure *proce
                      int32_t id, UNIT_JumpLabel **jump_label_ptr)
 {
     UNIT_JumpLabel *label = get_jump_label(procedure, id);
+    if (label == NULL) {
+        _UNIT_SetErrorFormat(translation->context, UNIT_ERROR_INVALID_USAGE,
+                             "%d is not a known jump label", id);
+        return NULL;
+    }
     if (jump_label_ptr != NULL) {
         *jump_label_ptr = label;
     }
@@ -344,7 +357,7 @@ stack_pop(_UNIT_BasicBlock *block, _UNIT_Vector *stack,
     assert(_UNIT_Vector_SIZE(stack) >= 0);
     if (_UNIT_Vector_SIZE(stack) == 0) {
         _UNIT_SetErrorFormat(block->context, UNIT_ERROR_INVALID_USAGE,
-                             "stack underflow at %s\n",
+                             "stack underflow at %s",
                              instruction_name(operation->instruction));
         return NULL;
     }
@@ -458,7 +471,6 @@ get_local(_UNIT_LocalVariables *locals, int32_t name)
 {
     assert(locals != NULL);
     _UNIT_LocalState *local_state = _UNIT_Map_Get(&locals->locals_map, &name);
-    assert(local_state != NULL);
     return local_state;
 }
 
@@ -626,6 +638,24 @@ _UNIT_Translate(_UNIT_Translation *translation,
         }                                                                                           \
         PUSH_ITEM(name);
 
+    #define INST_ASSERT(condition, message)                                         \
+        if (!(condition)) {                                                         \
+            _UNIT_SetErrorFormat(_block->context, UNIT_ERROR_INVALID_USAGE,         \
+                                 "error at %s (index %d): " message,                \
+                                 instruction_name(operation->instruction), index);  \
+            goto error;                                                             \
+        }
+
+    #define INST_ASSERT_FMT(condition, message, ...)                                \
+        if (!(condition)) {                                                         \
+            _UNIT_SetErrorFormat(_block->context, UNIT_ERROR_INVALID_USAGE,         \
+                                 "error at %s (index %d): " message,                \
+                                 instruction_name(operation->instruction), index,   \
+                                 __VA_ARGS__);                                      \
+            goto error;                                                             \
+        }
+    #define INST_ASSERT_OPARG(condition, message) INST_ASSERT_FMT(condition, message, operation->argument)
+
     START_NEW_BLOCK();
 
     for (UNIT_Size index = 0; index < size; ++index) {
@@ -648,6 +678,9 @@ _UNIT_Translate(_UNIT_Translation *translation,
             _UNIT_LocalState *local_state = create_new_local(&locals,
                                                              operation->argument,
                                                              location_id);
+            if (local_state == NULL) {
+                goto error;
+            }
             _UNIT_MachineItem *location = create_new_location(translation,
                                                               CURRENT_BLOCK(),
                                                               location_id);
@@ -677,6 +710,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
             case _UNIT_OP_LOAD_LOCAL_NAME:
             case UNIT_OP_LOAD_LOCAL: {
                 _UNIT_LocalState *local_state = get_local(&locals, operation->argument);
+                INST_ASSERT_OPARG(local_state != NULL, "local variable %d not assigned");
 
                 const char *hint = NULL;
                 if (operation->instruction == _UNIT_OP_LOAD_LOCAL_NAME) {
@@ -703,17 +737,34 @@ _UNIT_Translate(_UNIT_Translation *translation,
                 break;
             }
 
+            case UNIT_OP_ADDRESS_OF: {
+                _UNIT_LocalState *local_state = get_local(&locals, operation->argument);
+                INST_ASSERT_OPARG(local_state != NULL, "local variable %d not assigned");
+                assert(local_state->stack_slot != -1);
+
+                _UNIT_MachineItem *value;
+                if (local_state->stack_slot == -1) {
+                    value = new_machine_item(translation, _UNIT_TYPE_LOCATION,
+                                             local_state->location_id, NULL);
+                } else {
+                    value = new_machine_item(translation, _UNIT_TYPE_MEMORY,
+                                             local_state->stack_slot, NULL);
+                }
+
+                if (value == NULL) {
+                    goto error;
+                }
+
+                CREATE_DESTINATION(destination);
+                EMIT_DEST_ONE(_UNIT_I_ADDRESS_OF, destination, value);
+                break;
+            }
+
             case UNIT_OP_CALL_NAME: {
                 ARGUMENT_TO_ITEM(symbol, _UNIT_TYPE_CONSTANT);
                 symbol->hint = _UNIT_Vector_GET(&procedure->_symbols, operation->argument);
                 POP_TO_VAR(args);
-                if (args->type != _UNIT_TYPE_CALL_ARGS) {
-                    // TODO: Display machine item here
-                    _UNIT_SetError(context, UNIT_ERROR_INVALID_USAGE,
-                                   "CALL_NAME popped item of non-args type");
-                    goto error;
-                }
-
+                INST_ASSERT(args->type == _UNIT_TYPE_CALL_ARGS, "got non-args item off stack");
                 CREATE_DESTINATION(destination);
                 EMIT_DEST_TWO(_UNIT_I_CALL_SYMBOL, destination, symbol, args);
                 break;
@@ -721,7 +772,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
 
             case UNIT_OP_LOAD_STRING: {
                 const char *text = _UNIT_Vector_GET(&procedure->_global_strings, operation->argument);
-                assert(text != NULL);
+                INST_ASSERT_OPARG(text != NULL, "%d is not a known string ID");
                 _UNIT_MachineItem *result = new_machine_item(translation, _UNIT_TYPE_CONSTANT,
                                                              operation->argument, text);
                 if (result == NULL) {
@@ -775,14 +826,19 @@ _UNIT_Translate(_UNIT_Translation *translation,
                 START_NEW_BLOCK();
                 break;
             }
-            case UNIT_OP_COMPARE: {
+
+            case UNIT_OP_COMPARE_EQUAL:
+            case UNIT_OP_COMPARE_NOT_EQUAL:
+            case UNIT_OP_COMPARE_GREATER:
+            case UNIT_OP_COMPARE_GREATER_EQUAL:
+            case UNIT_OP_COMPARE_LESS:
+            case UNIT_OP_COMPARE_LESS_EQUAL: {
                 POP_TO_VAR(left);
                 POP_TO_VAR(right);
-                UNIT_ComparisonType type = operation->argument;
                 CREATE_DESTINATION(destination);
 
                 destination->type = _UNIT_TYPE_COMPARISON;
-                destination->comparison.type = type;
+                destination->comparison.type = operation->instruction;
                 destination->comparison.left = left;
                 destination->comparison.right = right;
                 // We intentionally don't emit any instructions here to allow
@@ -843,23 +899,23 @@ _UNIT_Translate(_UNIT_Translation *translation,
                 int8_t invert = (operation->instruction == UNIT_OP_JUMP_IF_FALSE);
 
                 switch (value->comparison.type) {
-                    case UNIT_COMPARE_EQUAL:
+                    case UNIT_OP_COMPARE_EQUAL:
                         fused = invert ? _UNIT_I_JUMP_IF_NOT_EQUAL : _UNIT_I_JUMP_IF_EQUAL;
                         break;
-                    case UNIT_COMPARE_NOT_EQUAL:
+                    case UNIT_OP_COMPARE_NOT_EQUAL:
                         fused = invert ? _UNIT_I_JUMP_IF_EQUAL : _UNIT_I_JUMP_IF_NOT_EQUAL;
                         break;
-                    case UNIT_COMPARE_GREATER_THAN:
+                    case UNIT_OP_COMPARE_GREATER:
                         fused = invert ? _UNIT_I_JUMP_IF_LESS_EQUAL : _UNIT_I_JUMP_IF_GREATER;
                         break;
-                    case UNIT_COMPARE_LESS_THAN:
+                    case UNIT_OP_COMPARE_GREATER_EQUAL:
+                        fused = invert ? _UNIT_I_JUMP_IF_LESS : _UNIT_I_JUMP_IF_GREATER_EQUAL;
+                        break;
+                    case UNIT_OP_COMPARE_LESS:
                         fused = invert ? _UNIT_I_JUMP_IF_GREATER_EQUAL : _UNIT_I_JUMP_IF_LESS;
                         break;
-                    case UNIT_COMPARE_LESS_EQUAL:
+                    case UNIT_OP_COMPARE_LESS_EQUAL:
                         fused = invert ? _UNIT_I_JUMP_IF_GREATER : _UNIT_I_JUMP_IF_LESS_EQUAL;
-                        break;
-                    case UNIT_COMPARE_GREATER_EQUAL:
-                        fused = invert ? _UNIT_I_JUMP_IF_LESS : _UNIT_I_JUMP_IF_GREATER_EQUAL;
                         break;
                     default:
                         _UNIT_Unreachable();
@@ -872,28 +928,6 @@ _UNIT_Translate(_UNIT_Translation *translation,
                 ADD_BLOCK_SUCCESSOR(saved_block, label->_block);
                 START_NEW_BLOCK();
                 ADD_BLOCK_SUCCESSOR(saved_block, CURRENT_BLOCK());
-                break;
-            }
-
-            case UNIT_OP_ADDRESS_OF: {
-                _UNIT_LocalState *local_state = get_local(&locals, operation->argument);
-                assert(local_state->stack_slot != -1);
-
-                _UNIT_MachineItem *value;
-                if (local_state->stack_slot == -1) {
-                    value = new_machine_item(translation, _UNIT_TYPE_LOCATION,
-                                             local_state->location_id, NULL);
-                } else {
-                    value = new_machine_item(translation, _UNIT_TYPE_MEMORY,
-                                             local_state->stack_slot, NULL);
-                }
-
-                if (value == NULL) {
-                    goto error;
-                }
-
-                CREATE_DESTINATION(destination);
-                EMIT_DEST_ONE(_UNIT_I_ADDRESS_OF, destination, value);
                 break;
             }
 
@@ -911,6 +945,25 @@ _UNIT_Translate(_UNIT_Translation *translation,
             BINARY_OPERATION(UNIT_OP_MULTIPLY, _UNIT_I_MUL);
             BINARY_OPERATION(UNIT_OP_DIVIDE, _UNIT_I_DIV);
             BINARY_OPERATION(UNIT_OP_MODULO, _UNIT_I_MOD);
+
+        case UNIT_OP_COPY: {
+            UNIT_Size index = _UNIT_Vector_SIZE(&stack) - operation->argument - 1;
+            assert(index >= 0);
+            _UNIT_MachineItem *item = _UNIT_Vector_GET(&stack, index);
+            // XXX: Might cause problems without a copy?
+            PUSH_ITEM(item);
+            break;
+        }
+
+        case UNIT_OP_SWAP: {
+            POP_TO_VAR(top);
+            UNIT_Size index = _UNIT_Vector_SIZE(&stack) - operation->argument - 1;
+            assert(index >= 0);
+            _UNIT_MachineItem *to_swap = _UNIT_Vector_STEAL(&stack, index);
+            _UNIT_Vector_SET(&stack, index, top);
+            PUSH_ITEM(to_swap);
+            break;
+        }
         }
     }
 

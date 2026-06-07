@@ -49,6 +49,32 @@ _UNIT_Vector_GET(const _UNIT_Vector *vector, UNIT_Size index)
     return vector->items[index];
 }
 
+static inline void
+_UNIT_Vector_SET(_UNIT_Vector *vector, UNIT_Size index, void *new_value)
+{
+    assert(vector != NULL);
+    assert(index >= 0);
+    assert(index < _UNIT_Vector_SIZE(vector));
+    if (vector->dealloc != NULL && vector->items[index] != NULL) {
+        vector->dealloc(vector->context, vector->items[index]);
+    }
+
+    vector->items[index] = new_value;
+}
+
+// Take an item out of a vector and set it to NULL, without running its deallocator.
+static inline void *
+_UNIT_Vector_STEAL(_UNIT_Vector *vector, UNIT_Size index)
+{
+    assert(vector != NULL);
+    assert(index >= 0);
+    assert(index < _UNIT_Vector_SIZE(vector));
+    assert(vector->items[index] != NULL);
+    void *result = vector->items[index];
+    vector->items[index] = NULL;
+    return result;
+}
+
 /* Like _UNIT_Vector_Append(), but does not attempt to resize.
  * Only use if you're certain that the vector is big enough. */
 static inline void

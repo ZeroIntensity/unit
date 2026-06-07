@@ -69,7 +69,13 @@ _UNIT_SetError(UNIT_Context *context, UNIT_ErrorCode code, const char *message)
     assert(context != NULL);
     assert(message != NULL);
     context->_internal.error.code = code;
-    strncpy(context->_internal.error.message, message, 256);
+    UNIT_Size len = strlen(message);
+    if (len >= 255) {
+        len = 254;
+    }
+    memcpy(context->_internal.error.message, message, len);
+    context->_internal.error.message[len] = '\n';
+    context->_internal.error.message[len + 1] = '\0';
 }
 
 void
