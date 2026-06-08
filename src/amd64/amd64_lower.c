@@ -192,7 +192,7 @@ flush_register(_UNIT_CompileContext *compile_context,
                AMD64_Operand actual)
 {
     AMD64_Operand original = machine_item_to_operand(item);
-    if (original.kind != OPERAND_REGISTER) {
+    if (original.kind != OPERAND_REGISTER && original.kind != OPERAND_IMMEDIATE) {
         EMIT(mov(compile_context->context, original, actual));
     }
 
@@ -276,7 +276,20 @@ translate_operation(_UNIT_CompileContext *compile_context,
 
     switch (operation->instruction) {
         case _UNIT_I_MOVE: {
-            EMIT(mov(ctx, OP(destination), OP(argument_1)));
+            AMD64_Operand dst = OP(destination);
+            AMD64_Operand src = OP(argument_1);
+            assert(dst.kind != OPERAND_IMMEDIATE);
+
+            if (dst.kind == OPERAND_STACK && src.kind == OPERAND_STACK) {
+                ENSURE_IN_REGISTER(argument_1);
+                EMIT(mov(ctx, dst, argument_1));
+                FLUSH_REGISTER(argument_1);
+            } else if (dst.kind == OPERAND_STACK && src.kind == OPERAND_IMMEDIATE) {
+                EMIT(mov(ctx, reg(REG_R11), src));
+                EMIT(mov(ctx, dst, reg(REG_R11)));
+            } else {
+                EMIT(mov(ctx, dst, src));
+            }
             break;
         }
 

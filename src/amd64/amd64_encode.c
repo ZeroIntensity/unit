@@ -175,6 +175,7 @@ AMD64_encode_instruction(_UNIT_CompileContext *compile_context,
         case AMD64_MOV: {
             AMD64_Operand dst = instr->operands[0];
             AMD64_Operand src = instr->operands[1];
+            assert(dst.kind != OPERAND_IMMEDIATE);
 
             // mov reg, imm64 (register encoded in opcode byte, uses REX.B)
             if (dst.kind == OPERAND_REGISTER && src.kind == OPERAND_IMMEDIATE) {

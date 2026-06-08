@@ -128,3 +128,43 @@ _UNIT_SizeMap_Clear(_UNIT_SizeMap *size_map)
     assert(size_map != NULL);
     _UNIT_Dealloc(size_map->context, size_map->items);
 }
+
+void
+_UNIT_SizeMap_Remove(_UNIT_SizeMap *size_map, UNIT_Size key)
+{
+    assert(size_map != NULL);
+    UNIT_Size index = (UNIT_Size)(key & (uint64_t)(size_map->capacity - 1));
+    UNIT_Size current = index;
+
+    do {
+        if (!size_map->items[current].is_populated) {
+            return;
+        }
+        if (size_map->items[current].key == key) break;
+        current++;
+        if (current == size_map->capacity) current = 0;
+    } while (current != index);
+
+    if (!size_map->items[current].is_populated) return;
+
+    size_map->items[current].is_populated = 0;
+    --size_map->len;
+
+    // Rehash subsequent entries
+    UNIT_Size next = current + 1;
+    if (next == size_map->capacity) {
+        next = 0;
+    }
+    while (size_map->items[next].is_populated) {
+        _UNIT_SizeMapPair item = size_map->items[next];
+        size_map->items[next].is_populated = 0;
+        --size_map->len;
+        UNIT_Status status = _UNIT_SizeMap_Set(size_map, item.key, item.value);
+        assert(!UNIT_FAILED(status));
+        (void)status;
+        ++next;
+        if (next == size_map->capacity) {
+            next = 0;
+        }
+    }
+}

@@ -51,24 +51,32 @@ static void
 free_dead_registers(_UNIT_RegisterAllocator *allocator, _UNIT_BasicBlock *block,
                     UNIT_Size index, _UNIT_SizeSet *registers_in_use)
 {
-    assert(allocator != NULL);
-    assert(block != NULL);
     _UNIT_SizeMap *assignments = &allocator->assignments;
-    assert(assignments != NULL);
+
+    UNIT_Size to_remove[64];
+    UNIT_Size to_remove_regs[64];
+    UNIT_Size remove_count = 0;
 
     _UNIT_SizeMap_ITER(assignments, location, register_id);
         if (_UNIT_SizeSet_Contains(&block->liveness.alive_at_end, location)) {
             continue;
         }
 
-        // Check if last use is at or before current instruction
         UNIT_Size last;
-        if (!UNIT_FAILED(_UNIT_SizeMap_Get(&block->liveness.last_uses, location, &last))) {
-            if (last <= index) {
-                _UNIT_SizeSet_Remove(registers_in_use, register_id);
+        if (!UNIT_FAILED(_UNIT_SizeMap_Get(&block->liveness.last_uses,
+                                           location, &last))) {
+            if (last < index) {
+                to_remove[remove_count] = location;
+                to_remove_regs[remove_count] = register_id;
+                remove_count++;
             }
         }
     _UNIT_SizeMap_END_ITER();
+
+    for (UNIT_Size i = 0; i < remove_count; ++i) {
+        _UNIT_SizeSet_Remove(registers_in_use, to_remove_regs[i]);
+        _UNIT_SizeMap_Remove(assignments, to_remove[i]);
+    }
 }
 
 static UNIT_Status
@@ -230,11 +238,7 @@ _UNIT_Translation_AllocateRegisters(_UNIT_Translation *translation,
             _UNIT_RegisterAllocator_Clear(&allocator);
             return _UNIT_FAIL;
         }
-    }
 
-    for (UNIT_Size index = 0; index < size; ++index) {
-        _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks, index);
-        assert(block != NULL);
         if (UNIT_FAILED(rewrite_block_locations(&allocator, block))) {
             _UNIT_RegisterAllocator_Clear(&allocator);
             return _UNIT_FAIL;

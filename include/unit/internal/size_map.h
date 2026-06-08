@@ -47,6 +47,9 @@ _UNIT_SizeMap_GET(const _UNIT_SizeMap *size_map, UNIT_Size key)
     return value;
 }
 
+void
+_UNIT_SizeMap_Remove(_UNIT_SizeMap *size_map, UNIT_Size key);
+
 #define _UNIT_SizeMap_ITER(size_map, key_name, value_name) \
     for (UNIT_Size _sm_index = 0; _sm_index < (size_map)->capacity; ++_sm_index) {          \
         if (!(size_map)->items[_sm_index].is_populated) {                                   \
