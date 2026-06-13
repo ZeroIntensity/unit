@@ -41,6 +41,11 @@
         return -1;                                                      \
     }
 
+#define ADDOP_STR(str)                                                      \
+    if (UNIT_FAILED(UNIT_Procedure_AddStringLoad(procedure, str))) {        \
+        return -1;                                                          \
+    }
+
 static int8_t
 codegen_prelude(UNIT_Procedure *procedure)
 {
@@ -49,22 +54,23 @@ codegen_prelude(UNIT_Procedure *procedure)
 
     ADDOP_INT(UNIT_OP_LOAD_INTEGER, 30000);
     ADDOP_INT(UNIT_OP_LOAD_INTEGER, 1);
-    ADDOP_CALL("calloc", 1);
+    ADDOP_CALL("calloc", 2);
     // [ptr]
 
     ADDOP_INT(UNIT_OP_COPY, 0);
+    // [ptr, ptr]
+
+    ADDOP_INT(UNIT_OP_STORE_LOCAL, 0);
+    // [ptr]
+
     ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
-    // [ptr, ptr, 0]
+    // [ptr, 0]
 
     ADDOP(UNIT_OP_COMPARE_EQUAL);
-    ADDOP_JUMP(UNIT_OP_JUMP_IF_TRUE, fail);
-    ADDOP_JUMP(UNIT_OP_JUMP_TO, body);
+    ADDOP_JUMP(UNIT_OP_JUMP_IF_FALSE, body);
 
-    // [ptr]
-    ADDOP_INT(UNIT_OP_STORE_LOCAL, 0);
-    // []
-
-    USE_LABEL(fail);
+    ADDOP_STR("brainfuck");
+    ADDOP_CALL("perror", 1);
     ADDOP_INT(UNIT_OP_LOAD_INTEGER, 1);
     ADDOP(UNIT_OP_EXIT);
 
@@ -136,6 +142,15 @@ codegen_print(UNIT_Procedure *procedure)
 
     ADDOP_CALL("putchar", 1);
     ADDOP(UNIT_OP_POP_TOP);
+
+    return 0;
+}
+
+static int8_t
+codegen_final(UNIT_Procedure *procedure)
+{
+    ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
+    ADDOP(UNIT_OP_RETURN_VALUE);
 
     return 0;
 }
@@ -225,6 +240,10 @@ int main(int argc, char **argv)
                 // Comment character
                 break;
         }
+    }
+
+    if (codegen_final(&procedure) < 0) {
+        goto error;
     }
 
     UNIT_CompiledProcedure *compiled = UNIT_Compile(&procedure, UNIT_ARCH_AMD64);
