@@ -103,16 +103,17 @@ Your first instinct might be to assign a register value to each class, like so:
             yield ("ADD", self.left.register, self.right.register)
 
 
-This works, but gets difficult very quickly. Again, a register machine has
-a finite number of registers, whereas the stack of a stack machine can be
-practically infinite.
+This works at first, but quickly breaks down as we consume registers.
+Again, a register machine has a finite number of registers, whereas
+the stack of a stack machine can be practically infinite.
 
 For example, imagine if ``find_free_register`` in the above code couldn't
 find a free register, such as if all the registers are storing local variables.
 In this case, you need to spill the result to the stack. But, for example's sake,
 let's pretend that our ``ADD`` instruction can only operate on registers.
-So, you need to push the current state of a register onto the stack, store the necessary
-value into the register, use it in ``ADD``, and then restore the state of the register.
+In this case, you need to push the current state of a register onto the stack, store
+the necessary value into the register, use it in ``ADD``, and then restore the
+state of the register.
 We could hack it together like this:
 
 .. code-block:: python

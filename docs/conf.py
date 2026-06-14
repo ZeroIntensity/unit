@@ -30,3 +30,6 @@ html_theme_options = {
   "accent_color": "teal",
   "github_url": "https://github.com/ZeroIntensity/unit"
 }
+html_css_files = [
+  'custom.css',
+]

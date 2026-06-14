@@ -1,0 +1,13 @@
+/* Shibuya's internal reference styling is really ugly.
+ * But, if we remove the "internal" class, it looks great.
+ * So, we just undo the damage done by "internal" and call it a day.
+ */
+dt.sig > a.internal {
+    color: inherit !important;
+    font-size: inherit !important;
+    border-bottom: 1px solid var(--yue-c-link-border);
+}
+
+dt.sig > a.internal:before {
+    content: none;
+}

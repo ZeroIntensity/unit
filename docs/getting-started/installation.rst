@@ -1,6 +1,9 @@
 Installation
 ============
 
+Installing UNIT
+---------------
+
 UNIT can be installed via `Git <https://git-scm.com/>`_ and
 `CMake <https://cmake.org/>`_:
 
@@ -70,8 +73,8 @@ Makefile + pkg-config
    LDFLAGS := $(shell pkg-config --libs unit)
 
 
-GCC/Clang (direct)
-******************
+GCC/Clang
+*********
 
 .. code-block:: bash
    :caption: :iconify:`devicon-plain:bash` bash
