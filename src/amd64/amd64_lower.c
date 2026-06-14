@@ -368,13 +368,13 @@ translate_operation(_UNIT_CompileContext *compile_context,
         }
 
         case _UNIT_I_RETURN_VALUE: {
-            EMIT(mov(ctx, reg(REG_RAX), OP(destination)));
+            EMIT(mov(ctx, reg(REG_RAX), OP(argument_1)));
             // ret() will be emitted after the loop
             break;
         }
 
         case _UNIT_I_JUMP: {
-            EMIT(jmp(ctx, OP(destination)));
+            EMIT(jmp(ctx, OP(argument_1)));
             break;
         }
 

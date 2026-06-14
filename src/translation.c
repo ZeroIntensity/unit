@@ -115,6 +115,8 @@ emit_machine_instruction(UNIT_Context *context,
                          _UNIT_MachineItem *arg1,
                          _UNIT_MachineItem *arg2)
 {
+    assert(context != NULL);
+    assert(block != NULL);
     _UNIT_MachineOperation *operation = _UNIT_Alloc(context,
                                                     sizeof(_UNIT_MachineOperation));
     if (operation == NULL) {
@@ -151,9 +153,9 @@ print_machine_item(_UNIT_MachineItem *item)
 {
     assert(item != NULL);
     if (item->type == _UNIT_TYPE_CONSTANT) {
-        printf("%d", item->value);
+        printf("constant(%d)", item->value);
     } else if (item->type == _UNIT_TYPE_LOCATION) {
-        printf("loc_%d", item->value);
+        printf("location(%d)", item->value);
     } else if (item->type == _UNIT_TYPE_CALL_ARGS) {
         printf("[");
         UNIT_Size size = _UNIT_Vector_SIZE(item->call_args);
@@ -192,7 +194,7 @@ print_machine_item(_UNIT_MachineItem *item)
         }
         print_machine_item(item->comparison.right);
     } else if (item->type == _UNIT_TYPE_MEMORY) {
-        printf("stack_address_%d", item->value);
+        printf("stack_slot_%d", item->value);
     } else {
         assert(item->type == _UNIT_TYPE_REGISTER);
         printf("register_%d", item->value);
@@ -221,25 +223,25 @@ print_instruction_stream(_UNIT_Vector *instructions)
             continue;
         }
         assert(operation != NULL);
-        printf("  %s", machine_instruction_name(operation->instruction));
         if (operation->destination != NULL) {
-            printf(" ");
+            printf("  ");
             print_machine_item(operation->destination);
+            printf(" = ");
+        } else {
+            printf("  ");
         }
 
+        printf("%s(", machine_instruction_name(operation->instruction));
         if (operation->argument_1 != NULL) {
-            assert(operation->destination != NULL);
-            printf(", ");
             print_machine_item(operation->argument_1);
         }
 
         if (operation->argument_2 != NULL) {
-            assert(operation->destination != NULL);
-            assert(operation->argument_1 != NULL);
+            assert(operation->argument_1 != NULL || operation->destination != NULL);
             printf(", ");
             print_machine_item(operation->argument_2);
         }
-        printf("\n");
+        printf(")\n");
     }
 }
 
@@ -650,6 +652,11 @@ _UNIT_Translate(_UNIT_Translation *translation,
             goto error;                                                                                 \
         }
 
+    #define EMIT_ONE(inst, arg1)                                                                        \
+        if (UNIT_FAILED(emit_machine_instruction(context, CURRENT_BLOCK(), inst, NULL, arg1, NULL))) {  \
+            goto error;                                                                                 \
+        }
+
     #define EMIT_DEST(inst, dest)                                                                       \
         if (UNIT_FAILED(emit_machine_instruction(context, CURRENT_BLOCK(), inst, dest, NULL, NULL))) {  \
             goto error;                                                                                 \
@@ -855,7 +862,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
 
             case UNIT_OP_RETURN_VALUE: {
                 POP_TO_VAR(value);
-                EMIT_DEST(_UNIT_I_RETURN_VALUE, value);
+                EMIT_ONE(_UNIT_I_RETURN_VALUE, value);
                 START_NEW_BLOCK();
                 break;
             }
@@ -907,7 +914,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
                     goto error;
                 }
 
-                EMIT_DEST(_UNIT_I_JUMP, item);
+                EMIT_ONE(_UNIT_I_JUMP, item);
                 ADD_BLOCK_SUCCESSOR(CURRENT_BLOCK(), label->_block);
                 START_NEW_BLOCK();
                 break;
