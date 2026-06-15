@@ -25,6 +25,28 @@ if(UNIT_BUILD_EXAMPLES)
     target_link_libraries(unit_brainf PRIVATE unit)
 endif()
 
+option(UNIT_BUILD_TESTS "Build tests" OFF)
+
+if(UNIT_BUILD_TESTS)
+    enable_testing()
+
+    set(TEST_TARGETS "")
+    file(GLOB TEST_SOURCES "${CMAKE_SOURCE_DIR}/tests/test_*.c")
+    foreach(TEST_SOURCE ${TEST_SOURCES})
+        get_filename_component(TEST_NAME ${TEST_SOURCE} NAME_WE)
+        add_executable(${TEST_NAME} ${TEST_SOURCE})
+        target_link_libraries(${TEST_NAME} PRIVATE unit)
+        add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
+        list(APPEND TEST_TARGETS ${TEST_NAME})
+    endforeach()
+
+    add_custom_target(tests
+        COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
+        DEPENDS ${TEST_TARGETS}
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    )
+endif()
+
 include(GNUInstallDirs)
 
 install(TARGETS unit
