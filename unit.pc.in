@@ -3,7 +3,7 @@ libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
 includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
 
 Name: unit
-Description: Lightweight compiler backend
+Description: Stack-based compiler backend
 Version: @PROJECT_VERSION@
 Libs: -L${libdir} -lunit
 Cflags: -I${includedir}
