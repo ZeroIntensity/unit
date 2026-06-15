@@ -135,12 +135,23 @@ set_entry(
     assert(items != NULL);
     assert(key != NULL);
     UNIT_Size index = (UNIT_Size)(hash & (uint64_t)(new_capacity - 1));
+    UNIT_Size start = index;
 
-    _UNIT_MapPair *pair;
-    while (items[index].key != NULL) {
-        pair = &items[index];
+    do {
+        _UNIT_MapPair *pair = &items[index];
+
+        if (pair->key == NULL) {
+            pair->key = key;
+            pair->value = value;
+            pair->hash = hash;
+            return 1;
+        }
+
         if (pair->hash == hash
             && map->compare_key(key, pair->key)) {
+            if (map->dealloc_key != NULL) {
+                map->dealloc_key(map->context, key);
+            }
             if (map->dealloc_value != NULL) {
                 map->dealloc_value(map->context, pair->value);
             }
@@ -152,22 +163,14 @@ set_entry(
         if (index == new_capacity) {
             index = 0;
         }
-    }
+    } while (index != start);
 
-    // The loop above never ran, implying that there was no hash collision.
-    assert(items[index].key == NULL);
-
-    pair = &items[index];
-    pair->key = key;
-    pair->value = value;
-    pair->hash = hash;
-    return 1;
+    _UNIT_Unreachable();
 }
 
 static UNIT_Status
 expand(_UNIT_Map *map) {
     assert(map != NULL);
-    // TODO: Check for overflow
     UNIT_Size new_capacity = map->capacity * 2;
     _UNIT_MapPair *new_items = _UNIT_Calloc(map->context, new_capacity,
                                             sizeof(_UNIT_MapPair));
@@ -202,8 +205,12 @@ _UNIT_Map_Get(_UNIT_Map *map, void *key)
     assert(key != NULL);
     uint64_t hash = map->hash_key(key);
     UNIT_Size index = (UNIT_Size)(hash & (uint64_t)(map->capacity - 1));
+    UNIT_Size start = index;
 
-    while (map->items[index].key != NULL) {
+    do {
+        if (map->items[index].key == NULL) {
+            return NULL;
+        }
         _UNIT_MapPair *pair = &map->items[index];
         if (pair->hash == hash
             && map->compare_key(key, pair->key)) {
@@ -211,10 +218,9 @@ _UNIT_Map_Get(_UNIT_Map *map, void *key)
         }
         index++;
         if (index == map->capacity) {
-            // Wrap around the table
             index = 0;
         }
-    }
+    } while (index != start);
 
     return NULL;
 }
@@ -224,8 +230,7 @@ _UNIT_Map_Set(_UNIT_Map *map, void *key, void *value) {
     assert(map != NULL);
     assert(key != NULL);
 
-    assert(map->len <= map->capacity);
-    if (map->len == map->capacity) {
+    if (map->len >= (map->capacity * 3) / 4) {
         if (UNIT_FAILED(expand(map))) {
             return _UNIT_FAIL;
         }
@@ -258,12 +263,13 @@ _UNIT_Map_Clear(_UNIT_Map *map)
             if (map->dealloc_key != NULL) {
                 map->dealloc_key(map->context, item->key);
             }
-
             if (map->dealloc_value != NULL) {
                 map->dealloc_value(map->context, item->value);
             }
         }
     }
-
     _UNIT_Dealloc(map->context, map->items);
+    map->items = NULL;
+    map->len = 0;
+    map->capacity = 0;
 }
