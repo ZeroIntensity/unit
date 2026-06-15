@@ -36,8 +36,8 @@ static void test_set(UNIT_Context *context)
     _UNIT_Vector vec;
     ASSERT_OK(context, _UNIT_Vector_Init(&vec, context, 4, NULL));
     int a = 10, b = 20, c = 99;
-    _UNIT_Vector_Append(&vec, &a);
-    _UNIT_Vector_Append(&vec, &b);
+    ASSERT_OK(context, _UNIT_Vector_Append(&vec, &a));
+    ASSERT_OK(context, _UNIT_Vector_Append(&vec, &b));
     _UNIT_Vector_SET(&vec, 1, &c);
     ASSERT_EQ(*(int *)_UNIT_Vector_GET(&vec, 1), 99);
     _UNIT_Vector_Clear(&vec);
@@ -66,9 +66,9 @@ static void test_reverse(UNIT_Context *context)
     int a = 1;
     int b = 2;
     int c = 3;
-    _UNIT_Vector_Append(&vec, &a);
-    _UNIT_Vector_Append(&vec, &b);
-    _UNIT_Vector_Append(&vec, &c);
+    ASSERT_OK(context, _UNIT_Vector_Append(&vec, &a));
+    ASSERT_OK(context, _UNIT_Vector_Append(&vec, &b));
+    ASSERT_OK(context, _UNIT_Vector_Append(&vec, &c));
     _UNIT_Vector_Reverse(&vec);
     ASSERT_EQ(*(int *)_UNIT_Vector_GET(&vec, 0), 3);
     ASSERT_EQ(*(int *)_UNIT_Vector_GET(&vec, 1), 2);

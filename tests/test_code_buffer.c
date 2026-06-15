@@ -41,7 +41,7 @@ static void test_patch32(UNIT_Context *context)
 {
     _UNIT_CodeBuffer buf;
     ASSERT_OK(context, _UNIT_CodeBuffer_Init(&buf, context));
-    _UNIT_CodeBuffer_Emit32(&buf, 0x00000000);
+    ASSERT_OK(context, _UNIT_CodeBuffer_Emit32(&buf, 0x00000000));
     _UNIT_CodeBuffer_Patch32(&buf, 0, 0x12345678);
     ASSERT_EQ(buf.data[0], 0x78);
     ASSERT_EQ(buf.data[1], 0x56);
@@ -57,7 +57,7 @@ static void test_reserve(UNIT_Context *context)
     UNIT_Size offset = _UNIT_CodeBuffer_Reserve(&buf, 7);
     ASSERT_EQ(offset, 0);
     ASSERT_EQ(_UNIT_CodeBuffer_CurrentIndex(&buf), 7);
-    _UNIT_CodeBuffer_Emit8(&buf, 0xAA);
+    ASSERT_OK(context, _UNIT_CodeBuffer_Emit8(&buf, 0xAA));
     ASSERT_EQ(_UNIT_CodeBuffer_CurrentIndex(&buf), 8);
     ASSERT_EQ(buf.data[7], 0xAA);
     _UNIT_CodeBuffer_Clear(&buf);

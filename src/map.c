@@ -140,7 +140,7 @@ set_entry(
     while (items[index].key != NULL) {
         pair = &items[index];
         if (pair->hash == hash
-            && !map->compare_key(key, pair->key)) {
+            && map->compare_key(key, pair->key)) {
             if (map->dealloc_value != NULL) {
                 map->dealloc_value(map->context, pair->value);
             }

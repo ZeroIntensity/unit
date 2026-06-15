@@ -32,7 +32,7 @@ static void test_remove(UNIT_Context *context)
     _UNIT_SizeMap map;
     ASSERT_OK(context, _UNIT_SizeMap_Init(&map, context, 8));
 
-    _UNIT_SizeMap_Set(&map, 42, 100);
+    ASSERT_OK(context, _UNIT_SizeMap_Set(&map, 42, 100));
     _UNIT_SizeMap_Remove(&map, 42);
     UNIT_Size value;
     ASSERT(UNIT_FAILED(_UNIT_SizeMap_Get(&map, 42, &value)));
