@@ -678,7 +678,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
         }                                                                                           \
         PUSH_ITEM(name);
 
-    #define INST_ASSERT(condition, message)                                         \
+    #define INST_CHECK(condition, message)                                          \
         if (!(condition)) {                                                         \
             _UNIT_SetErrorFormat(_block->context, UNIT_ERROR_INVALID_USAGE,         \
                                  "error at %s (index %d): " message,                \
@@ -686,7 +686,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
             goto error;                                                             \
         }
 
-    #define INST_ASSERT_FMT(condition, message, ...)                                \
+    #define INST_CHECK_FMT(condition, message, ...)                                 \
         if (!(condition)) {                                                         \
             _UNIT_SetErrorFormat(_block->context, UNIT_ERROR_INVALID_USAGE,         \
                                  "error at %s (index %d): " message,                \
@@ -694,7 +694,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
                                  __VA_ARGS__);                                      \
             goto error;                                                             \
         }
-    #define INST_ASSERT_OPARG(condition, message) INST_ASSERT_FMT(condition, message, operation->argument)
+    #define INST_CHECK_OPARG(condition, message) INST_CHECK_FMT(condition, message, operation->argument)
 
     START_NEW_BLOCK();
 
@@ -750,7 +750,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
             case _UNIT_OP_LOAD_LOCAL_NAME:
             case UNIT_OP_LOAD_LOCAL: {
                 _UNIT_LocalState *local_state = get_local(&locals, operation->argument);
-                INST_ASSERT_OPARG(local_state != NULL, "local variable %d not assigned");
+                INST_CHECK_OPARG(local_state != NULL, "local variable %d not assigned");
 
                 const char *hint = NULL;
                 if (operation->instruction == _UNIT_OP_LOAD_LOCAL_NAME) {
@@ -779,7 +779,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
 
             case UNIT_OP_ADDRESS_OF: {
                 _UNIT_LocalState *local_state = get_local(&locals, operation->argument);
-                INST_ASSERT_OPARG(local_state != NULL, "local variable %d not assigned");
+                INST_CHECK_OPARG(local_state != NULL, "local variable %d not assigned");
                 assert(local_state->stack_slot != -1);
 
                 _UNIT_MachineItem *value;
@@ -804,7 +804,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
                 ARGUMENT_TO_ITEM(symbol, _UNIT_TYPE_CONSTANT);
                 symbol->hint = _UNIT_Vector_GET(&procedure->_symbols, operation->argument);
                 POP_TO_VAR(args);
-                INST_ASSERT(args->type == _UNIT_TYPE_CALL_ARGS, "got non-args item off stack");
+                INST_CHECK(args->type == _UNIT_TYPE_CALL_ARGS, "got non-args item off stack");
                 CREATE_DESTINATION(destination);
                 EMIT_DEST_TWO(_UNIT_I_CALL_SYMBOL, destination, symbol, args);
                 break;
@@ -812,7 +812,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
 
             case UNIT_OP_LOAD_STRING: {
                 const char *text = _UNIT_Vector_GET(&procedure->_global_strings, operation->argument);
-                INST_ASSERT_OPARG(text != NULL, "%d is not a known string ID");
+                INST_CHECK_OPARG(text != NULL, "%d is not a known string ID");
                 _UNIT_MachineItem *result = new_machine_item(translation, _UNIT_TYPE_CONSTANT,
                                                              operation->argument, text);
                 if (result == NULL) {
@@ -1006,7 +1006,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
             }
 
             case UNIT_OP_READ_BYTES: {
-                INST_ASSERT_OPARG(operation->argument > 0, "must read at least 1 byte (got %d)");
+                INST_CHECK_OPARG(operation->argument > 0, "must read at least 1 byte (got %d)");
                 ARGUMENT_TO_ITEM(bytes, _UNIT_TYPE_CONSTANT);
                 POP_TO_VAR(address);
                 CREATE_DESTINATION(destination);
@@ -1015,7 +1015,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
             }
 
             case UNIT_OP_WRITE_BYTES: {
-                INST_ASSERT_OPARG(operation->argument > 0, "must write at least 1 byte (got %d)");
+                INST_CHECK_OPARG(operation->argument > 0, "must write at least 1 byte (got %d)");
                 ARGUMENT_TO_ITEM(bytes, _UNIT_TYPE_CONSTANT);
                 POP_TO_VAR(value);
                 POP_TO_VAR(address);
