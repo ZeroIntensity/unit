@@ -40,6 +40,22 @@ if(UNIT_BUILD_TESTS)
         list(APPEND TEST_TARGETS ${TEST_NAME})
     endforeach()
 
+    if(UNIT_BUILD_EXAMPLES)
+        find_package(Python3 REQUIRED COMPONENTS Interpreter)
+        file(GLOB INTEGRATION_TEST_SOURCES "${CMAKE_SOURCE_DIR}/tests/test_*.py")
+        foreach(INTEGRATION_TEST_SOURCE ${INTEGRATION_TEST_SOURCES})
+            get_filename_component(INTEGRATION_TEST_NAME ${INTEGRATION_TEST_SOURCE} NAME_WE)
+            add_test(
+                NAME ${INTEGRATION_TEST_NAME}
+                COMMAND ${Python3_EXECUTABLE} ${INTEGRATION_TEST_SOURCE}
+                WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+            )
+            set_tests_properties(${INTEGRATION_TEST_NAME} PROPERTIES
+                ENVIRONMENT "BUILD_DIR=${CMAKE_BINARY_DIR}"
+            )
+        endforeach()
+    endif()
+
     add_custom_target(tests
         COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
         DEPENDS ${TEST_TARGETS}
