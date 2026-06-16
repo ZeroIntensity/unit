@@ -74,6 +74,11 @@ class BrainfuckTests(unittest.TestCase):
         result = self._run(source)
         self.assertEqual(result, "J")
 
+    def test_hello_world(self) -> None:
+        source = "++++++++[>++++[>++>+++>+++>+<<<<-]>+>+>->>+[<]<-]>>.>---.+++++++..+++.>>.<-.<.+++.------.--------.>>+.>++."
+        result = self._run(source)
+        self.assertEqual(result, "Hello World!\n")
+
 
 if __name__ == "__main__":
     unittest.main()
