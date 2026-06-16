@@ -514,6 +514,12 @@ _UNIT_LocalVariables_Clear(_UNIT_LocalVariables *locals)
     _UNIT_Map_Clear(&locals->locals_map);
 }
 
+typedef struct {
+    UNIT_Size label_id;
+    UNIT_Size local_index;
+    UNIT_Size location_id;
+} _UNIT_LocalSnapshot;
+
 UNIT_Status
 _UNIT_Translate(_UNIT_Translation *translation,
                 const UNIT_Procedure *procedure)
@@ -567,6 +573,17 @@ _UNIT_Translate(_UNIT_Translation *translation,
         _UNIT_Map_Clear(&translation->strings);
         _UNIT_LocalVariables_Clear(&locals);
         _UNIT_Vector_Clear(&translation->blocks);
+        return _UNIT_FAIL;
+    }
+
+    _UNIT_Vector locals_snapshots;
+    if (UNIT_FAILED(_UNIT_Vector_Init(&locals_snapshots, context, 16, _UNIT_Dealloc))) {
+        _UNIT_Vector_Clear(&stack);
+        _UNIT_SizeMap_Clear(&translation->symbols);
+        _UNIT_Map_Clear(&translation->strings);
+        _UNIT_LocalVariables_Clear(&locals);
+        _UNIT_Vector_Clear(&translation->blocks);
+        _UNIT_SizeSet_Clear(&address_taken_locals);
         return _UNIT_FAIL;
     }
 
@@ -896,6 +913,24 @@ _UNIT_Translate(_UNIT_Translation *translation,
                 _UNIT_BasicBlock *block = label->_block;
                 block->id = _block_id++;
                 block->label_id = label->id;
+
+                _UNIT_Map_ITER(&locals.locals_map, key, value);
+                    int32_t local_index = *(int32_t *)key;
+                    _UNIT_LocalState *state = (_UNIT_LocalState *)value;
+                    _UNIT_LocalSnapshot *snapshot = _UNIT_Alloc(context,
+                                                                sizeof(_UNIT_LocalSnapshot));
+                    if (snapshot == NULL) {
+                        goto error;
+                    }
+
+                    snapshot->label_id = label->id;
+                    snapshot->local_index = local_index;
+                    snapshot->location_id = state->location_id;
+                    if (UNIT_FAILED(_UNIT_Vector_Append(&locals_snapshots, snapshot))) {
+                        goto error;
+                    }
+                _UNIT_Map_END_ITER();
+
                 // The jump label succeeds the current block because it fell
                 // through.
                 ADD_BLOCK_SUCCESSOR(CURRENT_BLOCK(), block);
@@ -911,6 +946,35 @@ _UNIT_Translate(_UNIT_Translation *translation,
                                                                &label);
                 if (item == NULL) {
                     goto error;
+                }
+
+                UNIT_Size snap_count = _UNIT_Vector_SIZE(&locals_snapshots);
+                for (UNIT_Size index = 0; index < snap_count; ++index) {
+                    _UNIT_LocalSnapshot *snap = _UNIT_Vector_GET(&locals_snapshots, index);
+                    if (snap->label_id != label->id) {
+                        continue;
+                    }
+
+                    _UNIT_LocalState *current = get_local(&locals, snap->local_index);
+                    if (current == NULL) {
+                        continue;
+                    }
+                    if (current->location_id == snap->location_id) {
+                        continue;
+                    }
+
+                    _UNIT_MachineItem *dest = new_machine_item(translation, _UNIT_TYPE_LOCATION,
+                                                               snap->location_id, NULL);
+                    if (dest == NULL) {
+                        goto error;
+                    }
+
+                    _UNIT_MachineItem *location = new_machine_item(translation, _UNIT_TYPE_LOCATION,
+                                                                   current->location_id, NULL);
+                    if (location == NULL) {
+                        goto error;
+                    }
+                    EMIT_DEST_ONE(_UNIT_I_MOVE, dest, location);
                 }
 
                 EMIT_ONE(_UNIT_I_JUMP, item);
@@ -1035,6 +1099,8 @@ error:
     _UNIT_SizeMap_Clear(&translation->symbols);
     _UNIT_Map_Clear(&translation->strings);
     _UNIT_Vector_Clear(&translation->blocks);
+    _UNIT_SizeSet_Clear(&address_taken_locals);
+    _UNIT_Vector_Clear(&locals_snapshots);
     return _UNIT_FAIL;
 }
 

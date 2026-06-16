@@ -64,9 +64,9 @@ _UNIT_Map_Set(_UNIT_Map *map, void *key, void *value);
 
 
 #define _UNIT_Map_ITER(map, key_name, value_name)                           \
-    for (UNIT_Size _m_index = 0; _m_index < map->capacity; ++_m_index) {    \
-        void *key_name = map->items[_m_index].key);                         \
-        void *value_name = map->items[_m_index].value;                      \
+    for (UNIT_Size _m_index = 0; _m_index < (map)->capacity; ++_m_index) {  \
+        void *key_name = (map)->items[_m_index].key;                        \
+        void *value_name = (map)->items[_m_index].value;                    \
         if (key_name == NULL) {                                             \
             continue;                                                       \
         }                                                                   \
