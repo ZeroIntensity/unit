@@ -17,6 +17,8 @@ UNIT_ErrorCode_ToString(UNIT_ErrorCode code)
             return "NO_MEMORY";
         case UNIT_ERROR_OS_FAILURE:
             return "OS_FAILURE";
+        case UNIT_ERROR_UNSUPPORTED_PLATFORM:
+            return "UNSUPPORTED_PLATFORM";
         default:
             _UNIT_Unreachable();
     }

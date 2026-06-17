@@ -1,6 +1,7 @@
 #include <string.h>
 
 #include <unit/compilation.h>
+#include <unit/errors.h>
 
 #include <unit/internal/architectures.h>
 #include <unit/internal/compile_context.h>
@@ -8,6 +9,43 @@
 #include <unit/internal/register_allocation.h>
 #include <unit/internal/set.h>
 #include <unit/internal/translation.h>
+
+UNIT_Status
+UNIT_GetCurrentPlatform(UNIT_Context *context, UNIT_Platform *out)
+{
+    assert(context != NULL);
+    assert(out != NULL);
+
+    UNIT_Platform platform = 0;
+
+#if defined(__x86_64__) || defined(_M_X64)
+    platform |= UNIT_ARCH_AMD64;
+#elif defined(__aarch64__) || defined(_M_ARM64)
+    platform |= UNIT_ARCH_AARCH64;
+#else
+    _UNIT_SetError(context,
+                   UNIT_ERROR_UNSUPPORTED_PLATFORM,
+                   "unknown CPU architecture");
+    return _UNIT_FAIL;
+#endif
+
+#if defined(_WIN32)
+    platform |= UNIT_ABI_WIN64;
+#elif defined(__APPLE__)
+    platform |= UNIT_ABI_APPLE;
+#elif defined(__linux__) || defined(__FreeBSD__) || defined(__OpenBSD__) \
+      || defined(__NetBSD__) || defined(__DragonFly__) || defined(__sun)
+    platform |= UNIT_ABI_SYSTEMV;
+#else
+    _UNIT_SetError(context,
+                   UNIT_ERROR_UNSUPPORTED_PLATFORM,
+                   "unknown operating system");
+    return _UNIT_FAIL;
+#endif
+
+    *out = platform;
+    return _UNIT_OK;
+}
 
 _UNIT_Relocation *
 new_relocation(UNIT_Context *context, UNIT_Size offset, UNIT_Size symbol_index,
@@ -340,7 +378,7 @@ UNIT_CompiledProcedure_Free(UNIT_CompiledProcedure *compiled)
 }
 
 static UNIT_CompiledProcedure *
-compile_procedure(const UNIT_Procedure *procedure, UNIT_Architecture architecture)
+compile_procedure(const UNIT_Procedure *procedure, UNIT_Platform platform)
 {
     assert(procedure != NULL);
     UNIT_Context *context = procedure->context;
@@ -377,12 +415,15 @@ compile_procedure(const UNIT_Procedure *procedure, UNIT_Architecture architectur
     }
 
     UNIT_Status result;
-    switch (architecture) {
+    switch (UNIT_Platform_GET_ARCH(platform)) {
         case UNIT_ARCH_AMD64:
             result = _UNIT_AMD64_Compile(&compiled_procedure->_translation,
                                          &compiled_procedure->_compile_context);
             break;
-        // TODO: Add more architectures here as we add them
+        default:
+            assert(UNIT_Platform_GET_ARCH(platform) == UNIT_ARCH_AARCH64);
+            _UNIT_SetError(context, UNIT_ERROR_UNSUPPORTED_PLATFORM, "AArch64 is not supported yet");
+            goto error;
     }
 
     if (UNIT_FAILED(result)) {
@@ -396,14 +437,14 @@ error:
 }
 
 static UNIT_CompiledProcedure *
-compile_and_store_procedure(const UNIT_Procedure *procedure, UNIT_Architecture architecture,
+compile_and_store_procedure(const UNIT_Procedure *procedure, UNIT_Platform platform,
                             _UNIT_Vector *compiled, _UNIT_Set *visited)
 {
     assert(procedure != NULL);
     assert(compiled != NULL);
     assert(visited != NULL);
 
-    UNIT_CompiledProcedure *compiled_procedure = compile_procedure(procedure, architecture);
+    UNIT_CompiledProcedure *compiled_procedure = compile_procedure(procedure, platform);
     if (compiled_procedure == NULL) {
         return NULL;
     }
@@ -420,7 +461,7 @@ compile_and_store_procedure(const UNIT_Procedure *procedure, UNIT_Architecture a
 }
 
 static UNIT_Status
-compile_procedure_recursive(const UNIT_Procedure *procedure, UNIT_Architecture architecture,
+compile_procedure_recursive(const UNIT_Procedure *procedure, UNIT_Platform platform,
                             _UNIT_Vector *compiled, _UNIT_Set *visited)
 {
     assert(procedure != NULL);
@@ -431,7 +472,7 @@ compile_procedure_recursive(const UNIT_Procedure *procedure, UNIT_Architecture a
         return _UNIT_OK;
     }
 
-    UNIT_CompiledProcedure *compiled_parent = compile_and_store_procedure(procedure, architecture,
+    UNIT_CompiledProcedure *compiled_parent = compile_and_store_procedure(procedure, platform,
                                                                           compiled, visited);
     if (compiled_parent == NULL) {
         return _UNIT_FAIL;
@@ -443,7 +484,7 @@ compile_procedure_recursive(const UNIT_Procedure *procedure, UNIT_Architecture a
         assert(subprocedure != NULL);
         assert(procedure != subprocedure);
 
-        if (UNIT_FAILED(compile_procedure_recursive(subprocedure, architecture,
+        if (UNIT_FAILED(compile_procedure_recursive(subprocedure, platform,
                                                     compiled, visited))) {
             return _UNIT_FAIL;
         }
@@ -635,7 +676,7 @@ merge_compiled(UNIT_Context *context, _UNIT_Vector *compiled,
 }
 
 UNIT_CompiledProcedure *
-UNIT_Compile(const UNIT_Procedure *procedure, UNIT_Architecture architecture)
+UNIT_Compile(const UNIT_Procedure *procedure, UNIT_Platform platform)
 {
     assert(procedure != NULL);
     UNIT_Context *context = procedure->context;
@@ -656,7 +697,7 @@ UNIT_Compile(const UNIT_Procedure *procedure, UNIT_Architecture architecture)
         return NULL;
     }
 
-    if (UNIT_FAILED(compile_procedure_recursive(procedure, architecture, &compiled,
+    if (UNIT_FAILED(compile_procedure_recursive(procedure, platform, &compiled,
                                                 &visited))) {
         goto error;
     }

@@ -145,7 +145,12 @@ int main(void)
 
     //ADDOP_INT(UNIT_OP_EXIT, 0);
 
-    UNIT_CompiledProcedure *compiled = UNIT_Compile(&procedure, UNIT_ARCH_AMD64);
+    UNIT_Platform platform;
+    if (UNIT_FAILED(UNIT_GetCurrentPlatform(&context, &platform))) {
+        goto error;
+    }
+
+    UNIT_CompiledProcedure *compiled = UNIT_Compile(&procedure, platform);
     if (compiled == NULL) {
         goto error;
     }

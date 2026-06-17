@@ -3,32 +3,28 @@
 
 #include <unit/base.h>
 #include <unit/context.h>
+#include <unit/platform.h>
 #include <unit/procedure.h>
 
 #include <unit/internal/compile_context.h>
 #include <unit/internal/translation.h>
 
 typedef enum {
-    UNIT_ARCH_AMD64,
-    // TODO: UNIT_ARCH_ARM64
-} UNIT_Architecture;
-
-typedef enum {
-    UNIT_FORMAT_ELF
-    // TODO: UNIT_FORMAT_MACHO
-    // TODO: UNIT_FORMAT_PE
+    UNIT_FORMAT_ELF,
+    UNIT_FORMAT_MACHO,
+    UNIT_FORMAT_PE,
 } UNIT_ExecutableFormat;
 
 typedef struct {
     UNIT_Context *context;
-    UNIT_Architecture architecture;
+    UNIT_Platform platform;
     const char *name;
     _UNIT_Translation _translation;
     _UNIT_CompileContext _compile_context;
 } UNIT_CompiledProcedure;
 
 UNIT_CompiledProcedure *
-UNIT_Compile(const UNIT_Procedure *procedure, UNIT_Architecture arch);
+UNIT_Compile(const UNIT_Procedure *procedure, UNIT_Platform platform);
 
 UNIT_Status
 UNIT_CompiledProcedure_WriteObjectFile(const UNIT_CompiledProcedure *compiled,

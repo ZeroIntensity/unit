@@ -3,11 +3,14 @@
 
 #include <unit/base.h>
 
+// These have to be defined in context.h instead of errors.h to avoid circular
+// dependency issues.
 typedef enum {
     UNIT_ERROR_NONE,
     UNIT_ERROR_NO_MEMORY,
     UNIT_ERROR_INVALID_USAGE,
-    UNIT_ERROR_OS_FAILURE
+    UNIT_ERROR_OS_FAILURE,
+    UNIT_ERROR_UNSUPPORTED_PLATFORM
 } UNIT_ErrorCode;
 
 #define SIZE_CLASS(size) \

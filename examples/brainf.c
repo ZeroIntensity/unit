@@ -293,7 +293,12 @@ int main(int argc, char **argv)
         goto error;
     }
 
-    UNIT_CompiledProcedure *compiled = UNIT_Compile(&procedure, UNIT_ARCH_AMD64);
+    UNIT_Platform platform;
+    if (UNIT_FAILED(UNIT_GetCurrentPlatform(&context, &platform))) {
+        goto error;
+    }
+
+    UNIT_CompiledProcedure *compiled = UNIT_Compile(&procedure, platform);
     if (compiled == NULL) {
         goto error;
     }
