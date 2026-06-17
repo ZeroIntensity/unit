@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <unit/platform.h>
+
 #include <unit/internal/basic_block.h>
 #include <unit/internal/compile_context.h>
 #include <unit/internal/translation.h>
@@ -53,6 +55,25 @@ static const AMD64_Register register_map[] = {
     REG_R9,
     REG_R10,
 };
+
+static const AMD64_Register *
+get_argument_registers(UNIT_ABI abi)
+{
+    static const AMD64_Register systemv[] = {
+        REG_RDI, REG_RSI, REG_RDX, REG_RCX, REG_R8, REG_R9
+    };
+    static const AMD64_Register win64[] = {
+        REG_RCX, REG_RDX, REG_R8, REG_R9
+    };
+
+    switch (abi) {
+        case UNIT_ABI_SYSTEMV:
+            return systemv;
+        case UNIT_ABI_WIN64:
+            return win64;
+        default: _UNIT_Unreachable();
+    }
+}
 
 AMD64_Operand
 machine_item_to_operand(const _UNIT_MachineItem *machine_item)
@@ -155,15 +176,6 @@ TWO_ARG_HELPER(sub, AMD64_SUB)
 TWO_ARG_HELPER(imul, AMD64_MUL)
 ONE_ARG_HELPER(idiv, AMD64_DIV)
 
-static const AMD64_Register argument_registers[] = {
-    REG_RDI,
-    REG_RSI,
-    REG_RDX,
-    REG_RCX,
-    REG_R8,
-    REG_R9,
-};
-
 #define EMIT(op)                                                             \
     if (UNIT_FAILED(AMD64_encode_instruction(compile_context, op))) {        \
         return _UNIT_FAIL;                                                    \
@@ -245,7 +257,8 @@ restore_register(_UNIT_CompileContext *compile_context, AMD64_Register preserved
 
 static UNIT_Status
 translate_operation(_UNIT_CompileContext *compile_context,
-                    _UNIT_MachineOperation *operation)
+                    _UNIT_MachineOperation *operation,
+                    UNIT_ABI abi)
 {
     assert(compile_context != NULL);
     assert(operation != NULL);
@@ -301,6 +314,7 @@ translate_operation(_UNIT_CompileContext *compile_context,
             assert(num_arguments <= 6);
 
             PRESERVE_REGISTER(REG_RAX);
+            const AMD64_Register *argument_registers = get_argument_registers(abi);
 
             // Save argument registers into stack frame slots
             UNIT_Size save_slots[8];
@@ -495,6 +509,16 @@ translate_operation(_UNIT_CompileContext *compile_context,
             }
             break;
         }
+
+        case _UNIT_I_LOAD_ARGUMENT: {
+            const AMD64_Register *argument_registers = get_argument_registers(abi);
+            UNIT_Size arg_index = operation->argument_1->value;
+            // TODO: Handle more than 6 args
+            assert(arg_index < 6);
+            AMD64_Register argument_register = argument_registers[arg_index];
+            EMIT(mov(ctx, OP(destination), reg(argument_register)));
+            break;
+        }
     }
 
     return _UNIT_OK;
@@ -503,7 +527,8 @@ translate_operation(_UNIT_CompileContext *compile_context,
 
 UNIT_Status
 _UNIT_AMD64_Compile(_UNIT_Translation *translation,
-                    _UNIT_CompileContext *compile_context)
+                    _UNIT_CompileContext *compile_context,
+                    UNIT_ABI abi)
 {
     // Reserve space for the prologue (sub rsp, imm32 = 7 bytes).
     // We'll patch it once we know the final frame size.
@@ -519,7 +544,7 @@ _UNIT_AMD64_Compile(_UNIT_Translation *translation,
             _UNIT_MachineOperation *operation = _UNIT_Vector_GET(&block->instructions,
                                                                 index);
             assert(operation != NULL);
-            if (UNIT_FAILED(translate_operation(compile_context, operation))) {
+            if (UNIT_FAILED(translate_operation(compile_context, operation, abi))) {
                 return _UNIT_FAIL;
             }
         }

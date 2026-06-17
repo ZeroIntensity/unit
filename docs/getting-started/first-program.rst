@@ -31,7 +31,7 @@ Start with some C code using UNIT:
 
         // The top of the stack is now the result of calling puts().
         // We don't actually care about it, so we pop it off.
-        UNIT_Procedure_AddOperation(&procedure, UNIT_OP_POP, 0 /* This value doesn't matter for POP_TOP */);
+        UNIT_Procedure_AddOperation(&procedure, UNIT_OP_POP, 0 /* This value doesn't matter for POP */);
 
         // Now, we want to return 0.
         // First, push 0 onto the stack, which will be consumed by the UNIT_OP_RETURN_VALUE opcode.

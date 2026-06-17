@@ -418,7 +418,8 @@ compile_procedure(const UNIT_Procedure *procedure, UNIT_Platform platform)
     switch (UNIT_Platform_GET_ARCH(platform)) {
         case UNIT_ARCH_AMD64:
             result = _UNIT_AMD64_Compile(&compiled_procedure->_translation,
-                                         &compiled_procedure->_compile_context);
+                                         &compiled_procedure->_compile_context,
+                                         UNIT_Platform_GET_ABI(platform));
             break;
         default:
             assert(UNIT_Platform_GET_ARCH(platform) == UNIT_ARCH_AARCH64);

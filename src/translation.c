@@ -55,8 +55,7 @@ instruction_name(UNIT_Instruction instruction)
         NAME(UNIT_OP_READ_BYTES);
         NAME(UNIT_OP_WRITE_BYTES);
     }
-    fprintf(stderr, "unknown machine instruction\n");
-    abort();
+    _UNIT_Unreachable();
 }
 
 const char *
@@ -85,9 +84,9 @@ machine_instruction_name(_UNIT_MachineInstruction machine_instruction)
         NAME(_UNIT_I_MOD);
         NAME(_UNIT_I_READ_BYTES);
         NAME(_UNIT_I_WRITE_BYTES);
+        NAME(_UNIT_I_LOAD_ARGUMENT);
     }
-    fprintf(stderr, "unknown machine instruction\n");
-    abort();
+    _UNIT_Unreachable();
 }
 
 #undef NAME
@@ -979,7 +978,9 @@ _UNIT_Translate(_UNIT_Translation *translation,
             }
 
             case UNIT_OP_LOAD_ARGUMENT: {
-                // TODO
+                ARGUMENT_TO_ITEM(index, _UNIT_TYPE_CONSTANT);
+                CREATE_DESTINATION(destination);
+                EMIT_DEST_ONE(_UNIT_I_LOAD_ARGUMENT, destination, index);
                 break;
             }
 
@@ -1044,8 +1045,8 @@ _UNIT_Translate(_UNIT_Translation *translation,
             case UNIT_OP_COMPARE_GREATER_EQUAL:
             case UNIT_OP_COMPARE_LESS:
             case UNIT_OP_COMPARE_LESS_EQUAL: {
-                POP_TO_VAR(left);
                 POP_TO_VAR(right);
+                POP_TO_VAR(left);
                 CREATE_DESTINATION(destination);
 
                 destination->type = _UNIT_TYPE_COMPARISON;

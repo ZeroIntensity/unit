@@ -141,7 +141,7 @@ codegen_print(UNIT_Procedure *procedure)
     // [*ptr]
 
     ADDOP_CALL("putchar", 1);
-    ADDOP(UNIT_OP_POP_TOP);
+    ADDOP(UNIT_OP_POP);
 
     return 0;
 }

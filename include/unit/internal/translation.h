@@ -62,6 +62,7 @@ typedef enum {
     _UNIT_I_MOD,
     _UNIT_I_READ_BYTES,
     _UNIT_I_WRITE_BYTES,
+    _UNIT_I_LOAD_ARGUMENT
 } _UNIT_MachineInstruction;
 
 typedef struct {

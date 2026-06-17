@@ -10,7 +10,7 @@ int main(void)
     }
 
     UNIT_Procedure procedure;
-    if (UNIT_FAILED(UNIT_Procedure_Init(&procedure, &context, "test"))) {
+    if (UNIT_FAILED(UNIT_Procedure_Init(&procedure, &context, "main"))) {
         UNIT_Context_Clear(&context);
         return 1;
     }
@@ -62,14 +62,57 @@ int main(void)
     NEW_JUMP_LABEL(correct);
     NEW_JUMP_LABEL(greater);
     NEW_JUMP_LABEL(invalid);
+    NEW_JUMP_LABEL(set_seed_from_time);
+    NEW_JUMP_LABEL(invalid_seed);
+    NEW_JUMP_LABEL(start_game);
 
-    ADDOP_STR("Guessing game!\nThe number is between 1 and 100");
+    ADDOP_INT(UNIT_OP_LOAD_ARGUMENT, 0);
+    ADDOP_INT(UNIT_OP_LOAD_INTEGER, 1);
+    ADDOP(UNIT_OP_COMPARE_LESS_EQUAL);
+    ADDOP_JUMP(UNIT_OP_JUMP_IF_TRUE, set_seed_from_time);
+
+    ADDOP_INT(UNIT_OP_LOAD_ARGUMENT, 1); // argv
+    ADDOP_INT(UNIT_OP_LOAD_INTEGER, sizeof(char*));
+    ADDOP(UNIT_OP_ADD);
+    // [argv + 8 (&argv[1])]
+    ADDOP_INT(UNIT_OP_READ_BYTES, 8);
+    // [argv[1]]
+
+    ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
+    ADDOP_STORE_NAME(seed);
+
+    ADDOP_STR("%d");
+    ADDOP_INT(UNIT_OP_ADDRESS_OF, seed.id);
+    // [argv[1], "%d", &seed]
+    ADDOP_CALL("sscanf", 3);
+    // [result]
+
+    ADDOP_INT(UNIT_OP_LOAD_INTEGER, 1);
+    ADDOP(UNIT_OP_COMPARE_NOT_EQUAL);
+    ADDOP_JUMP(UNIT_OP_JUMP_IF_TRUE, invalid_seed);
+
+    ADDOP_LOAD_NAME(seed);
+    ADDOP_CALL("srand", 1);
+    ADDOP(UNIT_OP_POP);
+    ADDOP_JUMP(UNIT_OP_JUMP_TO, start_game);
+
+    USE_LABEL(invalid_seed);
+    ADDOP_STR("Not a valid seed");
     ADDOP_CALL("puts", 1);
     ADDOP(UNIT_OP_POP);
+    ADDOP_INT(UNIT_OP_LOAD_INTEGER, 1);
+    ADDOP(UNIT_OP_RETURN_VALUE);
 
+    USE_LABEL(set_seed_from_time);
     ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0); // NULL
     ADDOP_CALL("time", 1);
     ADDOP_CALL("srand", 1);
+    ADDOP(UNIT_OP_POP);
+
+    USE_LABEL(start_game);
+
+    ADDOP_STR("Guessing game!\nThe number is between 1 and 100");
+    ADDOP_CALL("puts", 1);
     ADDOP(UNIT_OP_POP);
 
     ADDOP_CALL("rand", 0);
@@ -118,8 +161,8 @@ int main(void)
     ADDOP(UNIT_OP_COMPARE_EQUAL);
     ADDOP_JUMP(UNIT_OP_JUMP_IF_TRUE, correct);
 
-    ADDOP_LOAD_NAME(guess)
     ADDOP_LOAD_NAME(number)
+    ADDOP_LOAD_NAME(guess)
     ADDOP(UNIT_OP_COMPARE_GREATER);
     ADDOP_JUMP(UNIT_OP_JUMP_IF_TRUE, greater);
 
