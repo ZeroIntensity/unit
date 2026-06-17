@@ -84,7 +84,7 @@ _UNIT_Structure_DEFINE_PUBLIC_FREE(UNIT_Procedure);
 UNIT_Status
 UNIT_Procedure_AddOperation(UNIT_Procedure *procedure,
                             UNIT_Instruction instruction,
-                            int32_t argument)
+                            int64_t argument)
 {
     assert(procedure != NULL);
     _UNIT_Operation *operation = _UNIT_Alloc(procedure->context,
@@ -172,7 +172,7 @@ UNIT_Procedure_AddCall(UNIT_Procedure *procedure,
 UNIT_Status
 UNIT_Procedure_AddCallProcedure(UNIT_Procedure *procedure,
                                 UNIT_Procedure *target,
-                                int32_t nargs)
+                                uint8_t nargs)
 {
     if (UNIT_FAILED(UNIT_Procedure_AddOperation(procedure, UNIT_OP_PREPARE_CALL, nargs))) {
         return _UNIT_FAIL;

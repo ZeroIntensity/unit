@@ -54,6 +54,9 @@ instruction_name(UNIT_Instruction instruction)
         NAME(UNIT_OP_ADDRESS_OF);
         NAME(UNIT_OP_READ_BYTES);
         NAME(UNIT_OP_WRITE_BYTES);
+
+        NAME(UNIT_OP_CAST);
+        NAME(UNIT_OP_CONVERT);
     }
     _UNIT_Unreachable();
 }
@@ -85,11 +88,30 @@ machine_instruction_name(_UNIT_MachineInstruction machine_instruction)
         NAME(_UNIT_I_READ_BYTES);
         NAME(_UNIT_I_WRITE_BYTES);
         NAME(_UNIT_I_LOAD_ARGUMENT);
+        NAME(_UNIT_I_CONVERT);
     }
     _UNIT_Unreachable();
 }
 
 #undef NAME
+
+const char *
+integer_type_name(UNIT_IntegerType type)
+{
+#define INT_TYPE(name) case UNIT_TYPE_ ##name: return #name
+    switch (type) {
+        INT_TYPE(INT8);
+        INT_TYPE(INT16);
+        INT_TYPE(INT32);
+        INT_TYPE(INT64);
+        INT_TYPE(UINT8);
+        INT_TYPE(UINT16);
+        INT_TYPE(UINT32);
+        INT_TYPE(UINT64);
+    }
+#undef INT_TYPE
+    _UNIT_Unreachable();
+}
 
 static UNIT_Status
 mark_last_use(_UNIT_BasicBlock *block, _UNIT_MachineItem *item)
@@ -161,9 +183,9 @@ print_machine_item(_UNIT_MachineItem *item)
 {
     assert(item != NULL);
     if (item->type == _UNIT_TYPE_CONSTANT) {
-        printf("constant(%d)", item->value);
+        printf("constant(%ld)", item->value);
     } else if (item->type == _UNIT_TYPE_LOCATION) {
-        printf("location(%d)", item->value);
+        printf("location(%ld)", item->value);
     } else if (item->type == _UNIT_TYPE_CALL_ARGS) {
         printf("[");
         UNIT_Size size = _UNIT_Vector_SIZE(item->call_args);
@@ -202,10 +224,10 @@ print_machine_item(_UNIT_MachineItem *item)
         }
         print_machine_item(item->comparison.right);
     } else if (item->type == _UNIT_TYPE_MEMORY) {
-        printf("stack_slot_%d", item->value);
+        printf("stack_slot_%ld", item->value);
     } else {
         assert(item->type == _UNIT_TYPE_REGISTER);
-        printf("register_%d", item->value);
+        printf("register_%ld", item->value);
     }
 
     if (item->hint != NULL) {
@@ -226,7 +248,7 @@ print_instruction_stream(_UNIT_Vector *instructions)
             assert(operation->destination != NULL);
             assert(operation->destination->hint != NULL);
             // There should be a "block ..." right before this
-            printf(", label %s (%d):\n", operation->destination->hint,
+            printf(", label %s (%ld):\n", operation->destination->hint,
                    operation->destination->value);
             continue;
         }
@@ -287,7 +309,7 @@ attach_item_to_translation(_UNIT_Translation *translation, _UNIT_MachineItem *it
 
 static inline _UNIT_MachineItem *
 new_machine_item(_UNIT_Translation *translation, _UNIT_MachineItem_Type type,
-                 int32_t value, const char *hint)
+                 int64_t value, const char *hint)
 {
     _UNIT_MachineItem *item = _UNIT_Alloc(translation->context, sizeof(_UNIT_MachineItem));
     if (item == NULL) {
@@ -1123,6 +1145,28 @@ _UNIT_Translate(_UNIT_Translation *translation,
                 POP_TO_VAR(value);
                 POP_TO_VAR(address);
                 EMIT_DEST_TWO(_UNIT_I_WRITE_BYTES, address, value, bytes);
+                break;
+            }
+
+            case UNIT_OP_CAST: {
+                POP_TO_VAR(top);
+                top->integer_type = operation->argument;
+                PUSH_ITEM(top);
+                break;
+            }
+
+            case UNIT_OP_CONVERT: {
+                POP_TO_VAR(value);
+                _UNIT_MachineItem *type_item = new_machine_item(translation,
+                                                                _UNIT_TYPE_CONSTANT,
+                                                                operation->argument,
+                                                                integer_type_name(operation->argument));
+                if (type_item == NULL) {
+                    goto error;
+                }
+                CREATE_DESTINATION(destination);
+                destination->integer_type = operation->argument;
+                EMIT_DEST_TWO(_UNIT_I_CONVERT, destination, value, type_item);
                 break;
             }
         }

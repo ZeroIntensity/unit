@@ -58,6 +58,10 @@ typedef enum {
     UNIT_OP_ADDRESS_OF,
     UNIT_OP_READ_BYTES,
     UNIT_OP_WRITE_BYTES,
+
+    // Casting
+    UNIT_OP_CAST,
+    UNIT_OP_CONVERT
 } UNIT_Instruction;
 
 typedef struct {
@@ -67,7 +71,7 @@ typedef struct {
 
 typedef struct {
     const char *name;
-    UNIT_Size id;
+    int32_t id;
     // This is a _UNIT_BasicBlock * -- we hide it to avoid exposing that type
     // publicly.
     void *_block;
@@ -76,6 +80,17 @@ typedef struct {
 typedef struct {
     int32_t id;
 } UNIT_Local;
+
+typedef enum {
+    UNIT_TYPE_INT8,
+    UNIT_TYPE_INT16,
+    UNIT_TYPE_INT32,
+    UNIT_TYPE_INT64,
+    UNIT_TYPE_UINT8,
+    UNIT_TYPE_UINT16,
+    UNIT_TYPE_UINT32,
+    UNIT_TYPE_UINT64,
+} UNIT_IntegerType;
 
 typedef struct {
     UNIT_Context *context;
@@ -105,7 +120,7 @@ UNIT_Procedure_Free(UNIT_Procedure *procedure);
 UNIT_Status
 UNIT_Procedure_AddOperation(UNIT_Procedure *procedure,
                             UNIT_Instruction instruction,
-                            int32_t argument);
+                            int64_t argument);
 
 UNIT_JumpLabel *
 UNIT_Procedure_CreateJumpLabel(UNIT_Procedure *procedure, const char *name);
@@ -137,6 +152,6 @@ UNIT_Procedure_AddLoadLocal(UNIT_Procedure *procedure, UNIT_Local local);
 UNIT_Status
 UNIT_Procedure_AddCallProcedure(UNIT_Procedure *self,
                                 UNIT_Procedure *target,
-                                int32_t nargs);
+                                uint8_t nargs);
 
 #endif

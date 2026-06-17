@@ -25,13 +25,23 @@ typedef enum {
 } AMD64_Register;
 
 typedef enum {
+    // Moves
     AMD64_MOV,
     AMD64_MOVZX,
+    AMD64_MOVZX8,
+    AMD64_MOVSX8,
+    AMD64_MOVZX16,
+    AMD64_MOVSX16,
+    AMD64_MOVSXD,
+    AMD64_MOV32,
     AMD64_MOV_SIZED,
+
+    // Calls
     AMD64_SYSCALL,
-    AMD64_RET,
     AMD64_CALL_INDIRECT,
     AMD64_CALL_SYMBOL,
+
+    // Jumps
     AMD64_JUMP,
     AMD64_JUMP_LABEL,
     AMD64_JUMP_IF_EQUAL,
@@ -40,14 +50,21 @@ typedef enum {
     AMD64_JUMP_IF_GREATER,
     AMD64_JUMP_IF_LESS_EQUAL,
     AMD64_JUMP_IF_GREATER_EQUAL,
+
+    // Comparisons
     AMD64_COMPARE,
-    AMD64_LOAD_STRING,
-    AMD64_LOAD_ADDRESS,
+
+    // Arithmetic
     AMD64_ADD,
     AMD64_SUB,
     AMD64_MUL,
     AMD64_DIV,
-    AMD64_CQO
+
+    // Misc
+    AMD64_LOAD_STRING,
+    AMD64_LOAD_ADDRESS,
+    AMD64_CQO,
+    AMD64_RET,
 } AMD64_Opcode;
 
 typedef enum {

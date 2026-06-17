@@ -128,6 +128,9 @@ enum class OpCode
     ADDRESS_OF = UNIT_OP_ADDRESS_OF,
     READ_BYTES = UNIT_OP_READ_BYTES,
     WRITE_BYTES = UNIT_OP_WRITE_BYTES,
+
+    CAST = UNIT_OP_CAST,
+    CONVERT = UNIT_OP_CONVERT,
 };
 
 using Platform = std::uint32_t;

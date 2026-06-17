@@ -8,26 +8,34 @@
 
 // Actual opcodes
 enum {
+    // Moves
     OPCODE_MOV_RM64_R64 = 0x89,
     OPCODE_MOV_R64_RM64 = 0x8B,
     OPCODE_MOV_R64_IMM64 = 0xB8,
     OPCODE_MOV_RM8_R8 = 0x88,
-} Move;
 
-enum {
+    // Moves with zero extension
     OPCODE_OPERAND_SIZE_PREFIX = 0x66,
-    OPCODE_MOVZX_R64_RM8_0 = 0x0F,
-    OPCODE_MOVZX_R64_RM8_1 = 0xB6,
-    OPCODE_MOVZX_R64_RM16_0 = 0x0F,
-    OPCODE_MOVZX_R64_RM16_1 = 0xB7,
-} MoveWithZeroExtend;
+    OPCODE_MOVZX_R_RM8_0 = 0x0F,
+    OPCODE_MOVZX_R_RM8_1 = 0xB6,
+    OPCODE_MOVZX_R_RM16_0 = 0x0F,
+    OPCODE_MOVZX_R_RM16_1 = 0xB7,
+    OPCODE_MOVSX_R_RM8_0 = 0x0F,
+    OPCODE_MOVSX_R_RM8_1 = 0xBE,
+    OPCODE_MOVSX_R_RM16_0 = 0x0F,
+    OPCODE_MOVSX_R_RM16_1 = 0xBF,
+    OPCODE_MOVSXD_R64_RM32 = 0x63,
 
-enum {
+    // Syscalls
     OPCODE_SYSCALL_0 = 0x0f,
     OPCODE_SYSCALL_1 = 0x05,
-} Syscall;
 
-enum {
+    // Comparisons
+    OPCODE_CMP_RM64_IMM8  = 0x83,
+    OPCODE_CMP_RM64_R64 = 0x39,
+    OPCODE_CMP_R64_RM64 = 0x3B,
+
+    // Jumps
     OPCODE_JMP_REL32 = 0xE9,
     OPCODE_JCC_REL32 = 0x0F,
     OPCODE_JE_REL32 = 0x84,
@@ -36,42 +44,33 @@ enum {
     OPCODE_JGE_REL32 = 0x8D,
     OPCODE_JLE_REL32 = 0x8E,
     OPCODE_JG_REL32 = 0x8F,
-} Jump;
 
-enum {
-    OPCODE_CMP_RM64_IMM8  = 0x83,
-    OPCODE_CMP_RM64_R64 = 0x39,
-    OPCODE_CMP_R64_RM64 = 0x3B,
-} Compare;
-
-enum {
+    // Arithmetic
     OPCODE_ADD_RM64_R64 = 0x01,
     OPCODE_SUB_RM64_IMM8 = 0x83,
     OPCODE_SUB_RM64_R64 = 0x29,
-    // imul is split into two bytes
     OPCODE_IMUL_R64_RM64_0 = 0x0F,
     OPCODE_IMUL_R64_RM64_1 = 0xAF,
     OPCODE_IDIV_RM64 = 0xF7,
-} Arithmetic;
 
-enum {
+    // Misc
     OPCODE_RET = 0xc3,
     OPCODE_CALL_REL32 = 0xE8,
     OPCODE_LEA = 0x8D,
     OPCODE_CQO = 0x99,
-} Misc;
+};
 
 // Multi-purpose opcodes (specify the actual thing using ModRM)
 enum {
     OPCODE_GROUP5 = 0xFF,
-    OPCODE_GROUP1_IMM8  = 0x83,
+    OPCODE_GROUP1_IMM8 = 0x83,
     OPCODE_GROUP1_IMM32 = 0x81,
 };
 
 // Group 1
 enum {
     GROUP1_ADD = 0,
-    GROUP1_OR  = 1,
+    GROUP1_OR = 1,
     GROUP1_AND = 4,
     GROUP1_SUB = 5,
     GROUP1_XOR = 6,
@@ -186,16 +185,7 @@ AMD64_encode_instruction(_UNIT_CompileContext *compile_context,
 #define EMIT_REX(r_reg, b_reg)                                  \
     EMIT8(rex(1, needs_rex_r(r_reg), 0, needs_rex_r(b_reg)))
 
-        case AMD64_RET: {
-            EMIT8(OPCODE_RET);
-            break;
-        }
-
-        case AMD64_SYSCALL: {
-            EMIT8(OPCODE_SYSCALL_0);
-            EMIT8(OPCODE_SYSCALL_1);
-            break;
-        }
+        /* Moves */
 
         case AMD64_MOV: {
             AMD64_Operand dst = instr->operands[0];
@@ -276,6 +266,8 @@ AMD64_encode_instruction(_UNIT_CompileContext *compile_context,
             break;
         }
 
+        /* Moves with zero extension */
+
         case AMD64_MOVZX: {
             AMD64_Operand dst = instr->operands[0];
             AMD64_Operand src = instr->operands[1];
@@ -286,18 +278,17 @@ AMD64_encode_instruction(_UNIT_CompileContext *compile_context,
             switch (size) {
                 case 1:
                     EMIT_REX(dst.reg, src.reg);
-                    EMIT8(OPCODE_MOVZX_R64_RM8_0);
-                    EMIT8(OPCODE_MOVZX_R64_RM8_1);
+                    EMIT8(OPCODE_MOVZX_R_RM8_0);
+                    EMIT8(OPCODE_MOVZX_R_RM8_1);
                     EMIT8(modrm(MOD_INDIRECT, reg_bits(dst.reg), reg_bits(src.reg)));
                     break;
                 case 2:
                     EMIT_REX(dst.reg, src.reg);
-                    EMIT8(OPCODE_MOVZX_R64_RM16_0);
-                    EMIT8(OPCODE_MOVZX_R64_RM16_1);
+                    EMIT8(OPCODE_MOVZX_R_RM16_0);
+                    EMIT8(OPCODE_MOVZX_R_RM16_1);
                     EMIT8(modrm(MOD_INDIRECT, reg_bits(dst.reg), reg_bits(src.reg)));
                     break;
                 case 4:
-                    // mov r32, [reg] (implicit zero-extend to 64, no REX.W)
                     EMIT8(rex(0, needs_rex_r(dst.reg), 0, needs_rex_r(src.reg)));
                     EMIT8(OPCODE_MOV_R64_RM64);
                     EMIT8(modrm(MOD_INDIRECT, reg_bits(dst.reg), reg_bits(src.reg)));
@@ -348,6 +339,128 @@ AMD64_encode_instruction(_UNIT_CompileContext *compile_context,
             break;
         }
 
+
+        #define TWO_BYTE_REG_REG_CASE(name, byte0, byte1)                           \
+            case name: {                                                            \
+                AMD64_Operand dst = instr->operands[0];                             \
+                AMD64_Operand src = instr->operands[1];                             \
+                assert(dst.kind == OPERAND_REGISTER);                               \
+                assert(src.kind == OPERAND_REGISTER);                               \
+                EMIT_REX(dst.reg, src.reg);                                         \
+                EMIT8(byte0);                                                       \
+                EMIT8(byte1);                                                       \
+                EMIT8(modrm(MOD_REGISTER, reg_bits(dst.reg), reg_bits(src.reg)));   \
+                break;                                                              \
+            }
+
+        #define ONE_BYTE_REG_REG_CASE(name, opcode, use_rex_w)                          \
+            case name: {                                                                \
+                AMD64_Operand dst = instr->operands[0];                                 \
+                AMD64_Operand src = instr->operands[1];                                 \
+                assert(dst.kind == OPERAND_REGISTER);                                   \
+                assert(src.kind == OPERAND_REGISTER);                                   \
+                EMIT8(rex(use_rex_w, needs_rex_r(dst.reg), 0, needs_rex_r(src.reg)));   \
+                EMIT8(opcode);                                                          \
+                EMIT8(modrm(MOD_REGISTER, reg_bits(dst.reg),                            \
+                            reg_bits(src.reg)));                                        \
+                break;                                                                  \
+            }
+
+        TWO_BYTE_REG_REG_CASE(AMD64_MOVZX8, OPCODE_MOVZX_R_RM8_0, OPCODE_MOVZX_R_RM8_1)
+        TWO_BYTE_REG_REG_CASE(AMD64_MOVSX8, OPCODE_MOVSX_R_RM8_0, OPCODE_MOVSX_R_RM8_1)
+        TWO_BYTE_REG_REG_CASE(AMD64_MOVZX16, OPCODE_MOVZX_R_RM16_0, OPCODE_MOVZX_R_RM16_1)
+        TWO_BYTE_REG_REG_CASE(AMD64_MOVSX16, OPCODE_MOVSX_R_RM16_0, OPCODE_MOVSX_R_RM16_1)
+        ONE_BYTE_REG_REG_CASE(AMD64_MOVSXD, OPCODE_MOVSXD_R64_RM32, 1)
+
+        // MOV32 has a swapped dest and src so we can't use the macro
+        case AMD64_MOV32: {
+            AMD64_Operand dst = instr->operands[0];
+            AMD64_Operand src = instr->operands[1];
+            assert(dst.kind == OPERAND_REGISTER);
+            assert(src.kind == OPERAND_REGISTER);
+            EMIT8(rex(0, needs_rex_r(src.reg), 0, needs_rex_r(dst.reg)));
+            EMIT8(OPCODE_MOV_RM64_R64);
+            EMIT8(modrm(MOD_REGISTER, reg_bits(src.reg), reg_bits(dst.reg)));
+            break;
+        }
+
+        #undef TWO_BYTE_REG_REG_CASE
+        #undef ONE_BYTE_REG_REG_CASE
+
+        /* Syscalls */
+
+        case AMD64_SYSCALL: {
+            EMIT8(OPCODE_SYSCALL_0);
+            EMIT8(OPCODE_SYSCALL_1);
+            break;
+        }
+
+        /* Comparisons */
+
+        case AMD64_COMPARE: {
+            AMD64_Operand dst = instr->operands[0];
+            AMD64_Operand src = instr->operands[1];
+            assert(dst.kind == OPERAND_REGISTER);
+
+            // cmp reg, imm
+            if (src.kind == OPERAND_IMMEDIATE) {
+                EMIT_REX(0, dst.reg);
+                EMIT8(OPCODE_CMP_RM64_IMM8);
+                EMIT8(modrm(MOD_REGISTER, GROUP1_CMP, reg_bits(dst.reg)));
+                EMIT8((uint8_t)src.immediate);
+            }
+            // cmp reg, reg
+            else if (src.kind == OPERAND_REGISTER) {
+                EMIT_REX(src.reg, dst.reg);
+                EMIT8(OPCODE_CMP_RM64_R64);
+                EMIT8(modrm(MOD_REGISTER, reg_bits(src.reg), reg_bits(dst.reg)));
+            }
+            // cmp reg, [rsp+offset]
+            else {
+                assert(src.kind == OPERAND_STACK);
+                EMIT_REX(dst.reg, 0);
+                EMIT8(OPCODE_CMP_R64_RM64);
+                if (src.immediate == 0) {
+                    EMIT8(modrm(MOD_INDIRECT, reg_bits(dst.reg), REG_RSP));
+                    EMIT8(SIB_RSP_BASE);
+                } else if (src.immediate <= 127) {
+                    EMIT8(modrm(MOD_INDIRECT_DISP8, reg_bits(dst.reg), REG_RSP));
+                    EMIT8(SIB_RSP_BASE);
+                    EMIT8((uint8_t)src.immediate);
+                } else {
+                    EMIT8(modrm(MOD_INDIRECT_DISP32, reg_bits(dst.reg), REG_RSP));
+                    EMIT8(SIB_RSP_BASE);
+                    EMIT32((uint32_t)src.immediate);
+                }
+            }
+            break;
+        }
+
+        /* Jumps */
+
+#define CONDITIONAL_JUMP_CASE(name, condition_opcode)           \
+    case name: {                                                \
+        UNIT_Size label_index = instr->operands[0].immediate;  \
+        EMIT8(OPCODE_JCC_REL32);                                \
+        EMIT8(condition_opcode);                                \
+        EMIT_JUMP(label_index);                                 \
+        break;                                                  \
+    }
+
+        CONDITIONAL_JUMP_CASE(AMD64_JUMP_IF_EQUAL, OPCODE_JE_REL32)
+        CONDITIONAL_JUMP_CASE(AMD64_JUMP_IF_NOT_EQUAL, OPCODE_JNE_REL32)
+        CONDITIONAL_JUMP_CASE(AMD64_JUMP_IF_LESS, OPCODE_JL_REL32)
+        CONDITIONAL_JUMP_CASE(AMD64_JUMP_IF_GREATER, OPCODE_JG_REL32)
+        CONDITIONAL_JUMP_CASE(AMD64_JUMP_IF_LESS_EQUAL, OPCODE_JLE_REL32)
+        CONDITIONAL_JUMP_CASE(AMD64_JUMP_IF_GREATER_EQUAL, OPCODE_JGE_REL32)
+
+#undef CONDITIONAL_JUMP_CASE
+
+        case AMD64_RET: {
+            EMIT8(OPCODE_RET);
+            break;
+        }
+
         case AMD64_CALL_INDIRECT: {
             AMD64_Operand target = instr->operands[0];
             assert(target.kind == OPERAND_REGISTER);
@@ -392,111 +505,7 @@ AMD64_encode_instruction(_UNIT_CompileContext *compile_context,
             break;
         }
 
-        case AMD64_COMPARE: {
-            AMD64_Operand dst = instr->operands[0];
-            AMD64_Operand src = instr->operands[1];
-            assert(dst.kind == OPERAND_REGISTER);
-
-            // cmp reg, imm
-            if (src.kind == OPERAND_IMMEDIATE) {
-                EMIT_REX(0, dst.reg);
-                EMIT8(OPCODE_CMP_RM64_IMM8);
-                EMIT8(modrm(MOD_REGISTER, GROUP1_CMP, reg_bits(dst.reg)));
-                EMIT8((uint8_t)src.immediate);
-            }
-            // cmp reg, reg
-            else if (src.kind == OPERAND_REGISTER) {
-                EMIT_REX(src.reg, dst.reg);
-                EMIT8(OPCODE_CMP_RM64_R64);
-                EMIT8(modrm(MOD_REGISTER, reg_bits(src.reg), reg_bits(dst.reg)));
-            }
-            // cmp reg, [rsp+offset]
-            else {
-                assert(src.kind == OPERAND_STACK);
-                EMIT_REX(dst.reg, 0);
-                EMIT8(OPCODE_CMP_R64_RM64);
-                if (src.immediate == 0) {
-                    EMIT8(modrm(MOD_INDIRECT, reg_bits(dst.reg), REG_RSP));
-                    EMIT8(SIB_RSP_BASE);
-                } else if (src.immediate <= 127) {
-                    EMIT8(modrm(MOD_INDIRECT_DISP8, reg_bits(dst.reg), REG_RSP));
-                    EMIT8(SIB_RSP_BASE);
-                    EMIT8((uint8_t)src.immediate);
-                } else {
-                    EMIT8(modrm(MOD_INDIRECT_DISP32, reg_bits(dst.reg), REG_RSP));
-                    EMIT8(SIB_RSP_BASE);
-                    EMIT32((uint32_t)src.immediate);
-                }
-            }
-            break;
-        }
-
-#define CONDITIONAL_JUMP_CASE(name, condition_opcode)           \
-    case name: {                                                \
-        UNIT_Size label_index = instr->operands[0].immediate;  \
-        EMIT8(OPCODE_JCC_REL32);                                \
-        EMIT8(condition_opcode);                                \
-        EMIT_JUMP(label_index);                                 \
-        break;                                                  \
-    }
-
-        CONDITIONAL_JUMP_CASE(AMD64_JUMP_IF_EQUAL, OPCODE_JE_REL32)
-        CONDITIONAL_JUMP_CASE(AMD64_JUMP_IF_NOT_EQUAL, OPCODE_JNE_REL32)
-        CONDITIONAL_JUMP_CASE(AMD64_JUMP_IF_LESS, OPCODE_JL_REL32)
-        CONDITIONAL_JUMP_CASE(AMD64_JUMP_IF_GREATER, OPCODE_JG_REL32)
-        CONDITIONAL_JUMP_CASE(AMD64_JUMP_IF_LESS_EQUAL, OPCODE_JLE_REL32)
-        CONDITIONAL_JUMP_CASE(AMD64_JUMP_IF_GREATER_EQUAL, OPCODE_JGE_REL32)
-
-#undef CONDITIONAL_JUMP_CASE
-
-        case AMD64_LOAD_STRING: {
-            AMD64_Operand dst = instr->operands[0];
-            UNIT_Size string_index = instr->operands[1].immediate;
-            _UNIT_SizeMap *string_offsets = &compile_context->string_data.string_offsets;
-            UNIT_Size byte_offset = _UNIT_SizeMap_GET(string_offsets, string_index);
-
-            assert(dst.kind == OPERAND_REGISTER);
-            // lea reg, [rip + disp32] (dst in reg field, rm=5 for RIP-relative)
-            EMIT_REX(dst.reg, 0);
-            EMIT8(OPCODE_LEA);
-            EMIT8(modrm(MOD_INDIRECT, reg_bits(dst.reg), 5));
-
-            _UNIT_Relocation *relocation = _UNIT_Relocation_NewData(
-                compile_context->context, INDEX(), byte_offset);
-            if (relocation == NULL) {
-                goto error;
-            }
-            if (UNIT_FAILED(_UNIT_Vector_Append(&compile_context->symbol_table.relocations,
-                                                relocation))) {
-                goto error;
-            }
-            EMIT32(0x00);
-            break;
-        }
-
-        case AMD64_LOAD_ADDRESS: {
-            AMD64_Operand dst = instr->operands[0];
-            AMD64_Operand src = instr->operands[1];
-
-            // lea reg, [rsp + offset] (dst in reg field, RSP in rm)
-            assert(dst.kind == OPERAND_REGISTER);
-            assert(src.kind == OPERAND_STACK);
-            EMIT_REX(dst.reg, 0);
-            EMIT8(OPCODE_LEA);
-            if (src.immediate == 0) {
-                EMIT8(modrm(MOD_INDIRECT, reg_bits(dst.reg), REG_RSP));
-                EMIT8(SIB_RSP_BASE);
-            } else if (src.immediate <= 127) {
-                EMIT8(modrm(MOD_INDIRECT_DISP8, reg_bits(dst.reg), REG_RSP));
-                EMIT8(SIB_RSP_BASE);
-                EMIT8((uint8_t)src.immediate);
-            } else {
-                EMIT8(modrm(MOD_INDIRECT_DISP32, reg_bits(dst.reg), REG_RSP));
-                EMIT8(SIB_RSP_BASE);
-                EMIT32((uint32_t)src.immediate);
-            }
-            break;
-        }
+        /* Arithmetic */
 
         case AMD64_ADD: {
             AMD64_Operand dst = instr->operands[0];
@@ -563,6 +572,57 @@ AMD64_encode_instruction(_UNIT_CompileContext *compile_context,
             EMIT_REX(0, divisor.reg);
             EMIT8(OPCODE_IDIV_RM64);
             EMIT8(modrm(MOD_REGISTER, 7, reg_bits(divisor.reg)));
+            break;
+        }
+
+        /* Misc */
+
+        case AMD64_LOAD_STRING: {
+            AMD64_Operand dst = instr->operands[0];
+            UNIT_Size string_index = instr->operands[1].immediate;
+            _UNIT_SizeMap *string_offsets = &compile_context->string_data.string_offsets;
+            UNIT_Size byte_offset = _UNIT_SizeMap_GET(string_offsets, string_index);
+
+            assert(dst.kind == OPERAND_REGISTER);
+            // lea reg, [rip + disp32] (dst in reg field, rm=5 for RIP-relative)
+            EMIT_REX(dst.reg, 0);
+            EMIT8(OPCODE_LEA);
+            EMIT8(modrm(MOD_INDIRECT, reg_bits(dst.reg), 5));
+
+            _UNIT_Relocation *relocation = _UNIT_Relocation_NewData(
+                compile_context->context, INDEX(), byte_offset);
+            if (relocation == NULL) {
+                goto error;
+            }
+            if (UNIT_FAILED(_UNIT_Vector_Append(&compile_context->symbol_table.relocations,
+                                                relocation))) {
+                goto error;
+            }
+            EMIT32(0x00);
+            break;
+        }
+
+        case AMD64_LOAD_ADDRESS: {
+            AMD64_Operand dst = instr->operands[0];
+            AMD64_Operand src = instr->operands[1];
+
+            // lea reg, [rsp + offset] (dst in reg field, RSP in rm)
+            assert(dst.kind == OPERAND_REGISTER);
+            assert(src.kind == OPERAND_STACK);
+            EMIT_REX(dst.reg, 0);
+            EMIT8(OPCODE_LEA);
+            if (src.immediate == 0) {
+                EMIT8(modrm(MOD_INDIRECT, reg_bits(dst.reg), REG_RSP));
+                EMIT8(SIB_RSP_BASE);
+            } else if (src.immediate <= 127) {
+                EMIT8(modrm(MOD_INDIRECT_DISP8, reg_bits(dst.reg), REG_RSP));
+                EMIT8(SIB_RSP_BASE);
+                EMIT8((uint8_t)src.immediate);
+            } else {
+                EMIT8(modrm(MOD_INDIRECT_DISP32, reg_bits(dst.reg), REG_RSP));
+                EMIT8(SIB_RSP_BASE);
+                EMIT32((uint32_t)src.immediate);
+            }
             break;
         }
 
