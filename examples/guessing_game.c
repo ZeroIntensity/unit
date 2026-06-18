@@ -191,12 +191,11 @@ int main(void)
 
     //ADDOP_INT(UNIT_OP_EXIT, 0);
 
-    UNIT_Platform platform;
-    if (UNIT_FAILED(UNIT_GetCurrentPlatform(&context, &platform))) {
-        goto error;
-    }
+#ifndef UNIT_HOST_PLATFORM
+#error "Unsupported platform"
+#endif
 
-    UNIT_CompiledProcedure *compiled = UNIT_Compile(&procedure, platform);
+    UNIT_CompiledProcedure *compiled = UNIT_Compile(&procedure, UNIT_HOST_PLATFORM);
     if (compiled == NULL) {
         goto error;
     }

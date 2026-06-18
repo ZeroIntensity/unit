@@ -44,7 +44,24 @@ UNIT_Platform_GET_ARCH(UNIT_Platform platform)
     return arch;
 }
 
-UNIT_Status
-UNIT_GetCurrentPlatform(UNIT_Context *context, UNIT_Platform *out);
+#if defined(__x86_64__) || defined(_M_X64)
+    #if defined(_WIN32)
+        #define UNIT_HOST_PLATFORM (UNIT_ARCH_AMD64 | UNIT_ABI_WIN64)
+    #elif defined(__APPLE__)
+        #define UNIT_HOST_PLATFORM (UNIT_ARCH_AMD64 | UNIT_ABI_SYSTEMV)
+    #elif defined(__linux__) || defined(__FreeBSD__) || defined(__OpenBSD__) \
+          || defined(__NetBSD__) || defined(__DragonFly__) || defined(__sun)
+        #define UNIT_HOST_PLATFORM (UNIT_ARCH_AMD64 | UNIT_ABI_SYSTEMV)
+    #endif
+#elif defined(__aarch64__) || defined(_M_ARM64)
+    #if defined(_WIN32)
+        #define UNIT_HOST_PLATFORM (UNIT_ARCH_ARM64 | UNIT_ABI_WIN64)
+    #elif defined(__APPLE__)
+        #define UNIT_HOST_PLATFORM (UNIT_ARCH_ARM64 | UNIT_ABI_APPLE)
+    #elif defined(__linux__) || defined(__FreeBSD__) || defined(__OpenBSD__) \
+          || defined(__NetBSD__) || defined(__DragonFly__) || defined(__sun)
+        #define UNIT_HOST_PLATFORM (UNIT_ARCH_ARM64 | UNIT_ABI_SYSTEMV)
+    #endif
+#endif
 
 #endif

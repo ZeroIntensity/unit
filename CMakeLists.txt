@@ -23,6 +23,13 @@ if(UNIT_BUILD_EXAMPLES)
 
     add_executable(unit_brainf "${CMAKE_SOURCE_DIR}/examples/brainf.c")
     target_link_libraries(unit_brainf PRIVATE unit)
+
+    enable_language(CXX)
+    set(CMAKE_CXX_STANDARD 17)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+    add_executable(unit_factorial "${CMAKE_SOURCE_DIR}/examples/factorial.cpp")
+    target_link_libraries(unit_factorial PRIVATE unit)
 endif()
 
 option(UNIT_BUILD_TESTS "Build tests" OFF)

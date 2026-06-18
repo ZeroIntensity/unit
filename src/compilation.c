@@ -10,43 +10,6 @@
 #include <unit/internal/set.h>
 #include <unit/internal/translation.h>
 
-UNIT_Status
-UNIT_GetCurrentPlatform(UNIT_Context *context, UNIT_Platform *out)
-{
-    assert(context != NULL);
-    assert(out != NULL);
-
-    UNIT_Platform platform = 0;
-
-#if defined(__x86_64__) || defined(_M_X64)
-    platform |= UNIT_ARCH_AMD64;
-#elif defined(__aarch64__) || defined(_M_ARM64)
-    platform |= UNIT_ARCH_AARCH64;
-#else
-    _UNIT_SetError(context,
-                   UNIT_ERROR_UNSUPPORTED_PLATFORM,
-                   "unknown CPU architecture");
-    return _UNIT_FAIL;
-#endif
-
-#if defined(_WIN32)
-    platform |= UNIT_ABI_WIN64;
-#elif defined(__APPLE__)
-    platform |= UNIT_ABI_APPLE;
-#elif defined(__linux__) || defined(__FreeBSD__) || defined(__OpenBSD__) \
-      || defined(__NetBSD__) || defined(__DragonFly__) || defined(__sun)
-    platform |= UNIT_ABI_SYSTEMV;
-#else
-    _UNIT_SetError(context,
-                   UNIT_ERROR_UNSUPPORTED_PLATFORM,
-                   "unknown operating system");
-    return _UNIT_FAIL;
-#endif
-
-    *out = platform;
-    return _UNIT_OK;
-}
-
 _UNIT_Relocation *
 new_relocation(UNIT_Context *context, UNIT_Size offset, UNIT_Size symbol_index,
                _UNIT_RelocationType type)
