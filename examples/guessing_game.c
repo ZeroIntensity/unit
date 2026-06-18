@@ -47,14 +47,19 @@ int main(void)
         goto error;                                                         \
     }
 
+#define NEW_NAME(name)                                                      \
+    UNIT_Local name;                                                        \
+    if (UNIT_FAILED(UNIT_Procedure_AddLocal(&procedure, #name, &name))) {   \
+        goto error;                                                         \
+    }
+
 #define ADDOP_STORE_NAME(name)                                                  \
-    UNIT_Local name;                                                            \
-    if (UNIT_FAILED(UNIT_Procedure_AddStoreLocal(&procedure, #name, &name))) {  \
+    if (UNIT_FAILED(UNIT_Procedure_AddStoreName(&procedure, name))) {           \
         goto error;                                                             \
     }
 
 #define ADDOP_LOAD_NAME(name)                                           \
-    if (UNIT_FAILED(UNIT_Procedure_AddLoadLocal(&procedure, name))) {   \
+    if (UNIT_FAILED(UNIT_Procedure_AddLoadName(&procedure, name))) {    \
         goto error;                                                     \
     }
 
@@ -78,6 +83,7 @@ int main(void)
     ADDOP_INT(UNIT_OP_READ_BYTES, 8);
     // [argv[1]]
 
+    NEW_NAME(seed);
     ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
     ADDOP_STORE_NAME(seed);
 
@@ -120,6 +126,7 @@ int main(void)
     ADDOP(UNIT_OP_MODULO);
     ADDOP_INT(UNIT_OP_LOAD_INTEGER, 1);
     ADDOP(UNIT_OP_ADD);
+    NEW_NAME(number);
     ADDOP_STORE_NAME(number);
 
     ADDOP_STR("Debug: number is %d\n");
@@ -137,6 +144,7 @@ int main(void)
     ADDOP(UNIT_OP_POP);
 
     ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
+    NEW_NAME(guess);
     ADDOP_STORE_NAME(guess);
     ADDOP_STR("Not a valid number");
     ADDOP_CALL("puts", 1);

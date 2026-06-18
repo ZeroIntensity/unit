@@ -148,11 +148,14 @@ UNIT_Status
 UNIT_Procedure_AddStringLoad(UNIT_Procedure *procedure, const char *str);
 
 UNIT_Status
-UNIT_Procedure_AddStoreLocal(UNIT_Procedure *procedure, const char *name,
-                             UNIT_Local *local_ptr);
+UNIT_Procedure_AddLocal(UNIT_Procedure *procedure, const char *name,
+                        UNIT_Local *local_ptr);
 
 UNIT_Status
-UNIT_Procedure_AddLoadLocal(UNIT_Procedure *procedure, UNIT_Local local);
+UNIT_Procedure_AddStoreName(UNIT_Procedure *procedure, UNIT_Local local);
+
+UNIT_Status
+UNIT_Procedure_AddLoadName(UNIT_Procedure *procedure, UNIT_Local local);
 
 UNIT_Status
 UNIT_Procedure_AddCallProcedure(UNIT_Procedure *self,

@@ -14,14 +14,19 @@
         return -1;                                                          \
     }
 
-#define ADDOP_STORE_NAME(name)                                                  \
+#define NEW_NAME(name)                                                          \
     UNIT_Local name;                                                            \
-    if (UNIT_FAILED(UNIT_Procedure_AddStoreLocal(procedure, #name, &name))) {   \
+    if (UNIT_FAILED(UNIT_Procedure_AddLocal(procedure, #name, &name))) {        \
+        return -1;                                                              \
+    }
+
+#define ADDOP_STORE_NAME(name)                                                  \
+    if (UNIT_FAILED(UNIT_Procedure_AddStoreName(procedure, name))) {            \
         return -1;                                                              \
     }
 
 #define ADDOP_LOAD_NAME(name)                                           \
-    if (UNIT_FAILED(UNIT_Procedure_AddLoadLocal(procedure, name))) {    \
+    if (UNIT_FAILED(UNIT_Procedure_AddLoadName(procedure, name))) {     \
         return -1;                                                      \
     }
 

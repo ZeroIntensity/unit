@@ -1,7 +1,27 @@
+#include <iostream>
+#include <string>
+
 #include <unit/unit.hpp>
 
-int main(void)
+int main(int argc, char **argv)
 {
+    if (argc < 2) {
+        std::cerr << "Expected a number\n";
+        return 1;
+    }
+
+    char *number_str = argv[1];
+    int number;
+    try {
+        number = std::stoi(number_str);
+    } catch (std::invalid_argument &e) {
+        std::cerr << "Failed to parse number\n";
+        return 1;
+    } catch (std::out_of_range &e) {
+        std::cerr << "Number is too big\n";
+        return 1;
+    }
+
     unit::Context context;
     unit::Procedure procedure(context, "main");
 
@@ -29,8 +49,8 @@ int main(void)
     factorial.load_integer(1);
     factorial.return_value();
 
-    procedure.load_string("factorial 5: %ld\n");
-    procedure.load_integer(5);
+    procedure.load_string("%ld\n");
+    procedure.load_integer(number);
     procedure.call_procedure(factorial, 1);
     // ["factorial 5: %ld\n", factorial(5)]
     procedure.call_name("printf", 2);

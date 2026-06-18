@@ -213,10 +213,14 @@ enum class IntegerType {
     UINT64 = UNIT_TYPE_UINT64
 };
 
+class Procedure;
+
 class Local {
     UNIT_Local local;
 public:
     constexpr explicit Local(UNIT_Local l) : local(l) {}
+
+    explicit Local(Procedure& procedure, const std::string &name);
 
     [[nodiscard]] UNIT_Local
     raw() const
@@ -236,8 +240,6 @@ public:
         return local.id != other.local.id;
     }
 };
-
-class Procedure;
 
 class JumpLabel {
     UNIT_JumpLabel *label;
@@ -303,20 +305,18 @@ public:
         return &procedure;
     }
 
-    Local
-    store_name(const std::string &name)
+    void
+    store_name(Local local)
     {
-        UNIT_Local local;
-        if (UNIT_FAILED(UNIT_Procedure_AddStoreLocal(&procedure, name.c_str(), &local))) {
+        if (UNIT_FAILED(UNIT_Procedure_AddStoreName(&procedure, local.raw()))) {
             throw error(procedure.context);
         }
-        return Local(local);
     }
 
     void
     load_name(Local local)
     {
-        if (UNIT_FAILED(UNIT_Procedure_AddLoadLocal(&procedure, local.raw()))) {
+        if (UNIT_FAILED(UNIT_Procedure_AddLoadName(&procedure, local.raw()))) {
             throw error(procedure.context);
         }
     }
@@ -547,7 +547,7 @@ public:
     Procedure &operator=(const Procedure &) = delete;
 };
 
-// This needs to be defined down here because we need access to the full procedure class
+// These need to be defined down here because we need access to the full procedure class
 inline
 JumpLabel::JumpLabel(Procedure &procedure, const std::string &name)
 {
@@ -557,6 +557,15 @@ JumpLabel::JumpLabel(Procedure &procedure, const std::string &name)
     }
     this->label = label;
 }
+
+inline
+Local::Local(Procedure& procedure, const std::string &name)
+{
+    if (UNIT_FAILED(UNIT_Procedure_AddLocal(procedure.raw(), name.c_str(), &local))) {
+        throw error(procedure.raw()->context);
+    }
+}
+
 
 }
 
