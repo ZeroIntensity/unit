@@ -1,14 +1,14 @@
 from __future__ import annotations
 from typing import Self
 
-import _unit
+from unit import _core
 import contextvars
 
 class Context:
     CURRENT_CONTEXT = contextvars.ContextVar["Context | None"]('CURRENT_CONTEXT', default=None)
 
     def __init__(self) -> None:
-        self._context = _unit.Context()
+        self._context = _core.Context()
         self._old_token: contextvars.Token | None = None
 
     def __enter__(self) -> Self:
@@ -39,4 +39,4 @@ class Context:
 class Procedure:
     def __init__(self, *, context: Context | None = None) -> None:
         self.context = context or Context.current_or_new()
-        self._procedure = _unit.Procedure(self.context._context)
+        self._procedure = _core.Procedure(self.context._context)

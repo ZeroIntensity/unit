@@ -307,7 +307,6 @@ _unit_modexec(PyObject *module)
         return -1;
     }
 
-
 #define ADD_TYPE(name)                                                                  \
     state->name## Type = PyType_FromModuleAndSpec(module, &name## Type_spec, NULL);     \
     if (state->name## Type == NULL) {                                                   \
@@ -373,7 +372,7 @@ _unit_free(void *module)
 
 static struct PyModuleDef _unit_module = {
     PyModuleDef_HEAD_INIT,
-    .m_name = "_unit",
+    .m_name = "_core",
     .m_size = sizeof(_unit_state),
     .m_slots = _unit_slots,
     .m_traverse = _unit_traverse,
@@ -382,7 +381,7 @@ static struct PyModuleDef _unit_module = {
 };
 
 PyMODINIT_FUNC
-PyInit_unit(void)
+PyInit__core(void)
 {
     return PyModuleDef_Init(&_unit_module);
 }

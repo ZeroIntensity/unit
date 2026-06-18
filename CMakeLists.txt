@@ -76,9 +76,9 @@ option(UNIT_BUILD_PYTHON "Build Python bindings" OFF)
 
 if(UNIT_BUILD_PYTHON)
     find_package(Python3 REQUIRED COMPONENTS Interpreter Development.Module)
-    Python3_add_library(_unit MODULE python/unit/core.c)
-    target_link_libraries(_unit PRIVATE unit)
-    install(TARGETS _unit DESTINATION _unit)
+    Python3_add_library(_core MODULE python/unit/core.c)
+    target_link_libraries(_core PRIVATE unit)
+    install(TARGETS _core DESTINATION unit)
 endif()
 
 include(GNUInstallDirs)
