@@ -447,10 +447,213 @@ error:
     return _UNIT_FAIL;
 }
 
+typedef struct {
+    UNIT_Size store_count;
+    UNIT_Size load_count;
+    int8_t constant_value_known;
+    int64_t constant_value;
+} LocalInfo;
+
+static UNIT_Status
+gather_local_info(_UNIT_Vector *instructions, LocalInfo **info_ptr)
+{
+    UNIT_Size max_local = 0;
+
+    UNIT_Size size = _UNIT_Vector_SIZE(instructions);
+    for (UNIT_Size index = 0; index < size; ++index) {
+        _UNIT_Operation *op = _UNIT_Vector_GET(instructions, index);
+        switch (op->instruction) {
+            case UNIT_OP_STORE_LOCAL:
+            case _UNIT_OP_STORE_LOCAL_NAME:
+            case UNIT_OP_LOAD_LOCAL:
+            case _UNIT_OP_LOAD_LOCAL_NAME:
+            case UNIT_OP_ADDRESS_OF: {
+                if (op->argument >= max_local) {
+                    max_local = op->argument + 1;
+                }
+                break;
+            }
+            default:
+                break;
+        }
+    }
+
+    if (max_local == 0) {
+        *info_ptr = NULL;
+        return _UNIT_OK;
+    }
+
+    LocalInfo *info = _UNIT_Calloc(instructions->context,
+                                   max_local, sizeof(LocalInfo));
+    if (info == NULL) {
+        return _UNIT_FAIL;
+    }
+    *info_ptr = info;
+
+    for (UNIT_Size index = 0; index < size; ++index) {
+        _UNIT_Operation *op = _UNIT_Vector_GET(instructions, index);
+        UNIT_Size local_index;
+
+        switch (op->instruction) {
+            case UNIT_OP_STORE_LOCAL:
+            case _UNIT_OP_STORE_LOCAL_NAME:
+                local_index = op->argument;
+                info[local_index].store_count++;
+
+                if (index > 0) {
+                    _UNIT_Operation *previous = _UNIT_Vector_GET(instructions, index - 1);
+                    if (previous->instruction == UNIT_OP_LOAD_INTEGER
+                        && info[local_index].store_count == 1) {
+                        info[local_index].constant_value_known = 1;
+                        info[local_index].constant_value = previous->argument;
+                    } else {
+                        info[local_index].constant_value_known = 0;
+                    }
+                }
+                break;
+
+            case UNIT_OP_LOAD_LOCAL:
+            case _UNIT_OP_LOAD_LOCAL_NAME:
+                info[op->argument].load_count++;
+                break;
+
+            case UNIT_OP_ADDRESS_OF:
+                // When the address is taken, our optimization breaks down.
+                info[op->argument].store_count = -1;
+                info[op->argument].load_count = -1;
+                break;
+
+            default:
+                break;
+        }
+    }
+
+    return _UNIT_OK;
+}
+
+UNIT_Status
+UNIT_Procedure_OptimizeLocals(UNIT_Procedure *procedure)
+{
+    assert(procedure != NULL);
+    UNIT_Context *context = procedure->context;
+
+    _UNIT_Vector *instructions = &procedure->_instructions;
+    // gather_local_info() will use the context on the instructions vector
+    assert(instructions->context == context);
+
+    LocalInfo *info;
+    if (UNIT_FAILED(gather_local_info(instructions, &info))) {
+        return _UNIT_FAIL;
+    }
+
+    if (info == NULL) {
+        // Nothing to optimize
+        return _UNIT_OK;
+    }
+
+    UNIT_Size size = _UNIT_Vector_SIZE(instructions);
+
+    _UNIT_Vector optimized;
+    if (UNIT_FAILED(_UNIT_Vector_Init(&optimized, context, size, _UNIT_Dealloc))) {
+        _UNIT_Dealloc(context, info);
+        return _UNIT_FAIL;
+    }
+
+    #define APPEND(op) _UNIT_Vector_APPEND(&optimized, op)
+
+    for (UNIT_Size index = 0; index < size; ++index) {
+        _UNIT_Operation *op = _UNIT_Vector_STEAL(instructions, index);
+
+        switch (op->instruction) {
+            case UNIT_OP_STORE_LOCAL:
+            case _UNIT_OP_STORE_LOCAL_NAME: {
+                UNIT_Size local_index = op->argument;
+                if (info[local_index].load_count == 0) {
+                    // This is a dead store. Consume the value with pop, which
+                    // can be folded out later.
+                    _UNIT_Operation *pop = _UNIT_Alloc(context,
+                                                       sizeof(_UNIT_Operation));
+                    if (pop == NULL) {
+                        goto error;
+                    }
+                    pop->instruction = UNIT_OP_POP;
+                    pop->argument = 0;
+                    APPEND(pop);
+                    continue;
+                }
+                APPEND(op);
+
+                if (index + 1 <= size) {
+                    continue;
+                }
+
+                _UNIT_Operation *next = _UNIT_Vector_GET(instructions, index + 1);
+                if ((next->instruction == UNIT_OP_LOAD_LOCAL || next->instruction == _UNIT_OP_LOAD_LOCAL_NAME)
+                     && (next->argument == op->argument)) {
+                    // Redundant load-after-store; replace it with a copy
+                    _UNIT_Operation *copy = _UNIT_Alloc(context,
+                                                        sizeof(_UNIT_Operation));
+                    if (copy == NULL) {
+                        goto error;
+                    }
+                    copy->instruction = UNIT_OP_COPY;
+                    copy->argument = 0;
+                    APPEND(copy);
+
+                    // Skip the load
+                    ++index;
+                }
+                break;
+            }
+
+            case UNIT_OP_LOAD_LOCAL:
+            case _UNIT_OP_LOAD_LOCAL_NAME: {
+                UNIT_Size local_index = op->argument;
+                if (info[local_index].store_count == 1
+                    && info[local_index].constant_value_known) {
+                    // Propagate constant
+                    _UNIT_Operation *load = _UNIT_Alloc(context,
+                                                        sizeof(_UNIT_Operation));
+                    if (load == NULL) {
+                        goto error;
+                    }
+                    load->instruction = UNIT_OP_LOAD_INTEGER;
+                    load->argument = info[local_index].constant_value;
+                    APPEND(load);
+                    continue;
+                }
+
+                APPEND(op);
+                break;
+            }
+
+            default:
+                APPEND(op);
+                break;
+        }
+    }
+
+#undef APPEND
+
+    _UNIT_Dealloc(context, info);
+    _UNIT_Vector_Clear(instructions);
+    procedure->_instructions = optimized;
+    return _UNIT_OK;
+
+error:
+    _UNIT_Dealloc(context, info);
+    _UNIT_Vector_Clear(instructions);
+    return _UNIT_FAIL;
+}
+
 UNIT_Status
 UNIT_Procedure_Optimize(UNIT_Procedure *procedure)
 {
     if (UNIT_FAILED(UNIT_Procedure_OptimizeInline(procedure))) {
+        return _UNIT_FAIL;
+    }
+
+    if (UNIT_FAILED(UNIT_Procedure_OptimizeLocals(procedure))) {
         return _UNIT_FAIL;
     }
 
