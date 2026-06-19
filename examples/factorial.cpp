@@ -59,6 +59,9 @@ int main(int argc, char **argv)
     procedure.load_integer(0);
     procedure.return_value();
 
+    factorial.optimize();
+    procedure.optimize();
+
     factorial.print_instructions();
     procedure.print_instructions();
 

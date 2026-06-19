@@ -372,7 +372,8 @@ UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure, FILE *stream)
             UNIT_JumpLabel *label = _UNIT_Vector_GET(&procedure->_jump_labels, operation->argument);
             assert(label != NULL);
             assert(label->name != NULL);
-            fprintf(stream, "    label %s:\n", label->name);
+            fprintf(stream, "    label %s [%d]:\n", label->name, label->id);
+            continue;
         }
 
         fprintf(stream, "        %s", UNIT_Instruction_GetName(operation->instruction));
@@ -412,6 +413,17 @@ UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure, FILE *stream)
                 fprintf(stream, "  (%s)", name);
                 break;
             }
+            case UNIT_OP_JUMP_TO:
+            case UNIT_OP_JUMP_IF_TRUE:
+            case UNIT_OP_JUMP_IF_FALSE: {
+                UNIT_JumpLabel *label = _UNIT_Vector_GET(&procedure->_jump_labels,
+                                                         operation->argument);
+                assert(label != NULL);
+                fprintf(stream, "  (%s [%d])", label->name, label->id);
+                break;
+
+            }
+
             default:
                 break;
         }

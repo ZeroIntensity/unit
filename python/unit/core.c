@@ -553,6 +553,20 @@ ProcedureObject_compile(PyObject *op, PyObject *platform_obj)
                                                     compiled_procedure);
 }
 
+static PyObject *
+ProcedureObject_optimize(PyObject *op, PyObject *unused)
+{
+    assert(op != NULL);
+    ProcedureObject *self = ProcedureObject_CAST(op);
+
+    if (UNIT_FAILED(UNIT_Procedure_Optimize(&self->procedure))) {
+        set_py_error_from_context(get_state_from_object(op), self->procedure.context);
+        return NULL;
+    }
+
+    Py_RETURN_NONE;
+}
+
 static int
 ProcedureObject_traverse(PyObject *op, visitproc visit, void *arg)
 {
@@ -591,6 +605,7 @@ static PyMethodDef ProcedureObject_methods[] = {
     {"add_call_name", ProcedureObject_add_call_name, METH_VARARGS, NULL},
     {"add_operation", ProcedureObject_add_operation, METH_VARARGS, NULL},
     {"compile", ProcedureObject_compile, METH_O, NULL},
+    {"optimize", ProcedureObject_optimize, METH_NOARGS, NULL},
     {NULL},
 };
 

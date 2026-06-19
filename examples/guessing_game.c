@@ -197,11 +197,15 @@ int main(void)
     ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
     ADDOP(UNIT_OP_RETURN_VALUE);
 
-    //ADDOP_INT(UNIT_OP_EXIT, 0);
-
 #ifndef UNIT_HOST_PLATFORM
 #error "Unsupported platform"
 #endif
+
+    if (UNIT_FAILED(UNIT_Procedure_Optimize(&procedure))) {
+        goto error;
+    }
+
+    UNIT_Procedure_PrintInstructions(&procedure, stdout);
 
     UNIT_CompiledProcedure *compiled = UNIT_Compile(&procedure, UNIT_HOST_PLATFORM);
     if (compiled == NULL) {

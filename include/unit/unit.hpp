@@ -561,6 +561,14 @@ public:
         UNIT_Procedure_PrintInstructions(&procedure, stream);
     }
 
+    void
+    optimize()
+    {
+        if (UNIT_FAILED(UNIT_Procedure_Optimize(&procedure))) {
+            throw error(procedure.context);
+        }
+    }
+
     Procedure(const Procedure &) = delete;
     Procedure &operator=(const Procedure &) = delete;
 };

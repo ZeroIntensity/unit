@@ -321,28 +321,84 @@ copy_locals(_UNIT_Vector *in, _UNIT_Vector *out)
     return _UNIT_OK;
 }
 
+// Yuck
 static UNIT_Status
-remap_offsets(UNIT_Procedure *target, UNIT_Size local_offset,
-              UNIT_Size label_offset, _UNIT_Vector *output)
+remap_offsets(UNIT_Procedure *procedure,
+              UNIT_Procedure *target,
+              UNIT_Size local_offset,
+              UNIT_Size label_offset,
+              UNIT_Size symbol_offset,
+              UNIT_Size string_offset,
+              UNIT_Size nargs,
+              _UNIT_Vector *output)
 {
+    assert(procedure != NULL);
     assert(target != NULL);
+    assert(local_offset >= 0);
+    assert(label_offset >= 0);
+    assert(nargs >= 0);
+    assert(output != NULL);
+
     _UNIT_Vector *instructions = &target->_instructions;
     UNIT_Context *context = target->context;
     assert(context != NULL);
     assert(instructions != NULL);
+
+    char return_name[128];
+    snprintf(return_name, sizeof(return_name), "_inlined_%s_return", target->name);
+    UNIT_JumpLabel *end_label = UNIT_Procedure_CreateJumpLabel(procedure, return_name);
+    if (end_label == NULL) {
+        return _UNIT_FAIL;
+    }
+
+    // Usually these loads/stores will get optimized away in another pass
+    for (UNIT_Size i = 0; i < nargs; ++i) {
+        _UNIT_Operation *store = _UNIT_Alloc(context, sizeof(_UNIT_Operation));
+        if (store == NULL) {
+            return _UNIT_FAIL;
+        }
+        store->instruction = UNIT_OP_STORE_LOCAL;
+        store->argument = local_offset + nargs - 1 - i;
+        if (UNIT_FAILED(_UNIT_Vector_Append(output, store))) {
+            return _UNIT_FAIL;
+        }
+    }
 
     UNIT_Size size = _UNIT_Vector_SIZE(instructions);
     for (UNIT_Size index = 0; index < size; ++index) {
         _UNIT_Operation *target_op = _UNIT_Vector_GET(instructions, index);
 
         if (target_op->instruction == UNIT_OP_LOAD_ARGUMENT) {
-            // Arguments are already on the stack from the caller
+            _UNIT_Operation *load = _UNIT_Alloc(context, sizeof(_UNIT_Operation));
+            if (load == NULL) {
+                return _UNIT_FAIL;
+            }
+
+            load->instruction = UNIT_OP_LOAD_LOCAL;
+            load->argument = local_offset + target_op->argument;
+
+            if (UNIT_FAILED(_UNIT_Vector_Append(output, load))) {
+                return _UNIT_FAIL;
+            }
+
             continue;
         }
 
         if (target_op->instruction == UNIT_OP_RETURN_VALUE) {
             // The value we want is already on the stack
-            break;
+            _UNIT_Operation *jump = _UNIT_Alloc(context, sizeof(_UNIT_Operation));
+            if (jump == NULL) {
+                return _UNIT_FAIL;
+            }
+
+            jump->instruction = UNIT_OP_JUMP_TO;
+            jump->argument = end_label->id;
+
+            if (UNIT_FAILED(_UNIT_Vector_Append(output, jump))) {
+                return _UNIT_FAIL;
+            }
+
+            continue;
         }
 
         _UNIT_Operation *remapped = _UNIT_Alloc(context, sizeof(_UNIT_Operation));
@@ -366,11 +422,34 @@ remap_offsets(UNIT_Procedure *target, UNIT_Size local_offset,
             case _UNIT_OP_JUMP_MARKER:
                 remapped->argument += label_offset;
                 break;
+
+            case UNIT_OP_CALL_NAME:
+                remapped->argument += symbol_offset;
+                break;
+
+            case UNIT_OP_LOAD_STRING:
+                remapped->argument += string_offset;
+                break;
+
             default:
                 break;
         }
 
-        _UNIT_Vector_APPEND(output, remapped);
+        if (UNIT_FAILED(_UNIT_Vector_Append(output, remapped))) {
+            return _UNIT_FAIL;
+        }
+    }
+
+    _UNIT_Operation *marker = _UNIT_Alloc(context, sizeof(_UNIT_Operation));
+    if (marker == NULL) {
+        return _UNIT_FAIL;
+    }
+
+    marker->instruction = _UNIT_OP_JUMP_MARKER;
+    marker->argument = end_label->id;
+
+    if (UNIT_FAILED(_UNIT_Vector_Append(output, marker))) {
+        return _UNIT_FAIL;
     }
 
     return _UNIT_OK;
@@ -412,26 +491,57 @@ UNIT_Procedure_OptimizeInline(UNIT_Procedure *procedure)
         }
 
         _UNIT_Operation *prepare_call = _UNIT_Vector_Pop(&optimized);
-        (void)prepare_call;
         assert(prepare_call->instruction == UNIT_OP_PREPARE_CALL);
+        UNIT_Size nargs = prepare_call->argument;
+
+        UNIT_Size local_offset = _UNIT_Vector_SIZE(&procedure->_local_variables);
+        UNIT_Size label_offset = _UNIT_Vector_SIZE(&procedure->_jump_labels);
 
         if (UNIT_FAILED(copy_locals(&target->_local_variables, &procedure->_local_variables))) {
             goto error;
         }
 
-
         // We need to reserve label slots so remapped indices are valid.
         // This is super hacky though.
         UNIT_Size num_jump_labels = _UNIT_Vector_SIZE(&target->_jump_labels);
         for (UNIT_Size i = 0; i < num_jump_labels; ++i) {
-            if (UNIT_Procedure_CreateJumpLabel(procedure, "inlined") == NULL) {
+            UNIT_JumpLabel *label = _UNIT_Vector_GET(&target->_jump_labels, i);
+            assert(label != NULL);
+            char name[128];
+            snprintf(name, sizeof(name), "_inlined_%s_%s", target->name, label->name);
+            if (UNIT_Procedure_CreateJumpLabel(procedure, name) == NULL) {
                 goto error;
             }
         }
 
-        UNIT_Size local_offset = local_count + _UNIT_Vector_SIZE(&target->_local_variables);
-        UNIT_Size label_offset = label_count + num_jump_labels;
-        if (UNIT_FAILED(remap_offsets(target, local_offset, label_offset, &optimized))) {
+        UNIT_Size symbol_offset = _UNIT_Vector_SIZE(&procedure->_symbols);
+        UNIT_Size target_symbols = _UNIT_Vector_SIZE(&target->_symbols);
+        for (UNIT_Size i = 0; i < target_symbols; ++i) {
+            const char *name = _UNIT_Vector_GET(&target->_symbols, i);
+            char *copy = _UNIT_StrDup(context, name);
+            if (copy == NULL) {
+                return _UNIT_FAIL;
+            }
+
+            if (UNIT_FAILED(_UNIT_Vector_Append(&procedure->_symbols, copy))) {
+                return _UNIT_FAIL;
+            }
+        }
+
+        UNIT_Size string_offset = _UNIT_Vector_SIZE(&procedure->_global_strings);
+        UNIT_Size target_strings = _UNIT_Vector_SIZE(&target->_global_strings);
+        for (UNIT_Size j = 0; j < target_strings; ++j) {
+            const char *str = _UNIT_Vector_GET(&target->_global_strings, j);
+            char *copy = _UNIT_StrDup(context, str);
+            if (copy == NULL) return _UNIT_FAIL;
+            if (UNIT_FAILED(_UNIT_Vector_Append(&procedure->_global_strings, copy))) {
+                return _UNIT_FAIL;
+            }
+        }
+
+        if (UNIT_FAILED(remap_offsets(procedure, target, local_offset, label_offset,
+                                      symbol_offset, string_offset,
+                                      nargs, &optimized))) {
             goto error;
         }
     }
