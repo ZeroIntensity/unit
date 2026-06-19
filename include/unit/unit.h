@@ -10,6 +10,7 @@ extern "C" {
 #include <unit/compilation.h>
 #include <unit/errors.h>
 #include <unit/executable_buffer.h>
+#include <unit/optimization.h>
 #include <unit/procedure.h>
 
 #ifdef __cplusplus

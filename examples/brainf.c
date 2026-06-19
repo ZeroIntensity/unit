@@ -302,6 +302,12 @@ int main(int argc, char **argv)
 #error "Unsupported platform"
 #endif
 
+    if (UNIT_FAILED(UNIT_Procedure_Optimize(&procedure))) {
+        goto error;
+    }
+
+    UNIT_Procedure_PrintInstructions(&procedure, stdout);
+
     UNIT_CompiledProcedure *compiled = UNIT_Compile(&procedure, UNIT_HOST_PLATFORM);
     if (compiled == NULL) {
         goto error;
