@@ -649,16 +649,18 @@ error:
 UNIT_Status
 UNIT_Procedure_Optimize(UNIT_Procedure *procedure)
 {
-    if (UNIT_FAILED(UNIT_Procedure_OptimizeInline(procedure))) {
-        return _UNIT_FAIL;
-    }
+    for (int i = 0; i <= 2; ++i) {
+        if (UNIT_FAILED(UNIT_Procedure_OptimizeInline(procedure))) {
+            return _UNIT_FAIL;
+        }
 
-    if (UNIT_FAILED(UNIT_Procedure_OptimizeLocals(procedure))) {
-        return _UNIT_FAIL;
-    }
+        if (UNIT_FAILED(UNIT_Procedure_OptimizeLocals(procedure))) {
+            return _UNIT_FAIL;
+        }
 
-    if (UNIT_FAILED(UNIT_Procedure_OptimizeFold(procedure))) {
-        return _UNIT_FAIL;
+        if (UNIT_FAILED(UNIT_Procedure_OptimizeFold(procedure))) {
+            return _UNIT_FAIL;
+        }
     }
 
     return _UNIT_OK;
