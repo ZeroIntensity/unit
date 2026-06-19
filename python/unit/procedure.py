@@ -1,6 +1,8 @@
 from unit.context import Context
 from unit.opcode import OpCode
 from unit import _core
+from typing import Literal, TypeAlias
+from dataclasses import dataclass
 
 class CompiledProcedure:
     def __init__(self, compiled_procedure: _core.CompiledProcedure) -> None:
@@ -9,8 +11,74 @@ class CompiledProcedure:
 
         self._compiled = compiled_procedure
 
-    def write_object_file(self, path: str, format: int) -> None:
-        self._compiled.write_object_file(path, format)
+    def write_object_file(self, path: str, format: Literal["elf", "macho", "pe"]) -> None:
+        if format == "elf":
+            format_enum = _core.UNIT_FORMAT_ELF
+        elif format == "macho":
+            format_enum = _core.UNIT_FORMAT_MACHO
+        elif format == "pe":
+            format_enum = _core.UNIT_FORMAT_PE
+        else:
+            raise ValueError(f"unknown format {format!r}, expected one of: elf, macho, pe")
+        self._compiled.write_object_file(path, format_enum)
+
+
+Architecture: TypeAlias = Literal["amd64", "aarch64"]
+ABI: TypeAlias = Literal["systemv", "apple", "win64"]
+
+
+@dataclass(slots=True)
+class Platform:
+    architecture: Architecture
+    abi: ABI
+
+    def to_value(self) -> int:
+        result = 0
+        if self.architecture == "amd64":
+            result |= _core.UNIT_ARCH_AMD64
+        elif self.architecture == "aarch64":
+            result |= _core.UNIT_ARCH_AMD64
+        else:
+            raise ValueError(
+                f"unknown architecture {self.architecture!r}, expected one of: amd64, aarch64"
+            )
+
+        if self.abi == "systemv":
+            result |= _core.UNIT_ABI_SYSTEMV
+        elif self.abi == "apple":
+            result |= _core.UNIT_ABI_APPLE
+        elif self.abi == "win64":
+            result |= _core.UNIT_ABI_WIN64
+        else:
+            raise ValueError(
+                f"unknown ABI {self.abi!r}, expected one of: systemv, apple, win64"
+            )
+
+        return result
+
+    @classmethod
+    def host(cls) -> Platform:
+        host = _core.UNIT_HOST_PLATFORM
+
+        arch_num = host & _core._UNIT_ARCH_MASK
+        architecture: Architecture
+        if arch_num == _core.UNIT_ARCH_AMD64:
+            architecture = "amd64"
+        else:
+            assert arch_num == _core.UNIT_ARCH_AARCH64
+            architecture = "aarch64"
+
+        abi_num = host & _core._UNIT_ABI_MASK
+        abi: ABI
+        if abi_num == _core.UNIT_ABI_SYSTEMV:
+            abi = "systemv"
+        elif abi_num == _core.UNIT_ABI_APPLE:
+            abi = "apple"
+        else:
+            assert abi_num == _core.UNIT_ABI_WIN64
+            abi = "win64"
+
+        return cls(architecture=architecture, abi=abi)
 
 
 class Procedure:
@@ -97,5 +165,6 @@ class Procedure:
     def write_bytes(self, num_bytes: int, /) -> None:
         self._add_op_int(OpCode.WRITE_BYTES, num_bytes)
 
-    def compile(self, architecture: int) -> CompiledProcedure:
-        return CompiledProcedure(self._procedure.compile(architecture))
+    def compile(self, platform: Platform | None = None) -> CompiledProcedure:
+        platform = platform or Platform.host()
+        return CompiledProcedure(self._procedure.compile(platform.to_value()))

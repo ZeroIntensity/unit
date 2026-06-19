@@ -548,9 +548,9 @@ _unit_modexec(PyObject *module)
 
 #undef ADD_TYPE
 
-#define EXPORT_CONST(name)                      \
-    if (PyModule_AddIntMacro(module, name)) {   \
-        return -1;                              \
+#define EXPORT_CONST(name)                                  \
+    if (PyModule_AddIntConstant(module, #name, name)) {     \
+        return -1;                                          \
     }
 
     EXPORT_CONST(UNIT_OP_LOAD_STRING);
@@ -602,6 +602,21 @@ _unit_modexec(PyObject *module)
     EXPORT_CONST(UNIT_TYPE_UINT16);
     EXPORT_CONST(UNIT_TYPE_UINT32);
     EXPORT_CONST(UNIT_TYPE_UINT64);
+
+    EXPORT_CONST(UNIT_FORMAT_ELF);
+    EXPORT_CONST(UNIT_FORMAT_MACHO);
+    EXPORT_CONST(UNIT_FORMAT_PE);
+
+    EXPORT_CONST(UNIT_HOST_PLATFORM);
+
+    EXPORT_CONST(_UNIT_ABI_MASK);
+    EXPORT_CONST(UNIT_ABI_SYSTEMV);
+    EXPORT_CONST(UNIT_ABI_APPLE);
+    EXPORT_CONST(UNIT_ABI_SYSTEMV);
+
+    EXPORT_CONST(_UNIT_ARCH_MASK);
+    EXPORT_CONST(UNIT_ARCH_AMD64);
+    EXPORT_CONST(UNIT_ARCH_AARCH64);
 
 #undef EXPORT_CONST
 
