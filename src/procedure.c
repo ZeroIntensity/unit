@@ -379,7 +379,11 @@ UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure, FILE *stream)
         fprintf(stream, "        %s", UNIT_Instruction_GetName(operation->instruction));
         if (operation->argument != 0
             || operation->instruction == UNIT_OP_LOAD_INTEGER
-            || operation->instruction == UNIT_OP_LOAD_ARGUMENT) {
+            || operation->instruction == UNIT_OP_LOAD_ARGUMENT
+            || operation->instruction == UNIT_OP_STORE_LOCAL
+            || operation->instruction == UNIT_OP_LOAD_LOCAL
+            || operation->instruction == _UNIT_OP_STORE_LOCAL_NAME
+            || operation->instruction == _UNIT_OP_LOAD_LOCAL_NAME) {
             fprintf(stream, "  %ld", (long)operation->argument);
         }
 

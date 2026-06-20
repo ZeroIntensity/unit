@@ -321,28 +321,63 @@ copy_locals(_UNIT_Vector *in, _UNIT_Vector *out)
     return _UNIT_OK;
 }
 
-// Yuck
+typedef struct {
+    UNIT_Size local_offset;
+    UNIT_Size label_offset;
+    UNIT_Size symbol_offset;
+    UNIT_Size string_offset;
+    UNIT_Size args_offset; // Number of arguments
+} Offsets;
+
+static UNIT_Status
+create_artificial_instruction(_UNIT_Vector *instructions,
+                              UNIT_Instruction opcode, int64_t oparg)
+{
+    assert(instructions != NULL);
+
+    _UNIT_Operation *operation = _UNIT_Alloc(instructions->context, sizeof(_UNIT_Operation));
+    if (operation == NULL) {
+        return _UNIT_FAIL;
+    }
+
+    operation->instruction = opcode;
+    operation->argument = oparg;
+
+    if (UNIT_FAILED(_UNIT_Vector_Append(instructions, operation))) {
+        return _UNIT_FAIL;
+    }
+
+    return _UNIT_OK;
+}
+
 static UNIT_Status
 remap_offsets(UNIT_Procedure *procedure,
               UNIT_Procedure *target,
-              UNIT_Size local_offset,
-              UNIT_Size label_offset,
-              UNIT_Size symbol_offset,
-              UNIT_Size string_offset,
-              UNIT_Size nargs,
+              Offsets *offsets,
               _UNIT_Vector *output)
 {
     assert(procedure != NULL);
     assert(target != NULL);
-    assert(local_offset >= 0);
-    assert(label_offset >= 0);
-    assert(nargs >= 0);
+    assert(offsets != NULL);
     assert(output != NULL);
 
     _UNIT_Vector *instructions = &target->_instructions;
     UNIT_Context *context = target->context;
     assert(context != NULL);
     assert(instructions != NULL);
+
+    UNIT_Size nargs = offsets->args_offset;
+    UNIT_Size local_offset = offsets->local_offset;
+
+    // When functions are inlined, when implement returns as locals.
+    // There might be a more efficient way to do this.
+    char return_local_name[64];
+    snprintf(return_local_name, sizeof(return_local_name),
+             "_inlined_%s_return_value", target->name);
+    UNIT_Local return_local;
+    if (UNIT_FAILED(UNIT_Procedure_CreateLocal(procedure, return_local_name, &return_local))) {
+        return _UNIT_FAIL;
+    }
 
     char return_name[128];
     snprintf(return_name, sizeof(return_name), "_inlined_%s_return", target->name);
@@ -353,13 +388,9 @@ remap_offsets(UNIT_Procedure *procedure,
 
     // Usually these loads/stores will get optimized away in another pass
     for (UNIT_Size i = 0; i < nargs; ++i) {
-        _UNIT_Operation *store = _UNIT_Alloc(context, sizeof(_UNIT_Operation));
-        if (store == NULL) {
-            return _UNIT_FAIL;
-        }
-        store->instruction = UNIT_OP_STORE_LOCAL;
-        store->argument = local_offset + nargs - 1 - i;
-        if (UNIT_FAILED(_UNIT_Vector_Append(output, store))) {
+        int64_t arg_local_id = local_offset + nargs - 1 - i;
+        if (UNIT_FAILED(create_artificial_instruction(output, UNIT_OP_STORE_LOCAL,
+                                                      arg_local_id))) {
             return _UNIT_FAIL;
         }
     }
@@ -367,17 +398,12 @@ remap_offsets(UNIT_Procedure *procedure,
     UNIT_Size size = _UNIT_Vector_SIZE(instructions);
     for (UNIT_Size index = 0; index < size; ++index) {
         _UNIT_Operation *target_op = _UNIT_Vector_GET(instructions, index);
+        assert(target_op != NULL);
 
         if (target_op->instruction == UNIT_OP_LOAD_ARGUMENT) {
-            _UNIT_Operation *load = _UNIT_Alloc(context, sizeof(_UNIT_Operation));
-            if (load == NULL) {
-                return _UNIT_FAIL;
-            }
-
-            load->instruction = UNIT_OP_LOAD_LOCAL;
-            load->argument = local_offset + target_op->argument;
-
-            if (UNIT_FAILED(_UNIT_Vector_Append(output, load))) {
+            int64_t arg_local_id = local_offset + target_op->argument;
+            if (UNIT_FAILED(create_artificial_instruction(output, UNIT_OP_LOAD_LOCAL,
+                                                          arg_local_id))) {
                 return _UNIT_FAIL;
             }
 
@@ -386,15 +412,12 @@ remap_offsets(UNIT_Procedure *procedure,
 
         if (target_op->instruction == UNIT_OP_RETURN_VALUE) {
             // The value we want is already on the stack
-            _UNIT_Operation *jump = _UNIT_Alloc(context, sizeof(_UNIT_Operation));
-            if (jump == NULL) {
+            if (UNIT_FAILED(create_artificial_instruction(output, _UNIT_OP_STORE_LOCAL_NAME, return_local.id))) {
                 return _UNIT_FAIL;
             }
 
-            jump->instruction = UNIT_OP_JUMP_TO;
-            jump->argument = end_label->id;
-
-            if (UNIT_FAILED(_UNIT_Vector_Append(output, jump))) {
+            if (UNIT_FAILED(create_artificial_instruction(output, UNIT_OP_JUMP_TO,
+                                                          end_label->id))) {
                 return _UNIT_FAIL;
             }
 
@@ -412,24 +435,28 @@ remap_offsets(UNIT_Procedure *procedure,
             case UNIT_OP_LOAD_LOCAL:
             case _UNIT_OP_STORE_LOCAL_NAME:
             case _UNIT_OP_LOAD_LOCAL_NAME:
-            case UNIT_OP_ADDRESS_OF:
+            case UNIT_OP_ADDRESS_OF: {
                 remapped->argument += local_offset;
                 break;
+            }
 
             case UNIT_OP_JUMP_TO:
             case UNIT_OP_JUMP_IF_TRUE:
             case UNIT_OP_JUMP_IF_FALSE:
-            case _UNIT_OP_JUMP_MARKER:
-                remapped->argument += label_offset;
+            case _UNIT_OP_JUMP_MARKER: {
+                remapped->argument += offsets->label_offset;
                 break;
+            }
 
-            case UNIT_OP_CALL_NAME:
-                remapped->argument += symbol_offset;
+            case UNIT_OP_CALL_NAME: {
+                remapped->argument += offsets->symbol_offset;
                 break;
+            }
 
-            case UNIT_OP_LOAD_STRING:
-                remapped->argument += string_offset;
+            case UNIT_OP_LOAD_STRING: {
+                remapped->argument += offsets->string_offset;
                 break;
+            }
 
             default:
                 break;
@@ -440,15 +467,13 @@ remap_offsets(UNIT_Procedure *procedure,
         }
     }
 
-    _UNIT_Operation *marker = _UNIT_Alloc(context, sizeof(_UNIT_Operation));
-    if (marker == NULL) {
+    if (UNIT_FAILED(create_artificial_instruction(output, _UNIT_OP_JUMP_MARKER,
+                                                  end_label->id))) {
         return _UNIT_FAIL;
     }
 
-    marker->instruction = _UNIT_OP_JUMP_MARKER;
-    marker->argument = end_label->id;
-
-    if (UNIT_FAILED(_UNIT_Vector_Append(output, marker))) {
+    if (UNIT_FAILED(create_artificial_instruction(output, _UNIT_OP_LOAD_LOCAL_NAME,
+                                                  return_local.id))) {
         return _UNIT_FAIL;
     }
 
@@ -539,9 +564,15 @@ UNIT_Procedure_OptimizeInline(UNIT_Procedure *procedure)
             }
         }
 
-        if (UNIT_FAILED(remap_offsets(procedure, target, local_offset, label_offset,
-                                      symbol_offset, string_offset,
-                                      nargs, &optimized))) {
+        Offsets offsets = {
+            .local_offset = local_offset,
+            .label_offset = label_offset,
+            .symbol_offset = symbol_offset,
+            .string_offset = string_offset,
+            .args_offset = nargs,
+        };
+
+        if (UNIT_FAILED(remap_offsets(procedure, target, &offsets, &optimized))) {
             goto error;
         }
     }
@@ -759,6 +790,10 @@ error:
 UNIT_Status
 UNIT_Procedure_Optimize(UNIT_Procedure *procedure)
 {
+        if (UNIT_FAILED(UNIT_Procedure_OptimizeInline(procedure))) {
+            return _UNIT_FAIL;
+        }
+    /*
     for (int i = 0; i <= 2; ++i) {
         if (UNIT_FAILED(UNIT_Procedure_OptimizeInline(procedure))) {
             return _UNIT_FAIL;
@@ -771,7 +806,7 @@ UNIT_Procedure_Optimize(UNIT_Procedure *procedure)
         if (UNIT_FAILED(UNIT_Procedure_OptimizeFold(procedure))) {
             return _UNIT_FAIL;
         }
-    }
+    }*/
 
     return _UNIT_OK;
 }
