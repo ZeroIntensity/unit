@@ -853,22 +853,13 @@ UNIT_Procedure_Optimize(UNIT_Procedure *procedure)
             return _UNIT_FAIL;
         }
 
-        printf("pass %d, after inlining:", i);
-        UNIT_Procedure_PrintInstructions(procedure, stdout);
-
         if (UNIT_FAILED(UNIT_Procedure_OptimizeLocals(procedure))) {
             return _UNIT_FAIL;
         }
 
-        printf("pass %d, after locals:", i);
-        UNIT_Procedure_PrintInstructions(procedure, stdout);
-
         if (UNIT_FAILED(UNIT_Procedure_OptimizeFold(procedure))) {
             return _UNIT_FAIL;
         }
-
-        printf("pass %d, after folding:", i);
-        UNIT_Procedure_PrintInstructions(procedure, stdout);
     }
 
     return _UNIT_OK;
