@@ -286,8 +286,7 @@ UNIT_Procedure_OptimizeFold(UNIT_Procedure *procedure)
 
                     if (top.value) {
                         ADD_NEW_INSTRUCTION(UNIT_OP_JUMP_TO, op->argument);
-                    } else {
-                        //dead_code = 1;
+                        dead_code = 1;
                     }
                     continue;
                 }
@@ -300,10 +299,9 @@ UNIT_Procedure_OptimizeFold(UNIT_Procedure *procedure)
                 if (top.kind == STACK_COMPARE) {
                     ADD_NEW_INSTRUCTION(UNIT_OP_POP, 0);
 
-                    if (top.value) {
-                        //dead_code = 1;
-                    } else {
+                    if (!top.value) {
                         ADD_NEW_INSTRUCTION(UNIT_OP_JUMP_TO, op->argument);
+                        dead_code = 1;
                     }
                     continue;
                 }
