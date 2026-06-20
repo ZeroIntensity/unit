@@ -153,10 +153,9 @@ UNIT_Procedure_OptimizeFold(UNIT_Procedure *procedure)
                             _UNIT_Unreachable();
                     }
 
-                    // Remove the two LOAD_INTEGERs we already emitted
-                    UNIT_Size opt_size = _UNIT_Vector_SIZE(&optimized);
-                    _UNIT_Vector_Pop(&optimized);
-                    _UNIT_Vector_Pop(&optimized);
+                    // Remove the two loads
+                    ADD_NEW_INSTRUCTION(UNIT_OP_POP, 0);
+                    ADD_NEW_INSTRUCTION(UNIT_OP_POP, 0);
 
                     ADD_NEW_INSTRUCTION(UNIT_OP_LOAD_INTEGER, result);
                     PUSH(STACK_CONSTANT, result);
@@ -169,13 +168,16 @@ UNIT_Procedure_OptimizeFold(UNIT_Procedure *procedure)
 
             #define SIMPLE_COMPARE_FOLD(op)                                         \
                 if (left.kind == STACK_CONSTANT && right.kind == STACK_CONSTANT) {  \
+                    /* Remove the two values from the stack */                      \
+                    ADD_NEW_INSTRUCTION(UNIT_OP_POP, 0);                            \
+                    ADD_NEW_INSTRUCTION(UNIT_OP_POP, 0);                            \
                     PUSH(STACK_COMPARE, left.value op right.value);                 \
                     break;                                                          \
                 }
 
             case UNIT_OP_COMPARE_EQUAL: {
-                StackEntry left = POP();
                 StackEntry right = POP();
+                StackEntry left = POP();
                 SIMPLE_COMPARE_FOLD(==);
 
                 if (left.kind == STACK_LOCAL && right.kind == STACK_LOCAL) {
@@ -191,8 +193,8 @@ UNIT_Procedure_OptimizeFold(UNIT_Procedure *procedure)
             }
 
             case UNIT_OP_COMPARE_NOT_EQUAL: {
-                StackEntry left = POP();
                 StackEntry right = POP();
+                StackEntry left = POP();
                 SIMPLE_COMPARE_FOLD(!=);
 
                 if (left.kind == STACK_LOCAL && right.kind == STACK_LOCAL) {
@@ -207,42 +209,64 @@ UNIT_Procedure_OptimizeFold(UNIT_Procedure *procedure)
             }
 
             case UNIT_OP_COMPARE_GREATER: {
-                StackEntry left = POP();
                 StackEntry right = POP();
+                StackEntry left = POP();
                 SIMPLE_COMPARE_FOLD(>);
                 PUSH(STACK_UNKNOWN, 0);
                 break;
             }
 
             case UNIT_OP_COMPARE_GREATER_EQUAL: {
-                StackEntry left = POP();
                 StackEntry right = POP();
+                StackEntry left = POP();
                 SIMPLE_COMPARE_FOLD(>=);
                 PUSH(STACK_UNKNOWN, 0);
                 break;
             }
 
             case UNIT_OP_COMPARE_LESS: {
-                StackEntry left = POP();
                 StackEntry right = POP();
+                StackEntry left = POP();
                 SIMPLE_COMPARE_FOLD(<);
                 PUSH(STACK_UNKNOWN, 0);
                 break;
             }
 
             case UNIT_OP_COMPARE_LESS_EQUAL: {
-                StackEntry left = POP();
                 StackEntry right = POP();
-                SIMPLE_COMPARE_FOLD(>=);
+                StackEntry left = POP();
+                SIMPLE_COMPARE_FOLD(<=);
                 PUSH(STACK_UNKNOWN, 0);
                 break;
             }
 
             case UNIT_OP_POP: {
-                StackEntry top = POP();
-                if (top.kind == STACK_CONSTANT || top.kind == STACK_LOCAL) {
-                    _UNIT_Vector_Pop(&optimized);
-                    continue;
+                POP();
+                _UNIT_Operation *previous = _UNIT_Vector_GET(&optimized, _UNIT_Vector_SIZE(&optimized) - 1);
+                assert(previous != NULL);
+                UNIT_Instruction kind = previous->instruction;
+                switch (kind) {
+                    case UNIT_OP_LOAD_INTEGER:
+                    case UNIT_OP_ADD:
+                    case UNIT_OP_SUBTRACT:
+                    case UNIT_OP_MULTIPLY:
+                    case UNIT_OP_DIVIDE:
+                    case UNIT_OP_MODULO:
+                    case UNIT_OP_COPY:
+                    case UNIT_OP_SWAP:
+                    case UNIT_OP_COMPARE_EQUAL:
+                    case UNIT_OP_COMPARE_NOT_EQUAL:
+                    case UNIT_OP_COMPARE_GREATER:
+                    case UNIT_OP_COMPARE_GREATER_EQUAL:
+                    case UNIT_OP_COMPARE_LESS:
+                    case UNIT_OP_COMPARE_LESS_EQUAL:
+                    case UNIT_OP_READ_BYTES:
+                    case UNIT_OP_ADDRESS_OF:
+                    case UNIT_OP_LOAD_LOCAL:
+                        _UNIT_Vector_Pop(&optimized);
+                        continue;
+                    default:
+                        break;
                 }
                 break;
             }
@@ -258,12 +282,12 @@ UNIT_Procedure_OptimizeFold(UNIT_Procedure *procedure)
             case UNIT_OP_JUMP_IF_TRUE: {
                 StackEntry top = POP();
                 if (top.kind == STACK_COMPARE) {
-                    _UNIT_Vector_Pop(&optimized);
+                    ADD_NEW_INSTRUCTION(UNIT_OP_POP, 0);
 
                     if (top.value) {
                         ADD_NEW_INSTRUCTION(UNIT_OP_JUMP_TO, op->argument);
                     } else {
-                        dead_code = 1;
+                        //dead_code = 1;
                     }
                     continue;
                 }
@@ -274,10 +298,10 @@ UNIT_Procedure_OptimizeFold(UNIT_Procedure *procedure)
             case UNIT_OP_JUMP_IF_FALSE: {
                 StackEntry top = POP();
                 if (top.kind == STACK_COMPARE) {
-                    _UNIT_Vector_Pop(&optimized);
+                    ADD_NEW_INSTRUCTION(UNIT_OP_POP, 0);
 
                     if (top.value) {
-                        dead_code = 1;
+                        //dead_code = 1;
                     } else {
                         ADD_NEW_INSTRUCTION(UNIT_OP_JUMP_TO, op->argument);
                     }
@@ -329,7 +353,7 @@ UNIT_Procedure_OptimizeFold(UNIT_Procedure *procedure)
             case UNIT_OP_READ_BYTES: {
                 StackEntry entry = POP();
                 if (entry.kind == STACK_ADDRESS) {
-                    _UNIT_Vector_Pop(&optimized);
+                    ADD_NEW_INSTRUCTION(UNIT_OP_POP, 0);
                     ADD_NEW_INSTRUCTION(UNIT_OP_LOAD_LOCAL, op->argument);
                     break;
                 }
@@ -352,7 +376,7 @@ UNIT_Procedure_OptimizeFold(UNIT_Procedure *procedure)
             }
         }
 
-        _UNIT_Vector_APPEND(&optimized, op);
+        _UNIT_Vector_Append(&optimized, op);
     }
 
 #undef POP
@@ -424,6 +448,11 @@ remap_offsets(UNIT_Procedure *procedure,
               Offsets *offsets,
               _UNIT_Vector *output)
 {
+    #define ADD_NEW_INSTRUCTION(inst, op)                                           \
+        if (UNIT_FAILED(create_artificial_instruction(output, inst, op))) {         \
+            return _UNIT_FAIL;                                                      \
+        }
+
     assert(procedure != NULL);
     assert(target != NULL);
     assert(offsets != NULL);
@@ -457,10 +486,7 @@ remap_offsets(UNIT_Procedure *procedure,
     // Usually these loads/stores will get optimized away in another pass
     for (UNIT_Size i = 0; i < nargs; ++i) {
         int64_t arg_local_id = local_offset + nargs - 1 - i;
-        if (UNIT_FAILED(create_artificial_instruction(output, UNIT_OP_STORE_LOCAL,
-                                                      arg_local_id))) {
-            return _UNIT_FAIL;
-        }
+        ADD_NEW_INSTRUCTION(UNIT_OP_STORE_LOCAL, arg_local_id);
     }
 
     UNIT_Size size = _UNIT_Vector_SIZE(instructions);
@@ -470,24 +496,14 @@ remap_offsets(UNIT_Procedure *procedure,
 
         if (target_op->instruction == UNIT_OP_LOAD_ARGUMENT) {
             int64_t arg_local_id = local_offset + target_op->argument;
-            if (UNIT_FAILED(create_artificial_instruction(output, UNIT_OP_LOAD_LOCAL,
-                                                          arg_local_id))) {
-                return _UNIT_FAIL;
-            }
+            ADD_NEW_INSTRUCTION(UNIT_OP_LOAD_LOCAL, arg_local_id);
 
             continue;
         }
 
         if (target_op->instruction == UNIT_OP_RETURN_VALUE) {
-            // The value we want is already on the stack
-            if (UNIT_FAILED(create_artificial_instruction(output, _UNIT_OP_STORE_LOCAL_NAME, return_local.id))) {
-                return _UNIT_FAIL;
-            }
-
-            if (UNIT_FAILED(create_artificial_instruction(output, UNIT_OP_JUMP_TO,
-                                                          end_label->id))) {
-                return _UNIT_FAIL;
-            }
+            ADD_NEW_INSTRUCTION(_UNIT_OP_STORE_LOCAL_NAME, return_local.id);
+            ADD_NEW_INSTRUCTION(UNIT_OP_JUMP_TO, end_label->id);
 
             continue;
         }
@@ -535,15 +551,10 @@ remap_offsets(UNIT_Procedure *procedure,
         }
     }
 
-    if (UNIT_FAILED(create_artificial_instruction(output, _UNIT_OP_JUMP_MARKER,
-                                                  end_label->id))) {
-        return _UNIT_FAIL;
-    }
+    ADD_NEW_INSTRUCTION(_UNIT_OP_JUMP_MARKER, end_label->id);
+    ADD_NEW_INSTRUCTION(_UNIT_OP_LOAD_LOCAL_NAME, return_local.id);
 
-    if (UNIT_FAILED(create_artificial_instruction(output, _UNIT_OP_LOAD_LOCAL_NAME,
-                                                  return_local.id))) {
-        return _UNIT_FAIL;
-    }
+#undef ADD_NEW_INSTRUCTION
 
     return _UNIT_OK;
 }
@@ -565,13 +576,11 @@ UNIT_Procedure_OptimizeInline(UNIT_Procedure *procedure)
         return _UNIT_FAIL;
     }
 
-#define APPEND(op) _UNIT_Vector_APPEND(&optimized, op)
-
     for (UNIT_Size index = 0; index < size; ++index) {
         _UNIT_Operation *op = _UNIT_Vector_STEAL(instructions, index);
 
         if (op->instruction != UNIT_OP_CALL_PROCEDURE) {
-            APPEND(op);
+            _UNIT_Vector_APPEND(&optimized, op);
             continue;
         }
 
@@ -579,7 +588,7 @@ UNIT_Procedure_OptimizeInline(UNIT_Procedure *procedure)
                                                    op->argument);
 
         if (!should_inline(target, procedure)) {
-            APPEND(op);
+            _UNIT_Vector_APPEND(&optimized, op);
             continue;
         }
 
@@ -644,8 +653,6 @@ UNIT_Procedure_OptimizeInline(UNIT_Procedure *procedure)
             goto error;
         }
     }
-
-#undef APPEND
 
     _UNIT_Vector_Clear(&procedure->_instructions);
     procedure->_instructions = optimized;
@@ -768,10 +775,14 @@ UNIT_Procedure_OptimizeLocals(UNIT_Procedure *procedure)
         return _UNIT_FAIL;
     }
 
-    #define APPEND(op) _UNIT_Vector_APPEND(&optimized, op)
+    #define ADD_NEW_INSTRUCTION(inst, op)                                           \
+        if (UNIT_FAILED(create_artificial_instruction(&optimized, inst, op))) {     \
+            goto error;                                                             \
+        }
 
     for (UNIT_Size index = 0; index < size; ++index) {
         _UNIT_Operation *op = _UNIT_Vector_STEAL(instructions, index);
+        assert(op != NULL);
 
         switch (op->instruction) {
             case UNIT_OP_STORE_LOCAL:
@@ -780,38 +791,26 @@ UNIT_Procedure_OptimizeLocals(UNIT_Procedure *procedure)
                 if (info[local_index].load_count == 0) {
                     // This is a dead store. Consume the value with pop, which
                     // can be folded out later.
-                    _UNIT_Operation *pop = _UNIT_Alloc(context,
-                                                       sizeof(_UNIT_Operation));
-                    if (pop == NULL) {
-                        goto error;
-                    }
-                    pop->instruction = UNIT_OP_POP;
-                    pop->argument = 0;
-                    APPEND(pop);
+                    ADD_NEW_INSTRUCTION(UNIT_OP_POP, 0);
                     continue;
                 }
-                APPEND(op);
 
-                if (index + 1 <= size) {
-                    continue;
+                if (index + 1 >= size) {
+                    break;
                 }
 
                 _UNIT_Operation *next = _UNIT_Vector_GET(instructions, index + 1);
                 if ((next->instruction == UNIT_OP_LOAD_LOCAL || next->instruction == _UNIT_OP_LOAD_LOCAL_NAME)
                      && (next->argument == op->argument)) {
                     // Redundant load-after-store; replace it with a copy
-                    _UNIT_Operation *copy = _UNIT_Alloc(context,
-                                                        sizeof(_UNIT_Operation));
-                    if (copy == NULL) {
-                        goto error;
-                    }
-                    copy->instruction = UNIT_OP_COPY;
-                    copy->argument = 0;
-                    APPEND(copy);
+                    ADD_NEW_INSTRUCTION(UNIT_OP_COPY, 0);
+                    _UNIT_Vector_APPEND(&optimized, op);
 
                     // Skip the load
                     ++index;
+                    continue;
                 }
+
                 break;
             }
 
@@ -821,28 +820,21 @@ UNIT_Procedure_OptimizeLocals(UNIT_Procedure *procedure)
                 if (info[local_index].store_count == 1
                     && info[local_index].constant_value_known) {
                     // Propagate constant
-                    _UNIT_Operation *load = _UNIT_Alloc(context,
-                                                        sizeof(_UNIT_Operation));
-                    if (load == NULL) {
-                        goto error;
-                    }
-                    load->instruction = UNIT_OP_LOAD_INTEGER;
-                    load->argument = info[local_index].constant_value;
-                    APPEND(load);
+                    ADD_NEW_INSTRUCTION(UNIT_OP_LOAD_INTEGER, info[local_index].constant_value);
                     continue;
                 }
 
-                APPEND(op);
                 break;
             }
 
             default:
-                APPEND(op);
                 break;
         }
+
+        _UNIT_Vector_APPEND(&optimized, op);
     }
 
-#undef APPEND
+#undef ADD_NEW_INSTRUCTION
 
     _UNIT_Dealloc(context, info);
     _UNIT_Vector_Clear(instructions);
@@ -858,18 +850,27 @@ error:
 UNIT_Status
 UNIT_Procedure_Optimize(UNIT_Procedure *procedure)
 {
-    for (int i = 0; i <= 2; ++i) {
+    for (int i = 0; i <= 5; ++i) {
         if (UNIT_FAILED(UNIT_Procedure_OptimizeInline(procedure))) {
             return _UNIT_FAIL;
         }
+
+        printf("pass %d, after inlining:", i);
+        UNIT_Procedure_PrintInstructions(procedure, stdout);
 
         if (UNIT_FAILED(UNIT_Procedure_OptimizeLocals(procedure))) {
             return _UNIT_FAIL;
         }
 
+        printf("pass %d, after locals:", i);
+        UNIT_Procedure_PrintInstructions(procedure, stdout);
+
         if (UNIT_FAILED(UNIT_Procedure_OptimizeFold(procedure))) {
             return _UNIT_FAIL;
         }
+
+        printf("pass %d, after folding:", i);
+        UNIT_Procedure_PrintInstructions(procedure, stdout);
     }
 
     return _UNIT_OK;
