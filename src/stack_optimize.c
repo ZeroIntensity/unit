@@ -671,6 +671,7 @@ typedef struct {
     UNIT_Size load_count;
     int8_t constant_value_known;
     int64_t constant_value;
+    int8_t address_taken;
 } LocalInfo;
 
 static UNIT_Status
@@ -738,8 +739,7 @@ gather_local_info(_UNIT_Vector *instructions, LocalInfo **info_ptr)
 
             case UNIT_OP_ADDRESS_OF:
                 // When the address is taken, our optimization breaks down.
-                info[op->argument].store_count = -1;
-                info[op->argument].load_count = -1;
+                info[op->argument].address_taken = 1;
                 break;
 
             default:
@@ -791,6 +791,10 @@ UNIT_Procedure_OptimizeLocals(UNIT_Procedure *procedure)
             case UNIT_OP_STORE_LOCAL:
             case _UNIT_OP_STORE_LOCAL_NAME: {
                 UNIT_Size local_index = op->argument;
+                if (info[local_index].address_taken) {
+                    break;
+                }
+
                 if (info[local_index].load_count == 0) {
                     // This is a dead store. Consume the value with pop, which
                     // can be folded out later.
@@ -821,7 +825,8 @@ UNIT_Procedure_OptimizeLocals(UNIT_Procedure *procedure)
             case _UNIT_OP_LOAD_LOCAL_NAME: {
                 UNIT_Size local_index = op->argument;
                 if (info[local_index].store_count == 1
-                    && info[local_index].constant_value_known) {
+                    && info[local_index].constant_value_known
+                    && !info[local_index].address_taken) {
                     // Propagate constant
                     ADD_NEW_INSTRUCTION(UNIT_OP_LOAD_INTEGER, info[local_index].constant_value);
                     continue;
