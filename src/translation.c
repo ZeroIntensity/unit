@@ -657,6 +657,16 @@ _UNIT_Translate(_UNIT_Translation *translation,
         if (UNIT_FAILED(emit_machine_instruction(context, CURRENT_BLOCK(), inst, dest, arg1, arg2))) {  \
             goto error;                                                                                 \
         }
+
+    #define EMIT_THREE(inst, arg1, arg2, arg3)                                                          \
+        /* The destination is repurposed as arg1, so we have to manually mark it as a use. */           \
+        if (UNIT_FAILED(mark_last_use(CURRENT_BLOCK(), arg1))) {                                        \
+            goto error;                                                                                 \
+        }                                                                                               \
+        if (UNIT_FAILED(emit_machine_instruction(context, CURRENT_BLOCK(), inst, arg1, arg2, arg3))) {  \
+            goto error;                                                                                 \
+        }
+
     #define CREATE_DESTINATION(name)                                                                \
         _UNIT_MachineItem *name = create_new_location(translation, CURRENT_BLOCK(), UNIQUE_ID());   \
         if (name == NULL) {                                                                         \
@@ -924,9 +934,9 @@ _UNIT_Translate(_UNIT_Translation *translation,
                         _UNIT_Unreachable();
                 }
 
-                EMIT_DEST_TWO(fused, jump_target,
-                              value->comparison.left,
-                              value->comparison.right);
+                EMIT_THREE(fused, jump_target,
+                           value->comparison.left,
+                           value->comparison.right);
                 _UNIT_BasicBlock *saved_block = CURRENT_BLOCK();
                 ADD_BLOCK_SUCCESSOR(saved_block, label->_block);
                 START_NEW_BLOCK();
@@ -1095,7 +1105,10 @@ _UNIT_Translate(_UNIT_Translation *translation,
                 ARGUMENT_TO_ITEM(bytes, _UNIT_TYPE_CONSTANT);
                 POP_TO_VAR(value);
                 POP_TO_VAR(address);
-                EMIT_DEST_TWO(_UNIT_I_WRITE_BYTES, address, value, bytes);
+                if (UNIT_FAILED(mark_last_use(CURRENT_BLOCK(), address))) {
+                    goto error;
+                }
+                EMIT_THREE(_UNIT_I_WRITE_BYTES, address, value, bytes);
                 break;
             }
 
