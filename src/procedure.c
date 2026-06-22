@@ -585,11 +585,6 @@ deduce_stack_effect(const UNIT_Procedure *procedure, const _UNIT_Operation *op,
         }
 
         case _UNIT_OP_LOAD_LOCAL_NAME: {
-            PUSH(DEBUG_TYPE_LOCAL_NAME, oparg);
-            break;
-        }
-
-        case _UNIT_OP_STORE_LOCAL_NAME: {
             char *name = get_string(&procedure->_local_variables, "variable", oparg);
             if (name == NULL) {
                 return _UNIT_FAIL;
@@ -599,6 +594,7 @@ deduce_stack_effect(const UNIT_Procedure *procedure, const _UNIT_Operation *op,
             break;
         }
 
+        case _UNIT_OP_STORE_LOCAL_NAME:
         case UNIT_OP_STORE_LOCAL: {
             POP();
             break;
