@@ -8,3 +8,4 @@ This section describes important concepts to know when using UNIT.
    :caption: Contents:
 
    stack-machines
+   translation
