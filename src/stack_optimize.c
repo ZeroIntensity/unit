@@ -603,6 +603,7 @@ UNIT_Procedure_OptimizeInline(UNIT_Procedure *procedure)
         _UNIT_Operation *prepare_call = _UNIT_Vector_Pop(&optimized);
         assert(prepare_call->instruction == UNIT_OP_PREPARE_CALL);
         UNIT_Size nargs = prepare_call->argument;
+        _UNIT_Dealloc(context, prepare_call);
 
         UNIT_Size local_offset = _UNIT_Vector_SIZE(&procedure->_local_variables);
         UNIT_Size label_offset = _UNIT_Vector_SIZE(&procedure->_jump_labels);
