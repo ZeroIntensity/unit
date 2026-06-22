@@ -27,7 +27,7 @@ functions relating to a type called ``UNIT_SomeType`` will be named
 
 .. tip::
 
-    This is best paired with intellisense in your editor; if you're looking
+    This is best paired with IntelliSense in your editor; if you're looking
     for a "method" (there aren't really methods in C, but this is how we
     replicate them), simply write the type name and let autocomplete bring up
     the relevant functions.

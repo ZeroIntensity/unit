@@ -28,7 +28,7 @@ In general, there are three types of destinations:
 3. Stack-allocated values.
 
 For example, let's take the following UNIT stack machine instructions and
-translate them to register machine instructions. We'll
+translate them to register machine instructions.
 
 .. code-block::
    :caption: :iconify:`ri:stack-fill` Stack machine
@@ -222,3 +222,6 @@ the IR. For example, on AMD64, not all instructions support operating on
 stack slots, so UNIT has to move the value into a "scratch" register and then
 operate on it. (The scratch register is not allowed to be assigned to a location
 during register allocation, so it's always available for use in IR lowering.)
+
+The result is a sequence of bytes that can be written to an ELF object file
+or executed directly via JIT compilation.
