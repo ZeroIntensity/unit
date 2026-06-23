@@ -11,7 +11,9 @@ There is a single function to compile a procedure, called :c:func:`UNIT_Compile`
 It takes two arguments:
 
 1. A pointer to the procedure we want to compile.
-2. The target architecture, as a :c:enum:`UNIT_Architecture`.
+2. The target platform -- a combination of the architecture and ABI.
+
+The current platform is accessible via the :c:macro:`UNIT_HOST_PLATFORM` macro.
 
 Currently, UNIT only supports the AMD64 architecture, so let's pass
 :c:enum:`UNIT_ARCH_AMD64`.

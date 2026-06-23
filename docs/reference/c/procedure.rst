@@ -3,7 +3,8 @@ Procedures
 
 .. c:struct:: UNIT_Procedure
 
-   A container of instructions.
+   A container of instructions representing a function that will eventually
+   be compiled by UNIT.
 
    .. c:var:: UNIT_Context *context
 

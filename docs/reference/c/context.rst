@@ -5,7 +5,8 @@ Contexts
 .. c:type:: UNIT_Context
 
    Container type for all of UNIT's state. This structure has no public
-   fields.
+   fields, but it's size is available publicly (allowing for allocation on
+   the stack).
 
 
 .. c:function:: UNIT_Status UNIT_Context_Init(UNIT_Context *context)

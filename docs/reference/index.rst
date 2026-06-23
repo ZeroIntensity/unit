@@ -7,7 +7,5 @@ This section contains technical reference for UNIT's APIs.
    :maxdepth: 2
    :caption: Contents:
 
-   context
-   errors
-   procedure
-   instructions
+   c/index
+   cpp/index

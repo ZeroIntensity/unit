@@ -62,6 +62,10 @@ Errors
       A call to an operating system API failed. This implies that the
       C ``errno`` is set.
 
+   .. c:enumerator:: UNIT_ERROR_UNSUPPORTED_PLATFORM
+
+      An operation is not available on this platform.
+
 
 .. c:function:: UNIT_ErrorCode UNIT_GetErrorCode(const UNIT_Context *context)
 
