@@ -56,12 +56,12 @@ UNIT_Platform_GET_ARCH(UNIT_Platform platform)
     #endif
 #elif defined(__aarch64__) || defined(_M_ARM64)
     #if defined(_WIN32)
-        #define UNIT_HOST_PLATFORM (UNIT_ARCH_ARM64 | UNIT_ABI_WIN64)
+        #define UNIT_HOST_PLATFORM (UNIT_ARCH_AARCH64 | UNIT_ABI_WIN64)
     #elif defined(__APPLE__)
-        #define UNIT_HOST_PLATFORM (UNIT_ARCH_ARM64 | UNIT_ABI_APPLE)
+        #define UNIT_HOST_PLATFORM (UNIT_ARCH_AARCH64 | UNIT_ABI_APPLE)
     #elif defined(__linux__) || defined(__FreeBSD__) || defined(__OpenBSD__) \
           || defined(__NetBSD__) || defined(__DragonFly__) || defined(__sun)
-        #define UNIT_HOST_PLATFORM (UNIT_ARCH_ARM64 | UNIT_ABI_SYSTEMV)
+        #define UNIT_HOST_PLATFORM (UNIT_ARCH_AARCH64 | UNIT_ABI_SYSTEMV)
     #endif
 #endif
 
