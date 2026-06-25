@@ -1076,9 +1076,9 @@ _UNIT_Translate(_UNIT_Translation *translation,
 
             case UNIT_OP_COPY: {
                 UNIT_Size index = _UNIT_Vector_SIZE(&stack) - operation->argument - 1;
-                assert(index >= 0);
                 _UNIT_MachineItem *item = _UNIT_Vector_GET(&stack, index);
-                PUSH_ITEM(item);
+                CREATE_DESTINATION(destination);
+                EMIT_DEST_ONE(_UNIT_I_MOVE, destination, item);
                 break;
             }
 
