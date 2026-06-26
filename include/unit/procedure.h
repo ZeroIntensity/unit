@@ -97,9 +97,12 @@ typedef enum {
     UNIT_TYPE_UINT64,
 } UNIT_IntegerType;
 
+typedef uint32_t UNIT_Flags;
+
 typedef struct {
     UNIT_Context *context;
     char *name;
+    UNIT_Flags flags;
     _UNIT_Vector _instructions; // Contains _UNIT_Operation * (heap-allocated)
     _UNIT_Vector _global_strings; // Contains char * (heap-allocated)
     _UNIT_Vector _symbols; // Contains char * (heap-allocated)
@@ -166,7 +169,22 @@ const char *
 UNIT_Instruction_GetName(UNIT_Instruction instruction);
 
 UNIT_Status
-UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure, FILE *stream, int8_t visualize_stack_effect);
+UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure,
+                                 FILE *stream, int8_t visualize_stack_effect);
+
+#define UNIT_FLAG_NONE 0
+#define UNIT_FLAG_NO_OPTIMIZE_TRANSLATION (1 << 0)
+#define UNIT_FLAG_FORCE_NO_INLINE (1 << 1)
+#define UNIT_FLAG_FORCE_INLINE (1 << 2)
+#define UNIT_FLAG_PRINT_TRANSLATION_PREOP (1 << 3)
+#define UNIT_FLAG_PRINT_TRANSLATION_POSTOP (1 << 4)
+
+void
+UNIT_Procedure_SetFlags(UNIT_Procedure *procedure, UNIT_Flags flags);
+
+UNIT_Flags
+UNIT_Procedure_GetFlags(const UNIT_Procedure *procedure);
+
 
 #ifdef __cplusplus
 }

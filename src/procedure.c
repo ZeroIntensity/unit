@@ -888,3 +888,17 @@ error:
     _UNIT_Vector_Clear(&debug_stack);
     return _UNIT_FAIL;
 }
+
+void
+UNIT_Procedure_SetFlags(UNIT_Procedure *procedure, UNIT_Flags flags)
+{
+    assert(procedure != NULL);
+    procedure->flags = flags;
+}
+
+UNIT_Flags
+UNIT_Procedure_GetFlags(const UNIT_Procedure *procedure)
+{
+    assert(procedure != NULL);
+    return procedure->flags;
+}

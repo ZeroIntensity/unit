@@ -415,6 +415,14 @@ should_inline(const UNIT_Procedure *target, const UNIT_Procedure *caller)
         return 0;
     }
 
+    if (target->flags & UNIT_FLAG_FORCE_NO_INLINE) {
+        return 0;
+    }
+
+    if (target->flags & UNIT_FLAG_FORCE_INLINE) {
+        return 1;
+    }
+
     UNIT_Size size = _UNIT_Vector_SIZE(&target->_instructions);
     return size <= 50; // Probably needs tuning
 }
