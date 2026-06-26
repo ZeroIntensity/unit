@@ -22,7 +22,7 @@ create_artificial_instruction(_UNIT_Vector *instructions,
     return _UNIT_OK;
 }
 
-UNIT_Status
+int8_t
 UNIT_Procedure_OptimizeFold(UNIT_Procedure *procedure)
 {
     assert(procedure != NULL);
@@ -33,7 +33,7 @@ UNIT_Procedure_OptimizeFold(UNIT_Procedure *procedure)
 
     _UNIT_Vector optimized;
     if (UNIT_FAILED(_UNIT_Vector_Init(&optimized, context, size, _UNIT_Dealloc))) {
-        return _UNIT_FAIL;
+        return -1;
     }
 
     typedef struct {
@@ -62,13 +62,15 @@ UNIT_Procedure_OptimizeFold(UNIT_Procedure *procedure)
     #define RESET_STACK() stack_depth = 0
 
     #define ADD_NEW_INSTRUCTION(inst, op)                                           \
+        did_change = 1;                                                             \
         if (UNIT_FAILED(create_artificial_instruction(&optimized, inst, op))) {     \
-            return _UNIT_FAIL;                                                      \
+            goto error;                                                             \
         }
 
-    #define CONTINUE_AND_DISCARD() _UNIT_Dealloc(context, op); continue
+    #define CONTINUE_AND_DISCARD() did_change = 1; _UNIT_Dealloc(context, op); continue
 
     int8_t dead_code = 0;
+    int8_t did_change = 0;
 
     for (UNIT_Size index = 0; index < size; ++index) {
         _UNIT_Operation *op = _UNIT_Vector_STEAL(instructions, index);
@@ -141,14 +143,14 @@ UNIT_Procedure_OptimizeFold(UNIT_Procedure *procedure)
                         case UNIT_OP_DIVIDE:
                             if (right.value == 0) {
                                 _UNIT_SetError(context, UNIT_ERROR_INVALID_USAGE, "division by zero");
-                                return _UNIT_FAIL;
+                                goto error;
                             }
                             result = left.value / right.value;
                             break;
                         case UNIT_OP_MODULO:
                             if (right.value == 0) {
                                 _UNIT_SetError(context, UNIT_ERROR_INVALID_USAGE, "division by zero");
-                                return _UNIT_FAIL;
+                                goto error;
                             }
                             result = left.value % right.value;
                             break;
@@ -396,11 +398,11 @@ UNIT_Procedure_OptimizeFold(UNIT_Procedure *procedure)
     _UNIT_Vector old = procedure->_instructions;
     procedure->_instructions = optimized;
     _UNIT_Vector_Clear(&old);
-    return _UNIT_OK;
+    return did_change;
 
 error:
     _UNIT_Vector_Clear(&optimized);
-    return _UNIT_FAIL;
+    return -1;
 }
 
 static int8_t
@@ -567,7 +569,7 @@ remap_offsets(UNIT_Procedure *procedure,
     return _UNIT_OK;
 }
 
-UNIT_Status
+int8_t
 UNIT_Procedure_OptimizeInline(UNIT_Procedure *procedure)
 {
     assert(procedure != NULL);
@@ -581,9 +583,10 @@ UNIT_Procedure_OptimizeInline(UNIT_Procedure *procedure)
 
     _UNIT_Vector optimized;
     if (UNIT_FAILED(_UNIT_Vector_Init(&optimized, context, size, _UNIT_Dealloc))) {
-        return _UNIT_FAIL;
+        return -1;
     }
 
+    int8_t did_change = 0;
     for (UNIT_Size index = 0; index < size; ++index) {
         _UNIT_Operation *op = _UNIT_Vector_STEAL(instructions, index);
 
@@ -594,11 +597,12 @@ UNIT_Procedure_OptimizeInline(UNIT_Procedure *procedure)
 
         UNIT_Procedure *target = _UNIT_Vector_GET(&procedure->_subprocedures,
                                                    op->argument);
-
         if (!should_inline(target, procedure)) {
             _UNIT_Vector_APPEND(&optimized, op);
             continue;
         }
+
+        did_change = 1;
 
         _UNIT_Dealloc(context, op);
 
@@ -633,11 +637,11 @@ UNIT_Procedure_OptimizeInline(UNIT_Procedure *procedure)
             const char *name = _UNIT_Vector_GET(&target->_symbols, i);
             char *copy = _UNIT_StrDup(context, name);
             if (copy == NULL) {
-                return _UNIT_FAIL;
+                goto error;
             }
 
             if (UNIT_FAILED(_UNIT_Vector_Append(&procedure->_symbols, copy))) {
-                return _UNIT_FAIL;
+                goto error;
             }
         }
 
@@ -646,9 +650,12 @@ UNIT_Procedure_OptimizeInline(UNIT_Procedure *procedure)
         for (UNIT_Size j = 0; j < target_strings; ++j) {
             const char *str = _UNIT_Vector_GET(&target->_global_strings, j);
             char *copy = _UNIT_StrDup(context, str);
-            if (copy == NULL) return _UNIT_FAIL;
+            if (copy == NULL) {
+                goto error;
+            }
+
             if (UNIT_FAILED(_UNIT_Vector_Append(&procedure->_global_strings, copy))) {
-                return _UNIT_FAIL;
+                goto error;
             }
         }
 
@@ -667,11 +674,11 @@ UNIT_Procedure_OptimizeInline(UNIT_Procedure *procedure)
 
     _UNIT_Vector_Clear(&procedure->_instructions);
     procedure->_instructions = optimized;
-    return _UNIT_OK;
+    return did_change;
 
 error:
     _UNIT_Vector_Clear(&optimized);
-    return _UNIT_FAIL;
+    return -1;
 }
 
 typedef struct {
@@ -758,7 +765,7 @@ gather_local_info(_UNIT_Vector *instructions, LocalInfo **info_ptr)
     return _UNIT_OK;
 }
 
-UNIT_Status
+int8_t
 UNIT_Procedure_OptimizeLocals(UNIT_Procedure *procedure)
 {
     assert(procedure != NULL);
@@ -770,12 +777,12 @@ UNIT_Procedure_OptimizeLocals(UNIT_Procedure *procedure)
 
     LocalInfo *info;
     if (UNIT_FAILED(gather_local_info(instructions, &info))) {
-        return _UNIT_FAIL;
+        return -1;
     }
 
     if (info == NULL) {
         // Nothing to optimize
-        return _UNIT_OK;
+        return 0;
     }
 
     UNIT_Size size = _UNIT_Vector_SIZE(instructions);
@@ -783,15 +790,21 @@ UNIT_Procedure_OptimizeLocals(UNIT_Procedure *procedure)
     _UNIT_Vector optimized;
     if (UNIT_FAILED(_UNIT_Vector_Init(&optimized, context, size, _UNIT_Dealloc))) {
         _UNIT_Dealloc(context, info);
-        return _UNIT_FAIL;
+        return -1;
     }
 
     #define ADD_NEW_INSTRUCTION(inst, op)                                           \
+        did_change = 1;                                                             \
         if (UNIT_FAILED(create_artificial_instruction(&optimized, inst, op))) {     \
             goto error;                                                             \
         }
 
-    #define CONTINUE_AND_DISCARD() _UNIT_Dealloc(context, op); continue
+    #define CONTINUE_AND_DISCARD()      \
+        did_change = 1;                 \
+        _UNIT_Dealloc(context, op);     \
+        continue
+
+    int8_t did_change = 0;
 
     for (UNIT_Size index = 0; index < size; ++index) {
         _UNIT_Operation *op = _UNIT_Vector_STEAL(instructions, index);
@@ -859,30 +872,42 @@ UNIT_Procedure_OptimizeLocals(UNIT_Procedure *procedure)
     _UNIT_Dealloc(context, info);
     _UNIT_Vector_Clear(instructions);
     procedure->_instructions = optimized;
-    return _UNIT_OK;
-
+    return did_change;
 error:
     _UNIT_Dealloc(context, info);
     _UNIT_Vector_Clear(instructions);
-    return _UNIT_FAIL;
+    return -1;
 }
+
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 UNIT_Status
 UNIT_Procedure_Optimize(UNIT_Procedure *procedure)
 {
-    for (int i = 0; i <= 1; ++i) {
-        if (UNIT_FAILED(UNIT_Procedure_OptimizeInline(procedure))) {
+    int8_t any_did_change = 0;
+    do {
+        any_did_change = 0;
+        int8_t did_change = UNIT_Procedure_OptimizeInline(procedure);
+        if (did_change < 0) {
             return _UNIT_FAIL;
         }
 
-        if (UNIT_FAILED(UNIT_Procedure_OptimizeLocals(procedure))) {
+        any_did_change = MAX(any_did_change, did_change);
+
+        did_change = UNIT_Procedure_OptimizeLocals(procedure);
+        if (did_change < 0) {
             return _UNIT_FAIL;
         }
 
-        if (UNIT_FAILED(UNIT_Procedure_OptimizeFold(procedure))) {
+        any_did_change = MAX(any_did_change, did_change);
+
+        did_change = UNIT_Procedure_OptimizeFold(procedure);
+        if (did_change < 0) {
             return _UNIT_FAIL;
         }
-    }
+
+        any_did_change = MAX(any_did_change, did_change);
+    } while (any_did_change);
 
     return _UNIT_OK;
 }
