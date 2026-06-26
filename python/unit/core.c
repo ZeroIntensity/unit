@@ -567,6 +567,20 @@ ProcedureObject_optimize(PyObject *op, PyObject *unused)
     Py_RETURN_NONE;
 }
 
+static PyObject *
+ProcedureObject_set_flags(PyObject *op, PyObject *value)
+{
+    assert(op != NULL);
+    ProcedureObject *self = ProcedureObject_CAST(op);
+    uint32_t flags;
+    if (PyLong_AsUInt32(value, &flags) < 0) {
+        return NULL;
+    }
+    UNIT_Procedure_SetFlags(&self->procedure, flags);
+
+    Py_RETURN_NONE;
+}
+
 static int
 ProcedureObject_traverse(PyObject *op, visitproc visit, void *arg)
 {
@@ -606,6 +620,7 @@ static PyMethodDef ProcedureObject_methods[] = {
     {"add_operation", ProcedureObject_add_operation, METH_VARARGS, NULL},
     {"compile", ProcedureObject_compile, METH_O, NULL},
     {"optimize", ProcedureObject_optimize, METH_NOARGS, NULL},
+    {"set_flags", ProcedureObject_set_flags, METH_O, NULL},
     {NULL},
 };
 
@@ -725,6 +740,13 @@ _unit_modexec(PyObject *module)
     EXPORT_CONST(_UNIT_ARCH_MASK);
     EXPORT_CONST(UNIT_ARCH_AMD64);
     EXPORT_CONST(UNIT_ARCH_AARCH64);
+
+    EXPORT_CONST(UNIT_FLAG_NONE);
+    EXPORT_CONST(UNIT_FLAG_FORCE_INLINE);
+    EXPORT_CONST(UNIT_FLAG_FORCE_NO_INLINE);
+    EXPORT_CONST(UNIT_FLAG_NO_OPTIMIZE_TRANSLATION);
+    EXPORT_CONST(UNIT_FLAG_PRINT_TRANSLATION_PREOP);
+    EXPORT_CONST(UNIT_FLAG_PRINT_TRANSLATION_POSTOP);
 
 #undef EXPORT_CONST
 

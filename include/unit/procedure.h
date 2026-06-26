@@ -185,7 +185,6 @@ UNIT_Procedure_SetFlags(UNIT_Procedure *procedure, UNIT_Flags flags);
 UNIT_Flags
 UNIT_Procedure_GetFlags(const UNIT_Procedure *procedure);
 
-
 #ifdef __cplusplus
 }
 #endif

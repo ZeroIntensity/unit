@@ -4,8 +4,11 @@ from typing import Self
 from unit import _core
 import contextvars
 
+
 class Context:
-    CURRENT_CONTEXT = contextvars.ContextVar["Context | None"]('CURRENT_CONTEXT', default=None)
+    CURRENT_CONTEXT = contextvars.ContextVar["Context | None"](
+        "CURRENT_CONTEXT", default=None
+    )
 
     def __init__(self) -> None:
         self._context = _core.Context()

@@ -27,6 +27,15 @@ pack_version(int major, int minor, int patch, int dev)
     return UNIT_PACK_VERSION_FULL(major, minor, patch, dev);
 }
 
+enum class Flag : std::uint32_t {
+    NONE = UNIT_FLAG_NONE,
+    NO_OPTIMIZE_TRANSLATION = UNIT_FLAG_NO_OPTIMIZE_TRANSLATION,
+    FORCE_NO_INLINE = UNIT_FLAG_FORCE_NO_INLINE,
+    FORCE_INLINE = UNIT_FLAG_FORCE_INLINE,
+    PRINT_TRANSLATION_PREOP = UNIT_FLAG_PRINT_TRANSLATION_PREOP,
+    PRINT_TRANSLATION_POSTOP = UNIT_FLAG_PRINT_TRANSLATION_POSTOP
+};
+
 enum class ErrorCode {
     NONE = UNIT_ERROR_NONE,
     NO_MEMORY = UNIT_ERROR_NO_MEMORY,
@@ -588,6 +597,18 @@ public:
         if (UNIT_FAILED(UNIT_Procedure_Optimize(&procedure))) {
             throw error(procedure.context);
         }
+    }
+
+    void
+    set_flags(uint32_t flags)
+    {
+        UNIT_Procedure_SetFlags(&procedure, flags);
+    }
+
+    [[nodiscard]] uint32_t
+    get_flags() const
+    {
+        return UNIT_Procedure_GetFlags(&procedure);
     }
 
     Procedure(const Procedure &) = delete;

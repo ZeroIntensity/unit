@@ -2,6 +2,7 @@ from unit import _core
 
 from enum import Enum
 
+
 class OpCode(Enum):
     LOAD_STRING = _core.UNIT_OP_LOAD_STRING
     LOAD_INTEGER = _core.UNIT_OP_LOAD_INTEGER

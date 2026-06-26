@@ -8,10 +8,13 @@ import ctypes
 ArgT = TypeVar("ArgT")
 ResT = TypeVar("ResT")
 
+
 class ExecutableBuffer(Generic[ArgT, ResT]):
     def __init__(self, executable_buffer: _core.ExecutableBuffer) -> None:
         if __debug__ and not isinstance(executable_buffer, _core.ExecutableBuffer):
-            raise TypeError(f"expected an internal executable buffer, got {executable_buffer!r}")
+            raise TypeError(
+                f"expected an internal executable buffer, got {executable_buffer!r}"
+            )
 
         self._buffer = executable_buffer
 
@@ -37,9 +40,11 @@ class ExecutableBuffer(Generic[ArgT, ResT]):
                 ctypes_args.append(ctypes.c_char_p(encoded))
                 arg_types.append(ctypes.c_char_p)
             else:
-                raise TypeError(f"unsupported argument type: {type(arg)}. "
-                                "For finer control over arguments, construct your own "
-                                "function pointer via the 'address' attribute.")
+                raise TypeError(
+                    f"unsupported argument type: {type(arg)}. "
+                    "For finer control over arguments, construct your own "
+                    "function pointer via the 'address' attribute."
+                )
 
         func_type = ctypes.CFUNCTYPE(ctypes.c_int64, *arg_types)
         func = func_type(self._buffer.address)
@@ -49,11 +54,15 @@ class ExecutableBuffer(Generic[ArgT, ResT]):
 class CompiledProcedure:
     def __init__(self, compiled_procedure: _core.CompiledProcedure) -> None:
         if __debug__ and not isinstance(compiled_procedure, _core.CompiledProcedure):
-            raise TypeError(f"expected an internal compiled procedure, got {compiled_procedure!r}")
+            raise TypeError(
+                f"expected an internal compiled procedure, got {compiled_procedure!r}"
+            )
 
         self._compiled = compiled_procedure
 
-    def write_object_file(self, path: str, format: Literal["elf", "macho", "pe"]) -> None:
+    def write_object_file(
+        self, path: str, format: Literal["elf", "macho", "pe"]
+    ) -> None:
         if format == "elf":
             format_enum = _core.UNIT_FORMAT_ELF
         elif format == "macho":
@@ -61,7 +70,9 @@ class CompiledProcedure:
         elif format == "pe":
             format_enum = _core.UNIT_FORMAT_PE
         else:
-            raise ValueError(f"unknown format {format!r}, expected one of: elf, macho, pe")
+            raise ValueError(
+                f"unknown format {format!r}, expected one of: elf, macho, pe"
+            )
         self._compiled.write_object_file(path, format_enum)
 
     def jit(self) -> ExecutableBuffer[Any, Any]:
@@ -127,10 +138,30 @@ class Platform:
 
 
 class Procedure:
-    def __init__(self, name: str, *, context: Context | None = None) -> None:
+    def __init__(
+        self,
+        name: str,
+        *,
+        context: Context | None = None,
+        inlining: Literal["force", "never"] | None = None,
+        optimize_translation: bool = True,
+    ) -> None:
         self.context = context or Context.current_or_new()
         self.name = name
         self._procedure = _core.Procedure(self.context._context, name)
+        flags = _core.UNIT_FLAG_NONE
+
+        if inlining == "force":
+            flags |= _core.UNIT_FLAG_FORCE_INLINE
+        elif inlining == "never":
+            flags |= _core.UNIT_FLAG_FORCE_NO_INLINE
+
+        # We don't need a case for True because translation optimization is
+        # enabled by default.
+        if optimize_translation is False:
+            flags |= _core.UNIT_FLAG_NO_OPTIMIZE_TRANSLATION
+
+        self._procedure.set_flags(flags)
 
     def _add_op_int(self, opcode: OpCode, oparg: int) -> None:
         self._procedure.add_operation(opcode.value, oparg)
@@ -213,3 +244,6 @@ class Procedure:
     def compile(self, platform: Platform | None = None) -> CompiledProcedure:
         platform = platform or Platform.host()
         return CompiledProcedure(self._procedure.compile(platform.to_value()))
+
+    def optimize(self) -> None:
+        self._procedure.optimize()
