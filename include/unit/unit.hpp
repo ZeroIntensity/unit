@@ -36,6 +36,11 @@ enum class Flag : std::uint32_t {
     PRINT_TRANSLATION_POSTOP = UNIT_FLAG_PRINT_TRANSLATION_POSTOP
 };
 
+inline Flag operator|(Flag a, Flag b)
+{
+    return static_cast<Flag>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+}
+
 enum class ErrorCode {
     NONE = UNIT_ERROR_NONE,
     NO_MEMORY = UNIT_ERROR_NO_MEMORY,
@@ -73,14 +78,16 @@ public:
         UNIT_Context_Clear(&context);
     }
 
+    Context(const Context &) = delete;
+    Context(Context &&) = delete;
+    Context &operator=(const Context &) = delete;
+    Context &operator=(Context &&) = delete;
+
     [[nodiscard]] UNIT_Context *
     raw()
     {
         return &context;
     }
-
-    Context(const Context &) = delete;
-    Context &operator=(const Context &) = delete;
 };
 
 enum class ExecutableFormat {
@@ -89,15 +96,72 @@ enum class ExecutableFormat {
     PE = UNIT_FORMAT_PE,
 };
 
+template <typename Function>
+class ExecutableBuffer {
+    UNIT_ExecutableBuffer *buffer;
+
+    explicit ExecutableBuffer(UNIT_ExecutableBuffer *b)
+        : buffer(b) {}
+
+public:
+    ~ExecutableBuffer()
+    {
+        if (buffer != nullptr) {
+            UNIT_ExecutableBuffer_Free(buffer);
+        }
+    }
+
+    ExecutableBuffer(const ExecutableBuffer &) = delete;
+    ExecutableBuffer &operator=(const ExecutableBuffer &) = delete;
+    ExecutableBuffer &operator=(ExecutableBuffer &&) = delete;
+
+    ExecutableBuffer(ExecutableBuffer &&other) noexcept
+        : buffer(other.buffer)
+    {
+        other.buffer = nullptr;
+    }
+
+    template <typename... Args>
+    auto operator()(Args... args) const
+    {
+        return reinterpret_cast<Function>(UNIT_ExecutableBuffer_GetPointer(buffer))(args...);
+    }
+
+    friend class CompiledProcedure;
+};
+
 class CompiledProcedure {
     UNIT_CompiledProcedure *compiled;
 
-public:
     explicit CompiledProcedure(UNIT_CompiledProcedure *c) : compiled(c) {}
+public:
 
     ~CompiledProcedure()
     {
-        UNIT_CompiledProcedure_Free(compiled);
+        if (compiled != nullptr) {
+            UNIT_CompiledProcedure_Free(compiled);
+        }
+    }
+
+    CompiledProcedure(const CompiledProcedure &) = delete;
+    CompiledProcedure &operator=(const CompiledProcedure &) = delete;
+    CompiledProcedure &operator=(CompiledProcedure &&) = delete;
+
+    CompiledProcedure(CompiledProcedure &&other) noexcept
+        : compiled(other.compiled)
+    {
+        other.compiled = nullptr;
+    }
+
+    template <typename Function>
+    [[nodiscard]] ExecutableBuffer<Function>
+    jit()
+    {
+        UNIT_ExecutableBuffer *buffer = UNIT_CompiledProcedure_JIT(compiled);
+        if (buffer == NULL) {
+            throw error(compiled->context);
+        }
+        return ExecutableBuffer<Function>(buffer);
     }
 
     [[nodiscard]] UNIT_CompiledProcedure *
@@ -121,10 +185,8 @@ public:
         UNIT_CompiledProcedure_PrintTranslatedIR(compiled, stream);
     }
 
-    CompiledProcedure(const CompiledProcedure &) = delete;
-    CompiledProcedure &operator=(const CompiledProcedure &) = delete;
+    friend class Procedure;
 };
-
 
 enum class OpCode
 {
@@ -323,13 +385,18 @@ public:
         UNIT_Procedure_Clear(&procedure);
     }
 
+    Procedure(const Procedure &) = delete;
+    Procedure(Procedure &&) = delete;
+    Procedure &operator=(const Procedure &) = delete;
+    Procedure &operator=(Procedure &&) = delete;
+
     [[nodiscard]] UNIT_Procedure *
     raw()
     {
         return &procedure;
     }
 
-    Local
+    [[nodiscard]] Local
     create_local(const std::string &name)
     {
         UNIT_Local local;
@@ -482,7 +549,7 @@ public:
         add_op(OpCode::COMPARE_LESS_EQUAL);
     }
 
-    JumpLabel
+    [[nodiscard]] JumpLabel
     create_jump_label(const std::string &name)
     {
         UNIT_JumpLabel *label = UNIT_Procedure_CreateJumpLabel(&procedure, name.c_str());
@@ -494,7 +561,7 @@ public:
     }
 
     void
-    use_label(const JumpLabel label)
+    use_label(JumpLabel label)
     {
         if (UNIT_FAILED(UNIT_Procedure_UseLabel(&procedure, label.raw()))) {
             throw error(procedure.context);
@@ -503,7 +570,7 @@ public:
 
 private:
     void
-    add_op_jump(OpCode opcode, const JumpLabel label)
+    add_op_jump(OpCode opcode, JumpLabel label)
     {
         if (UNIT_FAILED(UNIT_Procedure_AddJump(&procedure, static_cast<UNIT_Instruction>(opcode),
                                                label.raw()))) {
@@ -513,19 +580,19 @@ private:
 
 public:
     void
-    jump_to(const JumpLabel label)
+    jump_to(JumpLabel label)
     {
         add_op_jump(OpCode::JUMP_TO, label);
     }
 
     void
-    jump_if_true(const JumpLabel label)
+    jump_if_true(JumpLabel label)
     {
         add_op_jump(OpCode::JUMP_IF_TRUE, label);
     }
 
     void
-    jump_if_false(const JumpLabel label)
+    jump_if_false(JumpLabel label)
     {
         add_op_jump(OpCode::JUMP_IF_FALSE, label);
     }
@@ -572,7 +639,7 @@ public:
         add_op_int(OpCode::CONVERT, static_cast<int64_t>(type));
     }
 
-    CompiledProcedure
+    [[nodiscard]] CompiledProcedure
     compile(Platform platform)
     {
         UNIT_CompiledProcedure *compiled = UNIT_Compile(&procedure, platform.raw());
@@ -600,21 +667,17 @@ public:
     }
 
     void
-    set_flags(uint32_t flags)
+    set_flags(Flag flags)
     {
-        UNIT_Procedure_SetFlags(&procedure, flags);
+        UNIT_Procedure_SetFlags(&procedure, static_cast<uint32_t>(flags));
     }
 
-    [[nodiscard]] uint32_t
+    [[nodiscard]] Flag
     get_flags() const
     {
-        return UNIT_Procedure_GetFlags(&procedure);
+        return static_cast<Flag>(UNIT_Procedure_GetFlags(&procedure));
     }
-
-    Procedure(const Procedure &) = delete;
-    Procedure &operator=(const Procedure &) = delete;
 };
-
 
 }
 
