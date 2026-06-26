@@ -135,9 +135,11 @@ item_dead_in_block(_UNIT_BasicBlock *block, UNIT_Size start,
 }
 
 static UNIT_Status
-optimize_block_moves(_UNIT_BasicBlock *block)
+optimize_block_moves(_UNIT_BasicBlock *block, int8_t *did_change)
 {
     assert(block != NULL);
+    assert(did_change != NULL);
+    *did_change = 0;
     _UNIT_Vector *instrs = &block->instructions;
     UNIT_Size size = _UNIT_Vector_SIZE(instrs);
 
@@ -148,7 +150,7 @@ optimize_block_moves(_UNIT_BasicBlock *block)
     }
 
 #define APPEND(op) _UNIT_Vector_APPEND(&new_instructions, op)
-#define CONTINUE_AND_DISCARD(op) _UNIT_Dealloc(block->context, op); continue
+#define CONTINUE_AND_DISCARD(op) *did_change = 1; _UNIT_Dealloc(block->context, op); continue
 
     for (UNIT_Size index = 0; index < size; ++index) {
         _UNIT_MachineOperation *op = _UNIT_Vector_STEAL(instrs, index);
@@ -233,14 +235,22 @@ optimize_block_moves(_UNIT_BasicBlock *block)
 UNIT_Status
 _UNIT_Translation_Optimize(_UNIT_Translation *translation)
 {
-    return _UNIT_OK;
     assert(translation != NULL);
     UNIT_Size block_count = _UNIT_Vector_SIZE(&translation->blocks);
 
     for (UNIT_Size i = 0; i < block_count; ++i) {
-        _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks, i);
-        assert(block != NULL);
-        optimize_block_moves(block);
+        while (true) {
+            _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks, i);
+            assert(block != NULL);
+            int8_t did_change;
+            if (UNIT_FAILED(optimize_block_moves(block, &did_change))) {
+                return _UNIT_FAIL;
+            }
+
+            if (!did_change) {
+                break;
+            }
+        }
     }
 
     return _UNIT_OK;
