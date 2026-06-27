@@ -98,7 +98,7 @@ class Platform:
         if self.architecture == "amd64":
             result |= _core.UNIT_ARCH_AMD64
         elif self.architecture == "aarch64":
-            result |= _core.UNIT_ARCH_AMD64
+            result |= _core.UNIT_ARCH_AARCH64
         else:
             raise ValueError(
                 f"unknown architecture {self.architecture!r}, expected one of: amd64, aarch64"

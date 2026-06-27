@@ -16,6 +16,11 @@ _UNIT_AMD64_Compile(_UNIT_Translation *translation,
                     _UNIT_CompileContext *context,
                     UNIT_ABI abi);
 
+UNIT_Status
+_UNIT_AARCH64_Compile(_UNIT_Translation *translation,
+                      _UNIT_CompileContext *context,
+                      UNIT_ABI abi);
+
 #ifdef __cplusplus
 }
 #endif

@@ -215,7 +215,7 @@ int main(void)
     }
 
     if (UNIT_FAILED(UNIT_CompiledProcedure_WriteObjectFile(compiled,
-                                                           "test.o", UNIT_FORMAT_ELF))) {
+                                                           "test.o", UNIT_HOST_FORMAT))) {
         UNIT_CompiledProcedure_Free(compiled);
         goto error;
     }

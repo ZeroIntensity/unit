@@ -2,6 +2,7 @@
 
 #include <unit/errors.h>
 #include <unit/executable_buffer.h>
+#include <unit/platform.h>
 
 struct _UNIT_ExecutableBuffer {
     UNIT_Context *context;
@@ -59,6 +60,7 @@ init_executable_buffer(const UNIT_CompiledProcedure *compiled,
     }
 
     UNIT_Size size = _UNIT_Vector_SIZE(&compile_context->symbol_table.relocations);
+    UNIT_Architecture arch = UNIT_Platform_GET_ARCH(compiled->platform);
     for (UNIT_Size index = 0; index < size; ++index) {
         _UNIT_Relocation *relocation = _UNIT_Vector_GET(&compile_context->symbol_table.relocations,
                                                         index);
@@ -85,14 +87,51 @@ init_executable_buffer(const UNIT_CompiledProcedure *compiled,
             }
 
             char *patch_address = (char *)code + relocation->offset;
-            int32_t displacement = (int32_t)((char *)target - (patch_address + 4));
-            memcpy(patch_address, &displacement, 4);
+
+            if (arch == UNIT_ARCH_AARCH64) {
+                /* BL instruction: patch imm26 field */
+                int64_t displacement = (char *)target - patch_address;
+                int32_t imm26 = (int32_t)(displacement / 4);
+                uint32_t inst;
+                memcpy(&inst, patch_address, 4);
+                inst = (inst & 0xFC000000) | ((uint32_t)imm26 & 0x03FFFFFF);
+                memcpy(patch_address, &inst, 4);
+            } else {
+                /* AMD64: RIP-relative 32-bit displacement */
+                int32_t displacement = (int32_t)((char *)target - (patch_address + 4));
+                memcpy(patch_address, &displacement, 4);
+            }
 
         } else if (relocation->type == RELOCATION_DATA) {
             char *patch_address = (char *)code + relocation->offset;
             char *data_address = (char *)rodata + relocation->symbol_index;
-            int32_t displacement = (int32_t)(data_address - (patch_address + 4));
-            memcpy(patch_address, &displacement, 4);
+
+            if (arch == UNIT_ARCH_AARCH64) {
+                /* ADRP + ADD pair: patch both instructions */
+                int64_t pc = (int64_t)(uintptr_t)patch_address;
+                int64_t target_addr = (int64_t)(uintptr_t)data_address;
+                int64_t page_offset = (target_addr & ~0xFFF) - (pc & ~0xFFF);
+                int32_t page_imm = (int32_t)(page_offset >> 12);
+                uint32_t lo12 = (uint32_t)(target_addr & 0xFFF);
+
+                /* Patch ADRP: immlo = bits[1:0], immhi = bits[20:2] */
+                uint32_t adrp_inst;
+                memcpy(&adrp_inst, patch_address, 4);
+                uint32_t immlo = (uint32_t)page_imm & 0x3;
+                uint32_t immhi = ((uint32_t)page_imm >> 2) & 0x7FFFF;
+                adrp_inst = (adrp_inst & 0x9F00001F) | (immlo << 29) | (immhi << 5);
+                memcpy(patch_address, &adrp_inst, 4);
+
+                /* Patch ADD: imm12 at bits[21:10] */
+                uint32_t add_inst;
+                memcpy(&add_inst, patch_address + 4, 4);
+                add_inst = (add_inst & 0xFFC003FF) | ((lo12 & 0xFFF) << 10);
+                memcpy(patch_address + 4, &add_inst, 4);
+            } else {
+                /* AMD64: RIP-relative 32-bit displacement */
+                int32_t displacement = (int32_t)(data_address - (patch_address + 4));
+                memcpy(patch_address, &displacement, 4);
+            }
         }
     }
 
