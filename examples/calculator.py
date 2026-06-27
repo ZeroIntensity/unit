@@ -2,12 +2,12 @@ import sys
 
 try:
     import unit
-except ImportError:
-    print(
+except ModuleNotFoundError as e:
+    e.add_note(
         "UNIT's Python bindings have not been built and/or installed. "
-        "To install them, run 'pip install .' in the root directory."
+        "To install them, run 'pip install .' in the root directory.",
     )
-    sys.exit(1)
+    raise
 
 
 def process_line() -> None:
