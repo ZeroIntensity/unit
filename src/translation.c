@@ -13,7 +13,7 @@ const char *
 machine_instruction_name(_UNIT_MachineInstruction machine_instruction)
 {
     switch (machine_instruction) {
-        NAME(MOVE);
+        NAME(LOAD);
         NAME(JUMP_LABEL);
         NAME(CALL_SYMBOL);
         NAME(JUMP);
@@ -632,7 +632,7 @@ handle_jump_snapshot(_UNIT_Translation *translation,
                     return _UNIT_FAIL;
                 }
                 if (UNIT_FAILED(emit_machine_instruction(translation->context, current_block,
-                                                         _UNIT_I_MOVE,
+                                                         _UNIT_I_LOAD,
                                                          _UNIT_MachineDestination_FromDestination(dest),
                                                          item, NULL))) {
                     return _UNIT_FAIL;
@@ -663,7 +663,7 @@ handle_jump_snapshot(_UNIT_Translation *translation,
             return _UNIT_FAIL;
         }
         if (UNIT_FAILED(emit_machine_instruction(translation->context, current_block,
-                                                 _UNIT_I_MOVE,
+                                                 _UNIT_I_LOAD,
                                                  _UNIT_MachineDestination_FromDestination(dest),
                                                  src, NULL))) {
             return _UNIT_FAIL;
@@ -686,7 +686,7 @@ handle_jump_snapshot(_UNIT_Translation *translation,
                     return _UNIT_FAIL;
                 }
                 if (UNIT_FAILED(emit_machine_instruction(translation->context, current_block,
-                                                         _UNIT_I_MOVE,
+                                                         _UNIT_I_LOAD,
                                                          _UNIT_MachineDestination_FromDestination(dest),
                                                          item, NULL))) {
                     return _UNIT_FAIL;
@@ -964,7 +964,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
                 location->hint = hint;
 
                 POP_TO_VAR(item);
-                EMIT_DEST_ONE(_UNIT_I_MOVE, location, item);
+                EMIT_DEST_ONE(_UNIT_I_LOAD, location, item);
 
                 if (_UNIT_SizeSet_Contains(&address_taken_locals, operation->argument)) {
                     local_state->stack_slot = locals.next_stack_slot++;
@@ -976,7 +976,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
                     // Sharing machine items is probably not a great idea but it's
                     // not causing any problems at the moment. We can easily make
                     // a copy of the location later if we need to.
-                    EMIT_DEST_ONE(_UNIT_I_MOVE, slot, location);
+                    EMIT_DEST_ONE(_UNIT_I_LOAD, slot, location);
                 }
                 break;
             }
@@ -1004,7 +1004,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
                     if (slot == NULL) {
                         goto error;
                     }
-                    EMIT_DEST_ONE(_UNIT_I_MOVE, location, slot);
+                    EMIT_DEST_ONE(_UNIT_I_LOAD, location, slot);
                 }
 
                 PUSH_ITEM(location);
@@ -1255,7 +1255,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
                 UNIT_Size index = _UNIT_Vector_SIZE(&stack) - operation->argument - 1;
                 _UNIT_MachineItem *item = _UNIT_Vector_GET(&stack, index);
                 CREATE_DESTINATION(destination);
-                EMIT_DEST_ONE(_UNIT_I_MOVE, destination, item);
+                EMIT_DEST_ONE(_UNIT_I_LOAD, destination, item);
                 break;
             }
 

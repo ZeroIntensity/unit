@@ -135,7 +135,7 @@ item_dead_in_block(_UNIT_BasicBlock *block, UNIT_Size start,
 }
 
 static UNIT_Status
-optimize_block_moves(_UNIT_BasicBlock *block, int8_t *did_change)
+optimize_block_loads(_UNIT_BasicBlock *block, int8_t *did_change)
 {
     assert(block != NULL);
     assert(did_change != NULL);
@@ -156,7 +156,7 @@ optimize_block_moves(_UNIT_BasicBlock *block, int8_t *did_change)
         _UNIT_MachineOperation *op = _UNIT_Vector_STEAL(instrs, index);
         assert(op != NULL);
 
-        if (op->instruction != _UNIT_I_MOVE) {
+        if (op->instruction != _UNIT_I_LOAD) {
             APPEND(op);
             continue;
         }
@@ -168,7 +168,7 @@ optimize_block_moves(_UNIT_BasicBlock *block, int8_t *did_change)
         assert(op->argument_2 == NULL);
 
         if (compare_items(destination, source)) {
-            // Self-move
+            // Self-load
             CONTINUE_AND_DISCARD(op);
         }
 
@@ -181,12 +181,12 @@ optimize_block_moves(_UNIT_BasicBlock *block, int8_t *did_change)
             CONTINUE_AND_DISCARD(op);
         }
 
-        // If the previous instruction produced src, and src is dead after this move,
-        // change the previous instruction's destination and delete the move.
+        // If the previous instruction produced src, and src is dead after this load,
+        // change the previous instruction's destination and delete the load.
         //
         // For example:
         // register_0 = ADD(register_1, 1)
-        // register_2 = MOVE(register_0)
+        // register_2 = LOAD(register_0)
         //
         // can be turned into
         //
@@ -243,7 +243,7 @@ _UNIT_Translation_Optimize(_UNIT_Translation *translation)
             _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks, i);
             assert(block != NULL);
             int8_t did_change;
-            if (UNIT_FAILED(optimize_block_moves(block, &did_change))) {
+            if (UNIT_FAILED(optimize_block_loads(block, &did_change))) {
                 return _UNIT_FAIL;
             }
 

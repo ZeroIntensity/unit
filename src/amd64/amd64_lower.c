@@ -317,7 +317,7 @@ translate_operation(_UNIT_CompileContext *compile_context,
     switch (operation->instruction) {
         /* General instructions */
 
-        case _UNIT_I_MOVE: {
+        case _UNIT_I_LOAD: {
             AMD64_Operand dst = OP(destination);
             AMD64_Operand src = OP(argument_1);
             assert(dst.kind != OPERAND_IMMEDIATE);

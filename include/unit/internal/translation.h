@@ -95,7 +95,7 @@ _UNIT_MachineDestination_GetPointerNullable(_UNIT_MachineDestination dest)
 
 typedef enum {
     // General
-    _UNIT_I_MOVE,
+    _UNIT_I_LOAD,
     _UNIT_I_CALL_SYMBOL,
     _UNIT_I_LOAD_STRING,
 
