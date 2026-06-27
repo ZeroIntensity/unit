@@ -22,6 +22,7 @@ UNIT_Procedure_Init(UNIT_Procedure *procedure,
     assert(context != NULL);
     assert(name != NULL);
     procedure->context = context;
+    procedure->flags = UNIT_FLAG_NONE;
     procedure->name = _UNIT_StrDup(context, name);
     if (procedure->name == NULL) {
         return _UNIT_FAIL;

@@ -201,7 +201,7 @@ optimize_block_moves(_UNIT_BasicBlock *block, int8_t *did_change)
         }
 
         _UNIT_MachineOperation *previous = NULL;
-        for (UNIT_Size sub_index = _UNIT_Vector_SIZE(&new_instructions); sub_index >= 0; --sub_index) {
+        for (UNIT_Size sub_index = _UNIT_Vector_SIZE(&new_instructions); sub_index > 0; --sub_index) {
             previous = _UNIT_Vector_GET(&new_instructions, sub_index - 1);
             if (previous != NULL) {
                 break;

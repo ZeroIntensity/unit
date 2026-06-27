@@ -564,9 +564,10 @@ LocalVariables_Clear(LocalVariables *locals)
 
 typedef struct {
     UNIT_Size label_id;
-    UNIT_Size local_index;
+    UNIT_Size index;
     UNIT_Size location_id;
-} LocalSnapshot;
+    int8_t is_stack;
+} Snapshot;
 
 static UNIT_Status
 snapshot_locals(LocalVariables *locals, _UNIT_Vector *snapshots, UNIT_Size label_id)
@@ -579,15 +580,16 @@ snapshot_locals(LocalVariables *locals, _UNIT_Vector *snapshots, UNIT_Size label
         int32_t local_index = *(int32_t *)key;
         assert(local_index >= 0);
         LocalState *state = (LocalState *)value;
-        LocalSnapshot *snapshot = _UNIT_Alloc(locals->context,
-                                              sizeof(LocalSnapshot));
+        Snapshot *snapshot = _UNIT_Alloc(locals->context,
+                                              sizeof(Snapshot));
         if (snapshot == NULL) {
             return _UNIT_FAIL;
         }
 
         snapshot->label_id = label_id;
-        snapshot->local_index = local_index;
+        snapshot->index = local_index;
         snapshot->location_id = state->location_id;
+        snapshot->is_stack = 0;
         if (UNIT_FAILED(_UNIT_Vector_Append(snapshots, snapshot))) {
             return _UNIT_FAIL;
         }
@@ -599,24 +601,54 @@ snapshot_locals(LocalVariables *locals, _UNIT_Vector *snapshots, UNIT_Size label
 static UNIT_Status
 handle_jump_snapshot(_UNIT_Translation *translation,
                      LocalVariables *locals,
-                     _UNIT_Vector *locals_snapshots,
+                     _UNIT_Vector *stack,
+                     _UNIT_Vector *snapshots,
                      _UNIT_BasicBlock *current_block,
-                     UNIT_Size label_id)
+                     UNIT_Size label_id,
+                     UNIT_Size *unique_id)
 {
     int8_t found_snapshot = 0;
-    UNIT_Size snap_count = _UNIT_Vector_SIZE(locals_snapshots);
+    UNIT_Size snap_count = _UNIT_Vector_SIZE(snapshots);
     for (UNIT_Size index = 0; index < snap_count; ++index) {
-        LocalSnapshot *snap = _UNIT_Vector_GET(locals_snapshots, index);
+        Snapshot *snap = _UNIT_Vector_GET(snapshots, index);
         if (snap->label_id != label_id) {
             continue;
         }
-        found_snapshot = 1;
 
-        LocalState *current = get_local(locals, snap->local_index);
-        if (current == NULL) {
-            continue;
+        found_snapshot = 1;
+        UNIT_Size current_location;
+        if (snap->is_stack) {
+            if (snap->index >= _UNIT_Vector_SIZE(stack)) {
+                continue;
+            }
+
+            _UNIT_MachineItem *item = _UNIT_Vector_GET(stack, snap->index);
+            if (item->type == _UNIT_TYPE_LOCATION) {
+                current_location = item->value;
+            } else {
+                _UNIT_MachineItem *dest = new_machine_item(translation, _UNIT_TYPE_LOCATION,
+                                                           snap->location_id, NULL);
+                if (dest == NULL) {
+                    return _UNIT_FAIL;
+                }
+                if (UNIT_FAILED(emit_machine_instruction(translation->context, current_block,
+                                                         _UNIT_I_MOVE,
+                                                         _UNIT_MachineDestination_FromDestination(dest),
+                                                         item, NULL))) {
+                    return _UNIT_FAIL;
+                }
+                continue;
+            }
+        } else {
+            LocalState *state = get_local(locals, snap->index);
+            if (state == NULL) {
+                continue;
+            }
+
+            current_location = state->location_id;
         }
-        if (current->location_id == snap->location_id) {
+
+        if (current_location == snap->location_id) {
             continue;
         }
 
@@ -625,23 +657,57 @@ handle_jump_snapshot(_UNIT_Translation *translation,
         if (dest == NULL) {
             return _UNIT_FAIL;
         }
-
-        _UNIT_MachineItem *location = new_machine_item(translation, _UNIT_TYPE_LOCATION,
-                                                        current->location_id, NULL);
-        if (location == NULL) {
+        _UNIT_MachineItem *src = new_machine_item(translation, _UNIT_TYPE_LOCATION,
+                                                   current_location, NULL);
+        if (src == NULL) {
             return _UNIT_FAIL;
         }
-
         if (UNIT_FAILED(emit_machine_instruction(translation->context, current_block,
-                                                 _UNIT_I_MOVE, _UNIT_MachineDestination_FromDestination(dest),
-                                                 location, NULL))) {
+                                                 _UNIT_I_MOVE,
+                                                 _UNIT_MachineDestination_FromDestination(dest),
+                                                 src, NULL))) {
             return _UNIT_FAIL;
         }
     }
 
     if (!found_snapshot) {
-        if (UNIT_FAILED(snapshot_locals(locals, locals_snapshots, label_id))) {
+        if (UNIT_FAILED(snapshot_locals(locals, snapshots, label_id))) {
             return _UNIT_FAIL;
+        }
+
+        UNIT_Size depth = _UNIT_Vector_SIZE(stack);
+        for (UNIT_Size index = 0; index < depth; ++index) {
+            _UNIT_MachineItem *item = _UNIT_Vector_GET(stack, index);
+            // We need to turn non-locations into locations so we can move them later
+            if (item->type != _UNIT_TYPE_LOCATION) {
+                ++(*unique_id);
+                _UNIT_MachineItem *dest = create_new_location(translation, current_block, *unique_id);
+                if (dest == NULL) {
+                    return _UNIT_FAIL;
+                }
+                if (UNIT_FAILED(emit_machine_instruction(translation->context, current_block,
+                                                         _UNIT_I_MOVE,
+                                                         _UNIT_MachineDestination_FromDestination(dest),
+                                                         item, NULL))) {
+                    return _UNIT_FAIL;
+                }
+
+                _UNIT_Vector_SET(stack, index, dest);
+                item = dest;
+            }
+
+            assert(item->type == _UNIT_TYPE_LOCATION);
+            Snapshot *snapshot = _UNIT_Alloc(translation->context, sizeof(Snapshot));
+            if (snapshot == NULL) {
+                return _UNIT_FAIL;
+            }
+            snapshot->label_id = label_id;
+            snapshot->index = index;
+            snapshot->location_id = item->value;
+            snapshot->is_stack = 1;
+            if (UNIT_FAILED(_UNIT_Vector_Append(snapshots, snapshot))) {
+                return _UNIT_FAIL;
+            }
         }
     }
 
@@ -840,6 +906,13 @@ _UNIT_Translate(_UNIT_Translation *translation,
         }
     #define INST_CHECK_OPARG(condition, message) INST_CHECK_FMT(condition, message, operation->argument)
 
+    #define TAKE_SNAPSHOT()                                                             \
+        if (UNIT_FAILED(handle_jump_snapshot(translation, &locals, &stack,              \
+                                            &locals_snapshots, CURRENT_BLOCK(),         \
+                                            label->id, &_location_id))) {               \
+            goto error;                                                                 \
+        }
+
     START_NEW_BLOCK();
 
     for (UNIT_Size index = 0; index < size; ++index) {
@@ -972,25 +1045,35 @@ _UNIT_Translate(_UNIT_Translation *translation,
                 block->id = _block_id++;
                 block->label_id = label->id;
 
-                // Restore locals from forward-jump snapshot if one exists
+                // Restore locations from forward-jump snapshot if one exists
                 int8_t found_snapshot = 0;
                 UNIT_Size snap_count = _UNIT_Vector_SIZE(&locals_snapshots);
                 for (UNIT_Size index = 0; index < snap_count; ++index) {
-                    LocalSnapshot *snap = _UNIT_Vector_GET(&locals_snapshots, index);
+                    Snapshot *snap = _UNIT_Vector_GET(&locals_snapshots, index);
                     if (snap->label_id != label->id) {
                         continue;
                     }
                     found_snapshot = 1;
-                    LocalState *state = get_local(&locals, snap->local_index);
-                    if (state != NULL) {
-                        state->location_id = snap->location_id;
+                    if (snap->is_stack) {
+                        if (snap->index < _UNIT_Vector_SIZE(&stack)) {
+                            _UNIT_MachineItem *new_item = new_machine_item(translation,
+                                                                            _UNIT_TYPE_LOCATION,
+                                                                            snap->location_id, NULL);
+                            if (new_item == NULL) {
+                                goto error;
+                            }
+                            _UNIT_Vector_SET(&stack, snap->index, new_item);
+                        }
+                    } else {
+                        LocalState *state = get_local(&locals, snap->index);
+                        if (state != NULL) {
+                            state->location_id = snap->location_id;
+                        }
                     }
                 }
 
                 if (!found_snapshot) {
-                    if (UNIT_FAILED(snapshot_locals(&locals, &locals_snapshots, label->id))) {
-                        goto error;
-                    }
+                    TAKE_SNAPSHOT();
                 }
 
                 // The jump label succeeds the current block because it fell
@@ -1010,12 +1093,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
                     goto error;
                 }
 
-                if (UNIT_FAILED(handle_jump_snapshot(translation, &locals,
-                                                    &locals_snapshots, CURRENT_BLOCK(),
-                                                    label->id))) {
-                    goto error;
-                }
-
+                TAKE_SNAPSHOT();
                 EMIT_ONE(_UNIT_I_JUMP, item);
                 ADD_BLOCK_SUCCESSOR(CURRENT_BLOCK(), label->_block);
                 START_NEW_BLOCK();
@@ -1063,12 +1141,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
                         _UNIT_Unreachable();
                 }
 
-                if (UNIT_FAILED(handle_jump_snapshot(translation, &locals,
-                                                     &locals_snapshots, CURRENT_BLOCK(),
-                                                     label->id))) {
-                    goto error;
-                }
-
+                TAKE_SNAPSHOT();
                 EMIT_THREE(fused, jump_target,
                            value->comparison.left,
                            value->comparison.right);
