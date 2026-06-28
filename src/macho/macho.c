@@ -146,7 +146,8 @@ create_and_store_symbol(_UNIT_MachO_Object *object)
  */
 static UNIT_Status
 build_symbols_and_relocations(_UNIT_MachO_Object *object,
-                              const _UNIT_CompileContext *compile_context)
+                              const _UNIT_CompileContext *compile_context,
+                              UNIT_Size cstring_address)
 {
     const _UNIT_Vector *symbols = &compile_context->symbol_table.symbols;
     const _UNIT_Vector *relocations = &compile_context->symbol_table.relocations;
@@ -204,7 +205,7 @@ build_symbols_and_relocations(_UNIT_MachO_Object *object,
         nlist->n_type = MACHO_N_SECT;
         nlist->n_sect = 2; /* __cstring, section 2 (1-based) */
         nlist->n_desc = 0;
-        nlist->n_value = reloc->symbol_index; /* byte offset within cstring */
+        nlist->n_value = cstring_address + reloc->symbol_index;
 
         if (UNIT_FAILED(_UNIT_SizeMap_Set(&data_reloc_sym_indices, i,
                                           local_sym_idx))) {
@@ -380,13 +381,15 @@ build_macho_object(_UNIT_MachO_Object *object,
         goto error;
     }
 
-    if (UNIT_FAILED(build_symbols_and_relocations(object, compile_context))) {
-        goto error;
-    }
-
     /* Now compute file layout */
     UNIT_Size text_size = _UNIT_CodeBuffer_CurrentIndex(object->text);
     UNIT_Size cstring_size = object->constant_data->size;
+
+    if (UNIT_FAILED(build_symbols_and_relocations(object, compile_context,
+                                                  text_size))) {
+        goto error;
+    }
+
     UNIT_Size num_relocs = _UNIT_Vector_SIZE(&object->relocations);
     UNIT_Size num_syms = _UNIT_Vector_SIZE(&object->symbols);
     UNIT_Size strtab_size = _UNIT_Vector_SIZE(&object->string_table);

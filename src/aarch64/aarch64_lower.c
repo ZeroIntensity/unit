@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <unit/platform.h>
 
@@ -93,11 +94,76 @@ static const AArch64_Register argument_registers[] = {
     REG_X0, REG_X1, REG_X2, REG_X3, REG_X4, REG_X5, REG_X6, REG_X7
 };
 
+static int8_t
+apple_variadic_fixed_arg_count(const char *name, UNIT_Size *count)
+{
+    assert(count != NULL);
+    if (name == NULL) {
+        return 0;
+    }
+    if (strcmp(name, "printf") == 0 || strcmp(name, "scanf") == 0) {
+        *count = 1;
+        return 1;
+    }
+    if (strcmp(name, "sscanf") == 0) {
+        *count = 2;
+        return 1;
+    }
+    return 0;
+}
+
+static UNIT_Size
+outgoing_variadic_arg_slots(_UNIT_MachineOperation *operation, UNIT_ABI abi)
+{
+    assert(operation != NULL);
+    if (abi != UNIT_ABI_APPLE || operation->instruction != _UNIT_I_CALL_SYMBOL) {
+        return 0;
+    }
+    assert(operation->argument_2 != NULL);
+    assert(operation->argument_2->type == _UNIT_TYPE_CALL_ARGS);
+
+    UNIT_Size fixed_count;
+    if (!apple_variadic_fixed_arg_count(operation->argument_1->hint, &fixed_count)) {
+        return 0;
+    }
+
+    UNIT_Size arg_count = _UNIT_Vector_SIZE(operation->argument_2->call_args);
+    if (arg_count <= fixed_count) {
+        return 0;
+    }
+
+    return arg_count - fixed_count;
+}
+
+static UNIT_Size
+max_outgoing_variadic_arg_slots(_UNIT_Translation *translation, UNIT_ABI abi)
+{
+    assert(translation != NULL);
+    UNIT_Size max_slots = 0;
+    UNIT_Size block_count = _UNIT_Vector_SIZE(&translation->blocks);
+    for (UNIT_Size block_index = 0; block_index < block_count; ++block_index) {
+        _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks,
+                                                    block_index);
+        UNIT_Size instruction_count = _UNIT_Vector_SIZE(&block->instructions);
+        for (UNIT_Size index = 0; index < instruction_count; ++index) {
+            _UNIT_MachineOperation *operation = _UNIT_Vector_GET(
+                &block->instructions, index);
+            UNIT_Size slots = outgoing_variadic_arg_slots(operation, abi);
+            if (slots > max_slots) {
+                max_slots = slots;
+            }
+        }
+    }
+    return max_slots;
+}
+
 /* ── Machine item to operand conversion ─────────────────────────────── */
 
 static AArch64_Operand
-machine_item_to_operand(const _UNIT_MachineItem *machine_item)
+machine_item_to_operand(_UNIT_CompileContext *compile_context,
+                        const _UNIT_MachineItem *machine_item)
 {
+    assert(compile_context != NULL);
     assert(machine_item != NULL);
     if (machine_item->type == _UNIT_TYPE_REGISTER) {
         assert(machine_item->value < NUM_VIRTUAL_REGISTERS);
@@ -109,7 +175,8 @@ machine_item_to_operand(const _UNIT_MachineItem *machine_item)
         abort();
     } else {
         assert(machine_item->type == _UNIT_TYPE_MEMORY);
-        return a64_stack(machine_item->value * 8);
+        return a64_stack((machine_item->value
+                          + compile_context->stack_frame.slot_offset) * 8);
     }
 }
 
@@ -363,7 +430,7 @@ translate_operation(_UNIT_CompileContext *compile_context,
     UNIT_Context *ctx = compile_context->context;
     assert(ctx != NULL);
 
-#define OP(value) machine_item_to_operand(ENSURE_VALID_ITEM(operation->value))
+#define OP(value) machine_item_to_operand(compile_context, ENSURE_VALID_ITEM(operation->value))
 
     switch (operation->instruction) {
 
@@ -397,6 +464,18 @@ translate_operation(_UNIT_CompileContext *compile_context,
             UNIT_Size num_arguments = _UNIT_Vector_SIZE(arguments);
             assert(num_arguments <= 8);
 
+            UNIT_Size fixed_arguments = num_arguments;
+            UNIT_Size apple_fixed_arguments;
+            int8_t apple_variadic = 0;
+            if (abi == UNIT_ABI_APPLE
+                && apple_variadic_fixed_arg_count(operation->argument_1->hint,
+                                                  &apple_fixed_arguments)
+                && num_arguments > apple_fixed_arguments) {
+                fixed_arguments = apple_fixed_arguments;
+                apple_variadic = 1;
+            }
+            assert(fixed_arguments <= 8);
+
             /* Save all virtual registers to stack slots before the call. */
             UNIT_Size save_slots[NUM_VIRTUAL_REGISTERS];
             AArch64_Operand dst_op = OP(destination);
@@ -419,10 +498,10 @@ translate_operation(_UNIT_CompileContext *compile_context,
             /* Move arguments into X0-X7, loading from save slots to
              * avoid circular dependency issues. */
             for (UNIT_Size arg = 0; arg < num_arguments; ++arg) {
-                AArch64_Register arg_reg = argument_registers[arg];
                 _UNIT_MachineItem *arg_item = _UNIT_Vector_GET(arguments, arg);
                 assert(arg_item != NULL);
-                AArch64_Operand value = machine_item_to_operand(arg_item);
+                AArch64_Operand value = machine_item_to_operand(compile_context,
+                                                                arg_item);
 
                 /* If the value is in a virtual register that we saved,
                  * load from the save slot instead to avoid clobbered values. */
@@ -437,9 +516,18 @@ translate_operation(_UNIT_CompileContext *compile_context,
                 }
 
                 ENSURE_IN_REGISTER(value, REG_X16, src_reg);
-                if (arg_reg != src_reg) {
-                    EMIT(a64_mov_reg(ctx, a64_reg(arg_reg),
-                                     a64_reg(src_reg)));
+                if (apple_variadic && arg >= fixed_arguments) {
+                    UNIT_Size vararg_offset = (arg - fixed_arguments) * 8;
+                    if (UNIT_FAILED(emit_store_stack(compile_context, src_reg,
+                                                     vararg_offset))) {
+                        return _UNIT_FAIL;
+                    }
+                } else {
+                    AArch64_Register arg_reg = argument_registers[arg];
+                    if (arg_reg != src_reg) {
+                        EMIT(a64_mov_reg(ctx, a64_reg(arg_reg),
+                                         a64_reg(src_reg)));
+                    }
                 }
             }
 
@@ -903,6 +991,11 @@ _UNIT_AARCH64_Compile(_UNIT_Translation *translation,
         return _UNIT_FAIL;
     }
 
+    UNIT_Size outgoing_slots = max_outgoing_variadic_arg_slots(translation, abi);
+    compile_context->stack_frame.slot_offset = outgoing_slots;
+    compile_context->stack_frame.next_slot += outgoing_slots;
+    compile_context->stack_frame.reserved_slots += outgoing_slots;
+
     UNIT_Size blocks_size = _UNIT_Vector_SIZE(&translation->blocks);
     for (UNIT_Size block_index = 0; block_index < blocks_size; ++block_index) {
         _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks,
@@ -922,6 +1015,9 @@ _UNIT_AARCH64_Compile(_UNIT_Translation *translation,
     }
 
     UNIT_Size frame_size = _UNIT_StackFrame_ComputeSize(&compile_context->stack_frame);
+    if (frame_size % 16 != 0) {
+        frame_size = (frame_size + 15) & ~(UNIT_Size)15;
+    }
     AArch64_PatchPrologue(compile_context, prologue_offset, frame_size);
     patch_epilogues(compile_context, &epilogue_patches, frame_size);
     AArch64_PatchJumps(compile_context);
