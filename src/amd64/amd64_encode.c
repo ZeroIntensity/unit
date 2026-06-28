@@ -211,34 +211,34 @@ AMD64_encode_instruction(_UNIT_CompileContext *compile_context,
             else if (dst.kind == OPERAND_STACK && src.kind == OPERAND_REGISTER) {
                 EMIT_REX(src.reg, 0);
                 EMIT8(OPCODE_MOV_RM64_R64);
-                if (dst.immediate == 0) {
+                if (dst.stack_offset == 0) {
                     EMIT8(modrm(MOD_INDIRECT, reg_bits(src.reg), REG_RSP));
                     EMIT8(SIB_RSP_BASE);
-                } else if (dst.immediate <= 127) {
+                } else if (dst.stack_offset <= 127) {
                     EMIT8(modrm(MOD_INDIRECT_DISP8, reg_bits(src.reg), REG_RSP));
                     EMIT8(SIB_RSP_BASE);
-                    EMIT8((uint8_t)dst.immediate);
+                    EMIT8((uint8_t)dst.stack_offset);
                 } else {
                     EMIT8(modrm(MOD_INDIRECT_DISP32, reg_bits(src.reg), REG_RSP));
                     EMIT8(SIB_RSP_BASE);
-                    EMIT32((uint32_t)dst.immediate);
+                    EMIT32((uint32_t)dst.stack_offset);
                 }
             }
             // mov reg, [rsp + offset] (dst.reg in reg field, RSP in rm)
             else if (dst.kind == OPERAND_REGISTER && src.kind == OPERAND_STACK) {
                 EMIT_REX(dst.reg, 0);
                 EMIT8(OPCODE_MOV_R64_RM64);
-                if (src.immediate == 0) {
+                if (src.stack_offset == 0) {
                     EMIT8(modrm(MOD_INDIRECT, reg_bits(dst.reg), REG_RSP));
                     EMIT8(SIB_RSP_BASE);
-                } else if (src.immediate <= 127) {
+                } else if (src.stack_offset <= 127) {
                     EMIT8(modrm(MOD_INDIRECT_DISP8, reg_bits(dst.reg), REG_RSP));
                     EMIT8(SIB_RSP_BASE);
-                    EMIT8((uint8_t)src.immediate);
+                    EMIT8((uint8_t)src.stack_offset);
                 } else {
                     EMIT8(modrm(MOD_INDIRECT_DISP32, reg_bits(dst.reg), REG_RSP));
                     EMIT8(SIB_RSP_BASE);
-                    EMIT32((uint32_t)src.immediate);
+                    EMIT32((uint32_t)src.stack_offset);
                 }
             }
             // mov reg, [reg]
@@ -423,17 +423,17 @@ AMD64_encode_instruction(_UNIT_CompileContext *compile_context,
                 assert(src.kind == OPERAND_STACK);
                 EMIT_REX(dst.reg, 0);
                 EMIT8(OPCODE_CMP_R64_RM64);
-                if (src.immediate == 0) {
+                if (src.stack_offset == 0) {
                     EMIT8(modrm(MOD_INDIRECT, reg_bits(dst.reg), REG_RSP));
                     EMIT8(SIB_RSP_BASE);
-                } else if (src.immediate <= 127) {
+                } else if (src.stack_offset <= 127) {
                     EMIT8(modrm(MOD_INDIRECT_DISP8, reg_bits(dst.reg), REG_RSP));
                     EMIT8(SIB_RSP_BASE);
-                    EMIT8((uint8_t)src.immediate);
+                    EMIT8((uint8_t)src.stack_offset);
                 } else {
                     EMIT8(modrm(MOD_INDIRECT_DISP32, reg_bits(dst.reg), REG_RSP));
                     EMIT8(SIB_RSP_BASE);
-                    EMIT32((uint32_t)src.immediate);
+                    EMIT32((uint32_t)src.stack_offset);
                 }
             }
             break;
@@ -629,17 +629,17 @@ AMD64_encode_instruction(_UNIT_CompileContext *compile_context,
             assert(src.kind == OPERAND_STACK);
             EMIT_REX(dst.reg, 0);
             EMIT8(OPCODE_LEA);
-            if (src.immediate == 0) {
+            if (src.stack_offset == 0) {
                 EMIT8(modrm(MOD_INDIRECT, reg_bits(dst.reg), REG_RSP));
                 EMIT8(SIB_RSP_BASE);
-            } else if (src.immediate <= 127) {
+            } else if (src.stack_offset <= 127) {
                 EMIT8(modrm(MOD_INDIRECT_DISP8, reg_bits(dst.reg), REG_RSP));
                 EMIT8(SIB_RSP_BASE);
-                EMIT8((uint8_t)src.immediate);
+                EMIT8((uint8_t)src.stack_offset);
             } else {
                 EMIT8(modrm(MOD_INDIRECT_DISP32, reg_bits(dst.reg), REG_RSP));
                 EMIT8(SIB_RSP_BASE);
-                EMIT32((uint32_t)src.immediate);
+                EMIT32((uint32_t)src.stack_offset);
             }
             break;
         }

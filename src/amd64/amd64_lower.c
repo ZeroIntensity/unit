@@ -31,9 +31,7 @@ AMD64_Operand
 stack_slot(uint64_t offset) {
     return (AMD64_Operand) {
         .kind = OPERAND_STACK,
-        // This is kind of cheating, but a stack_offset field would complicate
-        // things and would be a uint64_t anyway.
-        .immediate = offset
+        .stack_offset = offset
     };
 }
 
@@ -56,6 +54,8 @@ static const AMD64_Register register_map[] = {
     REG_R9,
     REG_R10,
 };
+
+static const AMD64_Register REG_SCRATCH = REG_R11;
 
 static const AMD64_Register *
 get_argument_registers(UNIT_ABI abi)
@@ -218,8 +218,8 @@ use_scratch_register_if_needed(_UNIT_CompileContext *compile_context,
         return _UNIT_OK;
     }
 
-    EMIT(mov(compile_context->context, reg(REG_R11), in_operand));
-    *out_operand = reg(REG_R11);
+    EMIT(mov(compile_context->context, reg(REG_SCRATCH), in_operand));
+    *out_operand = reg(REG_SCRATCH);
     return _UNIT_OK;
 }
 
@@ -279,6 +279,24 @@ restore_register(_UNIT_CompileContext *compile_context, AMD64_Register preserved
     return _UNIT_OK;
 }
 
+static int8_t
+operands_equal(AMD64_Operand left, AMD64_Operand right)
+{
+    if (left.kind != right.kind) {
+        return 0;
+    }
+    switch (left.kind) {
+        case OPERAND_REGISTER:
+            return left.reg == right.reg;
+        case OPERAND_STACK:
+            return left.stack_offset == right.stack_offset;
+        case OPERAND_IMMEDIATE:
+            return left.immediate == right.immediate;
+        default:
+            return 0;
+    }
+}
+
 static UNIT_Status
 translate_operation(_UNIT_CompileContext *compile_context,
                     _UNIT_MachineOperation *operation,
@@ -327,8 +345,8 @@ translate_operation(_UNIT_CompileContext *compile_context,
                 EMIT(mov(ctx, dst, argument_1));
                 UNDO_SCRATCH_REGISTER(argument_1);
             } else if (dst.kind == OPERAND_STACK && src.kind == OPERAND_IMMEDIATE) {
-                EMIT(mov(ctx, reg(REG_R11), src));
-                EMIT(mov(ctx, dst, reg(REG_R11)));
+                EMIT(mov(ctx, reg(REG_SCRATCH), src));
+                EMIT(mov(ctx, dst, reg(REG_SCRATCH)));
             } else {
                 EMIT(mov(ctx, dst, src));
             }
@@ -484,10 +502,20 @@ translate_operation(_UNIT_CompileContext *compile_context,
 
         #define BINARY_OP(inst, helper)                                                 \
             case inst: {                                                                \
-                USE_SCRATCH_REGISTER(destination);                                        \
-                EMIT(mov(ctx, destination, OP(argument_1)));                            \
-                EMIT(helper(ctx, destination, OP(argument_2)));                         \
-                UNDO_SCRATCH_REGISTER(destination);                                            \
+                /* When the destination and righthand side are the same register, they
+                 * clobber one another in the normal path. To avoid that, we load the RHS
+                 * into the scratch register to perform the operation. */                   \
+                if (operands_equal(OP(destination), OP(argument_2))                     \
+                    && !operands_equal(OP(destination), OP(argument_1))) {              \
+                    EMIT(mov(ctx, reg(REG_R11), OP(argument_2)));                       \
+                    EMIT(mov(ctx, OP(destination), OP(argument_1)));                    \
+                    EMIT(helper(ctx, OP(destination), reg(REG_R11)));                   \
+                } else {                                                                \
+                    USE_SCRATCH_REGISTER(destination);                                  \
+                    EMIT(mov(ctx, destination, OP(argument_1)));                        \
+                    EMIT(helper(ctx, destination, OP(argument_2)));                     \
+                    UNDO_SCRATCH_REGISTER(destination);                                 \
+                }                                                                       \
                 break;                                                                  \
             }
 
@@ -530,30 +558,30 @@ translate_operation(_UNIT_CompileContext *compile_context,
 
             switch (target) {
                 case UNIT_TYPE_UINT8:
-                    EMIT(movzx8(ctx, reg(REG_R11), argument_1));
+                    EMIT(movzx8(ctx, reg(REG_SCRATCH), argument_1));
                     break;
                 case UNIT_TYPE_INT8:
-                    EMIT(movsx8(ctx, reg(REG_R11), argument_1));
+                    EMIT(movsx8(ctx, reg(REG_SCRATCH), argument_1));
                     break;
                 case UNIT_TYPE_UINT16:
-                    EMIT(movzx16(ctx, reg(REG_R11), argument_1));
+                    EMIT(movzx16(ctx, reg(REG_SCRATCH), argument_1));
                     break;
                 case UNIT_TYPE_INT16:
-                    EMIT(movsx16(ctx, reg(REG_R11), argument_1));
+                    EMIT(movsx16(ctx, reg(REG_SCRATCH), argument_1));
                     break;
                 case UNIT_TYPE_UINT32:
-                    EMIT(mov32(ctx, reg(REG_R11), argument_1));
+                    EMIT(mov32(ctx, reg(REG_SCRATCH), argument_1));
                     break;
                 case UNIT_TYPE_INT32:
-                    EMIT(movsxd(ctx, reg(REG_R11), argument_1));
+                    EMIT(movsxd(ctx, reg(REG_SCRATCH), argument_1));
                     break;
                 case UNIT_TYPE_UINT64:
                 case UNIT_TYPE_INT64:
-                    EMIT(mov(ctx, reg(REG_R11), argument_1));
+                    EMIT(mov(ctx, reg(REG_SCRATCH), argument_1));
                     break;
             }
 
-            EMIT(mov(ctx, OP(destination), reg(REG_R11)));
+            EMIT(mov(ctx, OP(destination), reg(REG_SCRATCH)));
             break;
         }
 
@@ -564,11 +592,11 @@ translate_operation(_UNIT_CompileContext *compile_context,
             UNIT_Size size = operation->argument_2->value;
 
             if (size == 8) {
-                EMIT(mov(ctx, reg(REG_R11), indirect(argument_1)));
+                EMIT(mov(ctx, reg(REG_SCRATCH), indirect(argument_1)));
             } else {
-                EMIT(movzx(ctx, reg(REG_R11), indirect(argument_1), immediate(size)));
+                EMIT(movzx(ctx, reg(REG_SCRATCH), indirect(argument_1), immediate(size)));
             }
-            EMIT(mov(ctx, OP(destination), reg(REG_R11)));
+            EMIT(mov(ctx, OP(destination), reg(REG_SCRATCH)));
             break;
         }
 
@@ -583,9 +611,9 @@ translate_operation(_UNIT_CompileContext *compile_context,
             } else {
                 UNIT_Size slot = _UNIT_StackFrame_AllocateSlot(&compile_context->stack_frame);
                 EMIT(mov(ctx, stack_slot(slot), addr));
-                EMIT(mov(ctx, reg(REG_R11), OP(argument_1)));
+                EMIT(mov(ctx, reg(REG_SCRATCH), OP(argument_1)));
                 EMIT(mov(ctx, reg(addr.reg), stack_slot(slot)));
-                EMIT(mov_sized(ctx, indirect(reg(addr.reg)), reg(REG_R11), immediate(size)));
+                EMIT(mov_sized(ctx, indirect(reg(addr.reg)), reg(REG_SCRATCH), immediate(size)));
                 _UNIT_StackFrame_FreeSlot(&compile_context->stack_frame, slot);
             }
             break;

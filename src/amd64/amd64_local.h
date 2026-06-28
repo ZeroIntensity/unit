@@ -70,7 +70,6 @@ typedef enum {
 typedef enum {
     OPERAND_REGISTER,
     OPERAND_IMMEDIATE,
-    OPERAND_MEMORY,
     OPERAND_STACK,
     OPERAND_INDIRECT // Fancy word for pointer
 } AMD64_OperandKind;
@@ -81,6 +80,7 @@ typedef struct {
     union {
         AMD64_Register reg;
         uint64_t immediate;
+        uint64_t stack_offset;
     };
 } AMD64_Operand;
 
