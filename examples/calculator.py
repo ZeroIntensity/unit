@@ -33,7 +33,7 @@ def process_line() -> None:
         print("Invalid number(s)", file=sys.stderr)
         return
 
-    procedure = unit.Procedure("expr")
+    procedure = unit.Procedure("expr", optimize_translation=False)
     procedure.load_integer(left)
     procedure.load_integer(right)
 

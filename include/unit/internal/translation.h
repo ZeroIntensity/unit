@@ -161,7 +161,7 @@ _UNIT_Translation_PrintInstructions(const _UNIT_Translation *translation, const 
                                     FILE *stream);
 
 UNIT_Status
-_UNIT_Translation_Optimize(_UNIT_Translation *translation);
+_UNIT_Translation_Optimize(_UNIT_Translation *translation, int8_t num_registers);
 
 #ifdef __cplusplus
 }

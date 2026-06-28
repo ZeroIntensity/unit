@@ -75,7 +75,7 @@ compile_procedure(const UNIT_Procedure *procedure, UNIT_Platform platform)
     }
 
     if (!(procedure->flags & UNIT_FLAG_NO_OPTIMIZE_TRANSLATION)) {
-        if (UNIT_FAILED(_UNIT_Translation_Optimize(&compiled_procedure->_translation))) {
+        if (UNIT_FAILED(_UNIT_Translation_Optimize(&compiled_procedure->_translation, 8))) {
             _UNIT_Translation_Clear(&compiled_procedure->_translation);
             _UNIT_Dealloc(context, compiled_procedure);
             return NULL;
