@@ -434,7 +434,7 @@ translate_operation(_UNIT_CompileContext *compile_context,
 
     switch (operation->instruction) {
 
-        case _UNIT_I_MOVE: {
+        case _UNIT_I_LOAD: {
             AArch64_Operand dst = OP(destination);
             AArch64_Operand src = OP(argument_1);
 
