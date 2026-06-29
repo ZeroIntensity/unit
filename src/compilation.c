@@ -58,6 +58,7 @@ compile_procedure(const UNIT_Procedure *procedure, UNIT_Platform platform)
     }
     compiled_procedure->name = procedure->name;
     compiled_procedure->context = context;
+    compiled_procedure->platform = platform;
 
     if (UNIT_FAILED(_UNIT_Translate(&compiled_procedure->_translation, procedure))) {
         _UNIT_Dealloc(context, compiled_procedure);
@@ -74,8 +75,22 @@ compile_procedure(const UNIT_Procedure *procedure, UNIT_Platform platform)
         goto error;
     }
 
+  
+    int8_t num_registers;
+    switch (UNIT_Platform_GET_ARCH(platform)) {
+        case UNIT_ARCH_AMD64:
+            num_registers = 8;
+            break;
+        case UNIT_ARCH_AARCH64:
+            num_registers = 17;
+            break;
+        default:
+            _UNIT_SetError(context, UNIT_ERROR_UNSUPPORTED_PLATFORM, "Unsupported architecture");
+            goto error;
+    }
+  
     if (!(procedure->flags & UNIT_FLAG_NO_OPTIMIZE_TRANSLATION)) {
-        if (UNIT_FAILED(_UNIT_Translation_Optimize(&compiled_procedure->_translation, 8))) {
+        if (UNIT_FAILED(_UNIT_Translation_Optimize(&compiled_procedure->_translation, num_registers))) {
             _UNIT_Translation_Clear(&compiled_procedure->_translation);
             _UNIT_Dealloc(context, compiled_procedure);
             return NULL;
@@ -87,6 +102,12 @@ compile_procedure(const UNIT_Procedure *procedure, UNIT_Platform platform)
         _UNIT_Translation_Clear(&compiled_procedure->_translation);
         _UNIT_Dealloc(context, compiled_procedure);
         return NULL;
+    }
+
+    if (UNIT_FAILED(_UNIT_Translation_AllocateRegisters(&compiled_procedure->_translation,
+                                                        &compiled_procedure->_compile_context,
+                                                        num_registers))) {
+        goto error;
     }
 
     if (procedure->flags & UNIT_FLAG_PRINT_TRANSLATION_POSTOP) {
@@ -106,9 +127,13 @@ compile_procedure(const UNIT_Procedure *procedure, UNIT_Platform platform)
                                          &compiled_procedure->_compile_context,
                                          UNIT_Platform_GET_ABI(platform));
             break;
+        case UNIT_ARCH_AARCH64:
+            result = _UNIT_AARCH64_Compile(&compiled_procedure->_translation,
+                                           &compiled_procedure->_compile_context,
+                                           UNIT_Platform_GET_ABI(platform));
+            break;
         default:
-            assert(UNIT_Platform_GET_ARCH(platform) == UNIT_ARCH_AARCH64);
-            _UNIT_SetError(context, UNIT_ERROR_UNSUPPORTED_PLATFORM, "AArch64 is not supported yet");
+            _UNIT_SetError(context, UNIT_ERROR_UNSUPPORTED_PLATFORM, "Unsupported architecture");
             goto error;
     }
 
@@ -437,9 +462,11 @@ UNIT_CompiledProcedure_WriteObjectFile(const UNIT_CompiledProcedure *compiled,
     switch (format) {
         case UNIT_FORMAT_ELF:
             return _UNIT_ELF_WriteObjectFile(&compiled->_compile_context, path);
+        case UNIT_FORMAT_MACHO:
+            return _UNIT_MachO_WriteObjectFile(&compiled->_compile_context, path);
         default:
             _UNIT_SetError(compiled->context, UNIT_ERROR_UNSUPPORTED_PLATFORM,
-                           "only ELF is supported at the moment");
+                           "unsupported executable format");
             return _UNIT_FAIL;
     }
 

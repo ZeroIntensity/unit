@@ -98,6 +98,7 @@ _UNIT_StringData_Clear(_UNIT_StringData *string_data);
 #define _UNIT_StackFrame_MAX_FREE_SLOTS 32
 
 typedef struct {
+    UNIT_Size slot_offset;
     UNIT_Size next_slot;
     UNIT_Size free_slots[_UNIT_StackFrame_MAX_FREE_SLOTS];
     UNIT_Size free_slot_count;

@@ -10,6 +10,9 @@ extern "C" {
 UNIT_Status
 _UNIT_ELF_WriteObjectFile(const _UNIT_CompileContext *context, const char *path);
 
+UNIT_Status
+_UNIT_MachO_WriteObjectFile(const _UNIT_CompileContext *context, const char *path);
+
 #ifdef __cplusplus
 }
 #endif

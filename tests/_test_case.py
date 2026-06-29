@@ -38,9 +38,13 @@ class ExampleTestRunner(unittest.TestCase):
             encoding="utf-8",
             timeout=5,
         )
-        # TODO: Detect MSVC and Clang
+        import sys
+        if sys.platform == "darwin":
+            link_cmd = ["cc", "-o", "out", "test.o"]
+        else:
+            link_cmd = ["cc", "-o", "out", "test.o", "-lc"]
         subprocess.run(
-            ["gcc", "-o", "out", "test.o", "-lc"],
+            link_cmd,
             check=True,
             cwd=self.temporary.name,
             timeout=5,

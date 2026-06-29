@@ -182,6 +182,7 @@ void
 init_stack_frame(_UNIT_StackFrame *frame, UNIT_Size reserved_slots)
 {
     assert(frame != NULL);
+    frame->slot_offset = 0;
     frame->next_slot = reserved_slots;
     frame->free_slot_count = 0;
     frame->reserved_slots = reserved_slots;

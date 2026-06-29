@@ -90,10 +90,29 @@ public:
     }
 };
 
-enum class ExecutableFormat {
-    ELF = UNIT_FORMAT_ELF,
-    MACHO = UNIT_FORMAT_MACHO,
-    PE = UNIT_FORMAT_PE,
+class ExecutableFormat {
+public:
+    enum Value {
+        ELF = UNIT_FORMAT_ELF,
+        MACHO = UNIT_FORMAT_MACHO,
+        PE = UNIT_FORMAT_PE,
+    };
+
+    constexpr ExecutableFormat(Value v) : value_(v) {}
+
+    constexpr operator Value() const { return value_; }
+    explicit operator bool() const = delete;
+
+    static ExecutableFormat host() {
+#ifdef UNIT_HOST_FORMAT
+        return ExecutableFormat(static_cast<Value>(UNIT_HOST_FORMAT));
+#else
+        throw std::runtime_error("No host format available");
+#endif
+    }
+
+private:
+    Value value_;
 };
 
 class SymbolMap {
@@ -221,7 +240,7 @@ public:
     write_object_file(const std::string &path, ExecutableFormat format)
     {
         if (UNIT_FAILED(UNIT_CompiledProcedure_WriteObjectFile(compiled, path.c_str(),
-                                                               static_cast<UNIT_ExecutableFormat>(format)))) {
+                                                               static_cast<UNIT_ExecutableFormat>(static_cast<int>(format))))) {
             throw error(compiled->context);
         }
     }

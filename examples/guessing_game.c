@@ -98,7 +98,7 @@ int main(void)
     ADDOP_JUMP(UNIT_OP_JUMP_IF_TRUE, invalid_seed);
 
     ADDOP_LOAD_NAME(seed);
-    ADDOP_CALL("srand", 1);
+    ADDOP_CALL("srandom", 1);
     ADDOP(UNIT_OP_POP);
     ADDOP_JUMP(UNIT_OP_JUMP_TO, start_game);
 
@@ -112,7 +112,7 @@ int main(void)
     USE_LABEL(set_seed_from_time);
     ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0); // NULL
     ADDOP_CALL("time", 1);
-    ADDOP_CALL("srand", 1);
+    ADDOP_CALL("srandom", 1);
     ADDOP(UNIT_OP_POP);
 
     USE_LABEL(start_game);
@@ -121,7 +121,7 @@ int main(void)
     ADDOP_CALL("puts", 1);
     ADDOP(UNIT_OP_POP);
 
-    ADDOP_CALL("rand", 0);
+    ADDOP_CALL("random", 0);
     ADDOP_INT(UNIT_OP_LOAD_INTEGER, 100);
     ADDOP(UNIT_OP_MODULO);
     ADDOP_INT(UNIT_OP_LOAD_INTEGER, 1);
@@ -215,7 +215,7 @@ int main(void)
     }
 
     if (UNIT_FAILED(UNIT_CompiledProcedure_WriteObjectFile(compiled,
-                                                           "test.o", UNIT_FORMAT_ELF))) {
+                                                           "test.o", UNIT_HOST_FORMAT))) {
         UNIT_CompiledProcedure_Free(compiled);
         goto error;
     }
