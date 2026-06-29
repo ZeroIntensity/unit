@@ -339,20 +339,15 @@ new_machine_item(_UNIT_Translation *translation, _UNIT_MachineItem_Type type,
     return item;
 }
 
-static UNIT_JumpLabel *
-get_jump_label(const UNIT_Procedure *procedure, int32_t id)
-{
-    assert(procedure != NULL);
-    assert(id >= 0);
-    UNIT_JumpLabel *label = _UNIT_Vector_GET(&procedure->_jump_labels, id);
-    return label;
-}
-
 static _UNIT_MachineItem *
-get_jump_target_item(_UNIT_Translation *translation, const UNIT_Procedure *procedure,
+get_jump_target_item(_UNIT_Translation *translation, _UNIT_Vector *jump_labels,
                      int32_t id, UNIT_JumpLabel **jump_label_ptr)
 {
-    UNIT_JumpLabel *label = get_jump_label(procedure, id);
+    assert(translation != NULL);
+    assert(jump_labels != NULL);
+    assert(id >= 0);
+
+    UNIT_JumpLabel *label = _UNIT_Vector_GET(jump_labels, id);
     if (label == NULL) {
         _UNIT_SetErrorFormat(translation->context, UNIT_ERROR_INVALID_USAGE,
                              "%d is not a known jump label", id);
@@ -457,7 +452,8 @@ stack_pop(_UNIT_BasicBlock *block, _UNIT_Vector *stack,
 
 // Eagerly create basic blocks for every jump label.
 UNIT_Status
-create_jump_label_blocks(UNIT_Context *context, const _UNIT_Vector *jump_labels)
+create_jump_label_blocks(UNIT_Context *context, const _UNIT_Vector *jump_labels,
+                         _UNIT_Vector *output_jump_labels)
 {
     assert(jump_labels != NULL);
     UNIT_Size block_id = 0;
@@ -469,8 +465,24 @@ create_jump_label_blocks(UNIT_Context *context, const _UNIT_Vector *jump_labels)
         if (label_block == NULL) {
             return _UNIT_FAIL;
         }
-        assert(label->_block == NULL);
-        label->_block = label_block;
+
+        // Procedures can be compiled multiple times, so we need our own copy of labels.
+        UNIT_JumpLabel *copy = _UNIT_Alloc(context, sizeof(UNIT_JumpLabel));
+        if (copy == NULL) {
+            _UNIT_BasicBlock_Free(context, label_block);
+            return _UNIT_FAIL;
+        }
+
+        copy->_block = label_block;
+        copy->name = _UNIT_StrDup(context, label->name);
+        if (copy->name == NULL) {
+            _UNIT_BasicBlock_Free(context, label_block);
+            _UNIT_Dealloc(context, copy);
+            return _UNIT_FAIL;
+        }
+        copy->id = label->id;
+
+        _UNIT_Vector_APPEND(output_jump_labels, copy);
     }
 
     return _UNIT_OK;
@@ -770,6 +782,19 @@ _UNIT_Translate(_UNIT_Translation *translation,
         return _UNIT_FAIL;
     }
 
+    _UNIT_Vector jump_labels;
+    if (UNIT_FAILED(_UNIT_Vector_Init(&jump_labels, context,
+                                      _UNIT_Vector_SIZE(&procedure->_jump_labels),
+                                      _UNIT_JumpLabel_Free))) {
+        _UNIT_Vector_Clear(&stack);
+        _UNIT_Map_Clear(&translation->strings);
+        LocalVariables_Clear(&locals);
+        _UNIT_Vector_Clear(&translation->blocks);
+        _UNIT_SizeSet_Clear(&address_taken_locals);
+        _UNIT_Vector_Clear(&locals_snapshots);
+        return _UNIT_FAIL;
+    }
+
     UNIT_Size size = _UNIT_Vector_SIZE(&procedure->_instructions);
 
     // TODO: This is ugly. We should refactor this out into a more generic
@@ -786,7 +811,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
 
     // We need to eagerly assign blocks for each jump label so we can resolve
     // successors immediately
-    if (UNIT_FAILED(create_jump_label_blocks(context, &procedure->_jump_labels))) {
+    if (UNIT_FAILED(create_jump_label_blocks(context, &procedure->_jump_labels, &jump_labels))) {
         goto error;
     }
     UNIT_Size _block_id = 0;
@@ -1035,7 +1060,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
 
             case _UNIT_OP_JUMP_MARKER: {
                 UNIT_JumpLabel *label;
-                _UNIT_MachineItem *item = get_jump_target_item(translation, procedure,
+                _UNIT_MachineItem *item = get_jump_target_item(translation, &jump_labels,
                                                                operation->argument,
                                                                &label);
                 if (item == NULL) {
@@ -1086,7 +1111,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
 
             case UNIT_OP_JUMP_TO: {
                 UNIT_JumpLabel *label;
-                _UNIT_MachineItem *item = get_jump_target_item(translation, procedure,
+                _UNIT_MachineItem *item = get_jump_target_item(translation, &jump_labels,
                                                                operation->argument,
                                                                &label);
                 if (item == NULL) {
@@ -1109,7 +1134,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
                     goto error;
                 }
                 UNIT_JumpLabel *label;
-                _UNIT_MachineItem *jump_target = get_jump_target_item(translation, procedure,
+                _UNIT_MachineItem *jump_target = get_jump_target_item(translation, &jump_labels,
                                                                       operation->argument,
                                                                       &label);
                 if (jump_target == NULL) {
@@ -1260,12 +1285,14 @@ _UNIT_Translate(_UNIT_Translation *translation,
             }
 
             case UNIT_OP_SWAP: {
-                POP_TO_VAR(top);
-                UNIT_Size index = _UNIT_Vector_SIZE(&stack) - operation->argument - 1;
+                UNIT_Size top_index = _UNIT_Vector_SIZE(&stack) - 1;
+                UNIT_Size index = top_index - operation->argument;
+                assert(index != top_index);
                 assert(index >= 0);
+                _UNIT_MachineItem *top = _UNIT_Vector_STEAL(&stack, top_index);
                 _UNIT_MachineItem *to_swap = _UNIT_Vector_STEAL(&stack, index);
                 _UNIT_Vector_SET(&stack, index, top);
-                PUSH_ITEM(to_swap);
+                _UNIT_Vector_SET(&stack, top_index, to_swap);
                 break;
             }
 

@@ -75,12 +75,15 @@ typedef struct {
 } _UNIT_Operation;
 
 typedef struct {
-    char *name;
+    char *name; // heap-allocated
     int32_t id;
     // This is a _UNIT_BasicBlock * -- we hide it to avoid exposing that type
     // publicly.
     void *_block;
 } UNIT_JumpLabel;
+
+void
+_UNIT_JumpLabel_Free(UNIT_Context *context, void *ptr);
 
 typedef struct {
     int32_t id;

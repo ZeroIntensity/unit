@@ -258,7 +258,6 @@ UNIT_Procedure_OptimizeFold(UNIT_Procedure *procedure)
                     case UNIT_OP_DIVIDE:
                     case UNIT_OP_MODULO:
                     case UNIT_OP_COPY:
-                    case UNIT_OP_SWAP:
                     case UNIT_OP_COMPARE_EQUAL:
                     case UNIT_OP_COMPARE_NOT_EQUAL:
                     case UNIT_OP_COMPARE_GREATER:
@@ -341,14 +340,15 @@ UNIT_Procedure_OptimizeFold(UNIT_Procedure *procedure)
             }
 
             case UNIT_OP_SWAP: {
-                assert(op->argument < stack_depth);
-                if (op->argument < stack_depth) {
-                    StackEntry tmp = stack[stack_depth - 1];
-                    stack[stack_depth - 1] = stack[stack_depth - 1 - op->argument];
-                    stack[stack_depth - 1 - op->argument] = tmp;
-                } else {
+                UNIT_Size index = stack_depth - op->argument - 1;
+                if (index < 0) {
                     RESET_STACK();
+                    break;
                 }
+                UNIT_Size top = stack_depth - 1;
+                StackEntry tmp = stack[top];
+                stack[top] = stack[index];
+                stack[index] = tmp;
 
                 break;
             }

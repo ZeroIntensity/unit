@@ -180,15 +180,30 @@ class Procedure:
         self._procedure.set_flags(flags)
 
     def _add_op_int(self, opcode: OpCode, oparg: int) -> None:
+        if __debug__ and not isinstance(opcode, OpCode):
+            raise TypeError(f"Expected an OpCode, but got {opcode!r}")
+
+        if __debug__ and not isinstance(oparg, int):
+            raise TypeError(f"Expected an int oparg, but got {oparg!r}")
+
         self._procedure.add_operation(opcode.value, oparg)
 
     def _add_op(self, opcode: OpCode) -> None:
         self._add_op_int(opcode, 0)
 
     def _add_jump(self, opcode: OpCode, label: JumpLabel) -> None:
+        if __debug__ and not isinstance(opcode, OpCode):
+            raise TypeError(f"Expected an OpCode, but got {opcode!r}")
+
+        if __debug__ and not isinstance(label, JumpLabel):
+            raise TypeError(f"Expected a JumpLabel object, but got {label!r}")
+
         self._procedure.add_jump(opcode.value, label._label)
 
     def create_jump_label(self, name: str) -> JumpLabel:
+        if __debug__ and not isinstance(name, str):
+            raise TypeError(f"Expected a string for the jump label name, but got {name!r}")
+
         return JumpLabel(self._procedure.create_jump_label(name))
 
     def load_integer(self, value: int, /) -> None:
@@ -228,6 +243,15 @@ class Procedure:
         self._add_op_int(OpCode.LOAD_ARGUMENT, arg_number)
 
     def call_name(self, name: str, num_args: int, /) -> None:
+        if __debug__ and not isinstance(name, str):
+            raise TypeError(f"Expected a string for the symbol name, but got {name!r}")
+
+        if __debug__ and not isinstance(num_args, int):
+            raise TypeError(f"Expected an integer for the number of arguments, but got {num_args!r}")
+
+        if num_args < 0:
+            raise ValueError("Cannot have a negative number of arguments")
+
         self._procedure.add_call_name(name, num_args)
 
     def compare_equal(self) -> None:
@@ -258,6 +282,9 @@ class Procedure:
         self._add_jump(OpCode.JUMP_IF_FALSE, label)
 
     def use_label(self, label: JumpLabel, /) -> None:
+        if __debug__ and not isinstance(label, JumpLabel):
+            raise TypeError(f"Expected a JumpLabel object, but got {label!r}")
+
         self._procedure.use_label(label._label)
 
     def copy(self, offset_from_top: int, /) -> None:

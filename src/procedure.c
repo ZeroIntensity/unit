@@ -7,7 +7,7 @@
 #include <unit/internal/allocation.h>
 
 void
-free_jump_label(UNIT_Context *context, void *ptr)
+_UNIT_JumpLabel_Free(UNIT_Context *context, void *ptr)
 {
     UNIT_JumpLabel *label = (UNIT_JumpLabel *)ptr;
     _UNIT_Dealloc(context, label->name);
@@ -42,7 +42,7 @@ UNIT_Procedure_Init(UNIT_Procedure *procedure,
     }
 
     if (UNIT_FAILED(_UNIT_Vector_Init(&procedure->_jump_labels,
-                                      context, 4, free_jump_label))) {
+                                      context, 4, _UNIT_JumpLabel_Free))) {
         _UNIT_Dealloc(context, procedure->name);
         _UNIT_Vector_Clear(&procedure->_instructions);
         _UNIT_Vector_Clear(&procedure->_global_strings);
@@ -543,10 +543,12 @@ deduce_stack_effect(const UNIT_Procedure *procedure, const _UNIT_Operation *op,
     UNIT_Context *context = debug_stack->context;
     assert(context != NULL);
 
-#define POP()                                                                   \
-    if (_UNIT_Vector_SIZE(debug_stack) != 0) {                                  \
-        _UNIT_Dealloc(context, _UNIT_Vector_Pop(debug_stack));                  \
-    }                                                                           \
+#define POP()                                                                                           \
+    if (_UNIT_Vector_SIZE(debug_stack) == 0) {                                                          \
+        _UNIT_SetErrorFormat(procedure->context, UNIT_ERROR_INVALID_USAGE,                              \
+                             "stack underflow at %s", UNIT_Instruction_GetName(op->instruction));       \
+    }                                                                                                   \
+    _UNIT_Dealloc(context, _UNIT_Vector_Pop(debug_stack));                                              \
 
 #define PUSH(tp, the_value)                                                     \
     do {                                                                        \
@@ -703,22 +705,24 @@ deduce_stack_effect(const UNIT_Procedure *procedure, const _UNIT_Operation *op,
         }
 
         case UNIT_OP_SWAP: {
-            UNIT_Size offset = _UNIT_Vector_SIZE(debug_stack) - oparg - 1;
-            if (!_UNIT_Vector_INDEX_IS_VALID(debug_stack, offset)) {
+            UNIT_Size top_index = _UNIT_Vector_SIZE(debug_stack) - 1;
+            UNIT_Size offset = top_index - oparg;
+            if (!_UNIT_Vector_INDEX_IS_VALID(debug_stack, offset) || top_index == offset) {
                 _UNIT_SetErrorFormat(context, UNIT_ERROR_INVALID_USAGE,
                                      "invalid offset: %ld", oparg);
                 return _UNIT_FAIL;
             }
 
             // If the stack were empty, the above case would have failed.
-            assert(_UNIT_Vector_SIZE(debug_stack) > 0);
+            assert(top_index > 0);
+            assert(top_index != offset);
 
-            DebugStackItem *top = _UNIT_Vector_STEAL(debug_stack, 0);
+            DebugStackItem *top = _UNIT_Vector_STEAL(debug_stack, top_index);
             assert(top != NULL);
             DebugStackItem *at_offset = _UNIT_Vector_STEAL(debug_stack, offset);
             assert(at_offset != NULL);
 
-            _UNIT_Vector_SET(debug_stack, 0, at_offset);
+            _UNIT_Vector_SET(debug_stack, top_index, at_offset);
             _UNIT_Vector_SET(debug_stack, offset, top);
 
             break;
