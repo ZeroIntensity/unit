@@ -144,10 +144,6 @@ class Compare(Expression):
         self.right.codegen_unit(procedure)
         operators[self.operator]()
 
-# TODO: This is horrible
-names: dict[str, int] = {}
-next_name_id = 0
-
 
 @dataclass(slots=True)
 class Name(Expression):
@@ -157,7 +153,9 @@ class Name(Expression):
         yield Instruction(OpCode.LOAD_NAME, self.name)
 
     def codegen_unit(self, procedure: unit.Procedure) -> None:
-        procedure.load_local(names[self.name])
+        function = Function.current()
+        id = function.names.get_name(self.name)
+        procedure.load_local(id)
 
 
 class Statement(ASTNode):
@@ -200,10 +198,27 @@ class Let(Statement):
         yield Instruction(OpCode.STORE_NAME, self.name)
 
     def codegen_unit(self, procedure: unit.Procedure) -> None:
-        global next_name_id
-        names[self.name] = next_name_id
-        procedure.store_local(next_name_id)
-        next_name_id += 1
+        function = Function.current()
+        id = function.names.set_name(self.name)
+        procedure.store_local(id)
+
+
+@dataclass(slots=True)
+class LocalNameManager:
+    names: dict[str, int] = field(default_factory=dict, init=False)
+    next_name_id: int = field(default=0, init=False)
+
+    def set_name(self, name: str) -> int:
+        if name in self.names:
+            return self.names[name]
+
+        id = self.next_name_id
+        self.next_name_id += 1
+        self.names[name] = id
+        return id
+
+    def get_name(self, name: str) -> int:
+        return self.names[name]
 
 
 @dataclass(slots=True)
@@ -215,6 +230,7 @@ class Function:
     observed_args: dict[tuple[Any, ...], int] = field(default_factory=dict, init=False)
     specialized: dict[tuple[Any, ...], unit.procedure.ExecutableBuffer] = field(default_factory=dict, init=False)
     trampolines: dict[str, ctypes._CFunctionType] = field(default_factory=dict, init=False)
+    names: LocalNameManager = field(default_factory=LocalNameManager, init=False)
 
     CURRENT_FUNCTION: ClassVar[contextvars.ContextVar] = contextvars.ContextVar("CURRENT_FUNCTION")
 
@@ -227,12 +243,10 @@ class Function:
 
     def specialize(self, arguments: tuple[Any, ...]) -> unit.ExecutableBuffer:
         procedure = unit.Procedure(self.specialized_name(arguments))
-        global next_name_id
         for name, value in zip(self.parameters, arguments):
             Constant(value).codegen_unit(procedure)
-            names[name] = next_name_id
-            procedure.store_local(next_name_id)
-            next_name_id += 1
+            id = self.names.set_name(name)
+            procedure.store_local(id)
 
         with self.CURRENT_FUNCTION.set(self):
             self.original.body.codegen_unit(procedure)
