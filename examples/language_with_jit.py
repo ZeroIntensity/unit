@@ -10,6 +10,10 @@ import operator as py_operators
 import unit
 import contextvars
 
+import _pyrepl.readline as readline
+from _pyrepl.utils import ColorSpan, Span
+import _pyrepl.utils
+
 class OpCode(Enum):
     LOAD_CONST = auto()
     LOAD_NAME = auto()
@@ -364,6 +368,7 @@ class Module:
         for statement in self.body:
             statement.codegen_unit(procedure)
 
+OPERATORS: set[str] = {"'", '"', "(", ")", "=", ",", " ", "+", "-", "*", "/"}
 
 def tokenize(source: str) -> Iterator[str]:
     for line in source.split("\n"):
@@ -372,7 +377,7 @@ def tokenize(source: str) -> Iterator[str]:
 
         buffer = io.StringIO()
         for character in line:
-            if character in {"'", '"', "(", ")", "=", ",", " ", "+", "-", "*", "/"}:
+            if character in OPERATORS:
                 result = buffer.getvalue()
                 if result != "":
                     yield result
@@ -596,8 +601,7 @@ class Stack[T]:
 class Interpreter:
     CURRENT_INTERPRETER = contextvars.ContextVar("CURRENT_INTERPRETER")
 
-    def __init__(self, code: Iterable[Code]) -> None:
-        self.code = list(code)
+    def __init__(self) -> None:
         self.variables: dict[str, Any] = {}
         self.functions: dict[str, Function] = {}
         self.stack = Stack[Any]()
@@ -629,7 +633,8 @@ class Interpreter:
         else:
             function.observed_args[arguments] = 1
 
-        interpreter = Interpreter([inst for inst in function.body])
+        interpreter = Interpreter()
+        code = [inst for inst in function.body]
 
         # To allow recursive calls:
         interpreter.functions[function.name] = function
@@ -638,7 +643,7 @@ class Interpreter:
             assert parameter not in interpreter.variables
             interpreter.variables[parameter] = value
 
-        interpreter.interpret()
+        interpreter.interpret(code)
         if interpreter.stack.is_empty():
             self.stack.push(None)
         else:
@@ -703,7 +708,7 @@ class Interpreter:
             # The value should already be on the stack -- the calling interpreter
             # will get it.
             assert not self.stack.is_empty()
-            self._index = len(self.code)  # Jump to the end
+            self._index = -1  # Jump to the end
         elif opcode == OpCode.JUMP:
             assert isinstance(oparg, JumpLabel)
             assert oparg.index is not None
@@ -744,35 +749,47 @@ class Interpreter:
         else:
             raise RuntimeError(f"unknown opcode: {opcode}")
 
-    def _populate_jump_label_indices(self) -> None:
-        for index, item in enumerate(self.code):
+    def _populate_jump_label_indices(self, code: Sequence[Code]) -> None:
+        for index, item in enumerate(code):
             if isinstance(item, JumpLabel):
                 item.index = index
 
-    def interpret(self) -> None:
-        self._populate_jump_label_indices()
+    def interpret(self, code: Sequence[Code]) -> None:
+        self._populate_jump_label_indices(code)
 
-        while self._index < len(self.code):
-            code = self.code[self._index]
-            if isinstance(code, Instruction):
+        while self._index < len(code):
+            value = code[self._index]
+            if isinstance(value, Instruction):
                 with self.CURRENT_INTERPRETER.set(self):
-                    self.interpret_instruction(code)
+                    self.interpret_instruction(value)
             else:
-                assert isinstance(code, JumpLabel)
+                assert isinstance(value, JumpLabel)
+
+            if self._index == -1:
+                break
 
             self._index += 1
 
     @classmethod
     def run(cls, module: Module) -> None:
-        cls(module.codegen()).interpret()
+        cls().interpret(list(module.codegen()))
 
 
-def run(source: str) -> None:
-    module = Parser.parse(source)
-    Interpreter.run(module)
+BANNER = """Welcome to the UNIT JIT Demo
 
+This is a REPL for a simple interpreted language with a JIT.
+This language supports the following constructs:
 
-source = """
+ - Variables: let <name> = <value>
+ - Strings: '<content>'/"<content>"
+ - Printing: print <value>
+ - Comparisons: <value> ==, !=, <, <=, >, >= <value>
+ - Arithmetic: <value> +, -, *, / <value>
+ - Conditionals: if <value> { ... } else { ... }
+ - Functions: func <name>(<parameter 1>, <parameter 2>, ...) { ... }
+ - Returns: return <value>
+
+Example function:
 func fib(n) {
     if n <= 0 {
         return 0
@@ -784,7 +801,66 @@ func fib(n) {
 
     return fib(n - 1) + fib(n - 2)
 }
-print fib(10)
 """
 
-run(source)
+class REPL:
+    def __init__(self) -> None:
+        self.interpreter = Interpreter()
+
+    def run(self):
+        print(BANNER)
+        print("Type 'exit' to quit.")
+
+        while True:
+            try:
+                source = self.read_statement()
+            except EOFError:
+                print()
+                break
+            except KeyboardInterrupt:
+                print()
+                continue
+
+            if source.strip() == "exit":
+                break
+
+            if not source.strip():
+                continue
+
+            try:
+                module = Parser.parse(source)
+                self.interpreter.interpret(list(module.codegen()))
+            except (SyntaxError, RuntimeError) as e:
+                print(f"error: {e}")
+
+    def read_statement(self) -> str:
+        lines = []
+        depth = 0
+        first = True
+
+        while True:
+            prompt = ">>> " if first else "... "
+            first = False
+            line = input(prompt)
+            lines.append(line)
+            depth += line.count("{") - line.count("}")
+
+            if depth <= 0:
+                break
+
+        return "\n".join(lines)
+
+# TODO
+def patched_gen_colors(buffer: str) -> Iterator[ColorSpan]:
+    if False:
+        yield
+
+
+def main():
+    _pyrepl.utils.gen_colors = patched_gen_colors
+    readline._setup({})
+    repl = REPL()
+    repl.run()
+
+if __name__ == "__main__":
+    main()
