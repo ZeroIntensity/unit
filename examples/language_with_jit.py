@@ -303,6 +303,7 @@ class Print(Statement):
         procedure.load_string("%d")
         self.value.codegen_unit(procedure)
         procedure.call_name("printf", 2)
+        procedure.pop()
 
 
 @dataclass(slots=True)
@@ -368,7 +369,7 @@ class Module:
         for statement in self.body:
             statement.codegen_unit(procedure)
 
-OPERATORS: set[str] = {"'", '"', "(", ")", "=", ",", " ", "+", "-", "*", "/"}
+OPERATORS: set[str] = {"'", '"', "(", ")", "=", ",", " ", "+", "-", "*", "/", "{", "}"}
 
 def tokenize(source: str) -> Iterator[str]:
     for line in source.split("\n"):
@@ -476,7 +477,7 @@ class Parser:
         elif token == '"':
             return self.parse_double_quote_str()
         else:
-            if self.pop_token_if_matches("("):
+            if self.pop_token_if_matches("(", allow_empty=True):
                 return self.parse_call(token)
             return Name(token)
 
@@ -802,6 +803,39 @@ func fib(n) {
     return fib(n - 1) + fib(n - 2)
 }
 """
+
+# Debug code, remove later
+code = """
+func fib(n) {
+    if n <= 0 {
+        return 0
+    }
+
+    if n == 1 {
+        return 1
+    }
+
+    return fib(n - 1) + fib(n - 2)
+}
+print fib(10)
+let x = 5
+print x
+if x == 5 {
+    print 2
+}
+
+if x == 2 {} else { print 3 }
+
+func test(n) {
+    print n
+}
+
+test(2)
+test(2)
+test(2)
+"""
+mod = Parser.parse(code)
+Interpreter().run(mod)
 
 class REPL:
     def __init__(self) -> None:
