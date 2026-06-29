@@ -84,6 +84,7 @@ ContextObject_dealloc(PyObject *op)
 {
     assert(op != NULL);
     ContextObject *context = ContextObject_CAST(op);
+    PyObject_GC_UnTrack(op);
     UNIT_Context_Clear(&context->context);
     PyTypeObject *cls = Py_TYPE(op);
     cls->tp_free(op);
@@ -140,6 +141,7 @@ ExecutableBufferObject_dealloc(PyObject *op)
 {
     assert(op != NULL);
     ExecutableBufferObject *self = ExecutableBufferObject_CAST(op);
+    PyObject_GC_UnTrack(op);
     UNIT_ExecutableBuffer_Free(self->buffer);
 
     PyTypeObject *cls = Py_TYPE(op);
@@ -359,6 +361,7 @@ CompiledProcedureObject_dealloc(PyObject *op)
 {
     assert(op != NULL);
     CompiledProcedureObject *compiled = CompiledProcedureObject_CAST(op);
+    PyObject_GC_UnTrack(op);
     UNIT_CompiledProcedure_Free(compiled->compiled_procedure);
 
     PyTypeObject *cls = Py_TYPE(op);
@@ -421,6 +424,7 @@ LocalObject_dealloc(PyObject *op)
 {
     assert(op != NULL);
     PyTypeObject *cls = Py_TYPE(op);
+    PyObject_GC_UnTrack(op);
     cls->tp_free(op);
     Py_DECREF(cls);
 }
@@ -473,6 +477,7 @@ JumpLabelObject_dealloc(PyObject *op)
 {
     assert(op != NULL);
     PyTypeObject *cls = Py_TYPE(op);
+    PyObject_GC_UnTrack(op);
     cls->tp_free(op);
     Py_DECREF(cls);
 }
@@ -766,6 +771,7 @@ ProcedureObject_dealloc(PyObject *op)
 {
     assert(op != NULL);
     ProcedureObject *procedure = ProcedureObject_CAST(op);
+    PyObject_GC_UnTrack(op);
     UNIT_Procedure_Clear(&procedure->procedure);
     (void)ProcedureObject_clear(op);
     PyTypeObject *cls = Py_TYPE(op);

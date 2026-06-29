@@ -73,6 +73,17 @@ if(UNIT_BUILD_TESTS)
         DEPENDS ${TEST_TARGETS}
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     )
+
+    set(VENV_DIR ${CMAKE_BINARY_DIR}/.test_venv)
+
+    add_custom_target(python_tests
+        COMMAND ${Python3_EXECUTABLE} -m venv ${VENV_DIR} --clear
+        COMMAND ${VENV_DIR}/bin/pip install ${CMAKE_SOURCE_DIR}
+        COMMAND ${VENV_DIR}/bin/python -m unittest discover -s ${CMAKE_SOURCE_DIR}/tests/python -v
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        DEPENDS unit
+        COMMENT "Installing Python bindings and running tests"
+    )
 endif()
 
 option(UNIT_BUILD_PYTHON "Build Python bindings" OFF)
