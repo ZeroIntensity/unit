@@ -27,7 +27,9 @@ class ExampleTestRunner(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
-    def compile(self, args: Iterable[str] | None = None, *, input: str | None = None) -> None:
+    def compile(
+        self, args: Iterable[str] | None = None, *, input: str | None = None
+    ) -> None:
         subprocess.run(
             [self.build_dir / self.executable_name, *(args or ())],
             input=input,

@@ -2,13 +2,13 @@
 #include <string.h>
 
 static bool
-compare_strings(void *a, void *b)
+compare_strings(const void *a, const void *b)
 {
     return strcmp((const char *)a, (const char *)b) == 0;
 }
 
 static UNIT_Size
-hash_string(void *key)
+hash_string(const void *key)
 {
     const char *str = (const char *)key;
     UNIT_Size hash = 5381;
@@ -21,20 +21,20 @@ hash_string(void *key)
 
 // Deliberately bad hash to force collisions
 static UNIT_Size
-hash_constant(void *key)
+hash_constant(const void *key)
 {
     (void)key;
     return 42;
 }
 
 static bool
-compare_ints(void *a, void *b)
+compare_ints(const void *a, const void *b)
 {
     return *(int *)a == *(int *)b;
 }
 
 static UNIT_Size
-hash_int(void *key)
+hash_int(const void *key)
 {
     return (UNIT_Size)(*(int *)key);
 }
@@ -267,7 +267,6 @@ test_null_value(UNIT_Context *context)
 static void
 test_many_collisions_with_grow(UNIT_Context *context)
 {
-    // Constant hash + small initial capacity = worst case
     _UNIT_Map map;
     ASSERT_OK(context, _UNIT_Map_Init(&map, context, 2, compare_strings,
                                        hash_constant, NULL, NULL));
@@ -329,7 +328,6 @@ test_reuse_after_clear(UNIT_Context *context)
 static void
 test_overwrite_repeatedly(UNIT_Context *context)
 {
-    // Overwrite the same key 100 times — only the last value should stick
     _UNIT_Map map;
     ASSERT_OK(context, _UNIT_Map_Init(&map, context, 8, compare_strings,
                                        hash_string, NULL, NULL));
@@ -357,7 +355,7 @@ test_overwrite_with_collisions(UNIT_Context *context)
     ASSERT_OK(context, _UNIT_Map_Set(&map, "x", &a));
     ASSERT_OK(context, _UNIT_Map_Set(&map, "y", &b));
     ASSERT_OK(context, _UNIT_Map_Set(&map, "z", &c));
-    
+
     int a2 = 10;
     int b2 = 20;
     int c2 = 30;
@@ -404,7 +402,6 @@ static void test_expansion_preserves_all(UNIT_Context *context)
         keys[i] = i;
         values[i] = i * 3;
         ASSERT_OK(context, _UNIT_Map_Set(&map, &keys[i], &values[i]));
-        // Verify all previous entries still accessible after each insert
         for (int j = 0; j <= i; ++j) {
             int *result = _UNIT_Map_Get(&map, &keys[j]);
             ASSERT(result != NULL);
@@ -532,7 +529,7 @@ static void test_many_overwrites_with_expansion(UNIT_Context *context)
 
 static void test_get_full_table_missing_key(UNIT_Context *context)
 {
-    // Ensure Get terminates even with high load
+    // Ensure Get() terminates even with high load
     _UNIT_Map map;
     ASSERT_OK(context, _UNIT_Map_Init(&map, context, 4, compare_ints,
                                        hash_int, NULL, NULL));

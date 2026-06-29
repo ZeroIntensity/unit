@@ -70,21 +70,12 @@ compile_procedure(const UNIT_Procedure *procedure, UNIT_Platform platform)
                                             stdout);
     }
 
-    if (!(procedure->flags & UNIT_FLAG_NO_OPTIMIZE_TRANSLATION)) {
-        if (UNIT_FAILED(_UNIT_Translation_Optimize(&compiled_procedure->_translation))) {
-            _UNIT_Translation_Clear(&compiled_procedure->_translation);
-            _UNIT_Dealloc(context, compiled_procedure);
-            return NULL;
-        }
+    if (UNIT_FAILED(_UNIT_Translation_AllocateRegisters(&compiled_procedure->_translation,
+                                                        &compiled_procedure->_compile_context, 8))) {
+        goto error;
     }
 
-    if (UNIT_FAILED(_UNIT_CompileContext_Init(&compiled_procedure->_compile_context, context,
-                                              procedure, &compiled_procedure->_translation))) {
-        _UNIT_Translation_Clear(&compiled_procedure->_translation);
-        _UNIT_Dealloc(context, compiled_procedure);
-        return NULL;
-    }
-
+  
     int8_t num_registers;
     switch (UNIT_Platform_GET_ARCH(platform)) {
         case UNIT_ARCH_AMD64:
@@ -96,6 +87,21 @@ compile_procedure(const UNIT_Procedure *procedure, UNIT_Platform platform)
         default:
             _UNIT_SetError(context, UNIT_ERROR_UNSUPPORTED_PLATFORM, "Unsupported architecture");
             goto error;
+    }
+  
+    if (!(procedure->flags & UNIT_FLAG_NO_OPTIMIZE_TRANSLATION)) {
+        if (UNIT_FAILED(_UNIT_Translation_Optimize(&compiled_procedure->_translation, num_registers))) {
+            _UNIT_Translation_Clear(&compiled_procedure->_translation);
+            _UNIT_Dealloc(context, compiled_procedure);
+            return NULL;
+        }
+    }
+
+    if (UNIT_FAILED(_UNIT_CompileContext_Init(&compiled_procedure->_compile_context, context,
+                                              procedure, &compiled_procedure->_translation))) {
+        _UNIT_Translation_Clear(&compiled_procedure->_translation);
+        _UNIT_Dealloc(context, compiled_procedure);
+        return NULL;
     }
 
     if (UNIT_FAILED(_UNIT_Translation_AllocateRegisters(&compiled_procedure->_translation,

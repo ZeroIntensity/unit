@@ -76,8 +76,12 @@ class CompiledProcedure:
             )
         self._compiled.write_object_file(path, format_enum)
 
-    def jit(self) -> ExecutableBuffer[Any, Any]:
-        return ExecutableBuffer(self._compiled.jit())
+    def jit(self, extra_symbols: dict[str, int] | None = None) -> ExecutableBuffer[Any, Any]:
+        symbols = []
+        if extra_symbols is not None:
+            for key, value in extra_symbols.items():
+                symbols.append((key, value))
+        return ExecutableBuffer(self._compiled.jit(symbols))
 
     def translation_text(self) -> str:
         return self._compiled.print_translation()
@@ -141,6 +145,13 @@ class Platform:
 
         return cls(architecture=architecture, abi=abi)
 
+class JumpLabel:
+    def __init__(self, label: _core.JumpLabel) -> None:
+        if __debug__ and not isinstance(label, _core.JumpLabel):
+            raise TypeError(f"expected an internal JumpLabel object, got {label!r}")
+
+        self._label = label
+
 
 class Procedure:
     def __init__(
@@ -174,8 +185,17 @@ class Procedure:
     def _add_op(self, opcode: OpCode) -> None:
         self._add_op_int(opcode, 0)
 
+    def _add_jump(self, opcode: OpCode, label: JumpLabel) -> None:
+        self._procedure.add_jump(opcode.value, label._label)
+
+    def create_jump_label(self, name: str) -> JumpLabel:
+        return JumpLabel(self._procedure.create_jump_label(name))
+
     def load_integer(self, value: int, /) -> None:
         self._add_op_int(OpCode.LOAD_INTEGER, value)
+
+    def load_string(self, value: str, /) -> None:
+        self._procedure.add_string_load(value)
 
     def store_local(self, id: int, /) -> None:
         self._add_op_int(OpCode.STORE_LOCAL, id)
@@ -228,14 +248,26 @@ class Procedure:
     def compare_less_equal(self) -> None:
         self._add_op(OpCode.COMPARE_LESS_EQUAL)
 
+    def jump_to(self, label: JumpLabel, /) -> None:
+        self._add_jump(OpCode.JUMP_TO, label)
+
+    def jump_if_true(self, label: JumpLabel, /) -> None:
+        self._add_jump(OpCode.JUMP_IF_TRUE, label)
+
+    def jump_if_false(self, label: JumpLabel, /) -> None:
+        self._add_jump(OpCode.JUMP_IF_FALSE, label)
+
+    def use_label(self, label: JumpLabel, /) -> None:
+        self._procedure.use_label(label._label)
+
     def copy(self, offset_from_top: int, /) -> None:
         self._add_op_int(OpCode.COPY, offset_from_top)
 
     def swap(self, offset_from_top: int, /) -> None:
         self._add_op_int(OpCode.SWAP, offset_from_top)
 
-    def pop(self, offset_from_top: int, /) -> None:
-        self._add_op_int(OpCode.POP, offset_from_top)
+    def pop(self) -> None:
+        self._add_op(OpCode.POP)
 
     def address_of(self, id: int, /) -> None:
         self._add_op_int(OpCode.ADDRESS_OF, id)

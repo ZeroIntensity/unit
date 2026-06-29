@@ -115,6 +115,42 @@ private:
     Value value_;
 };
 
+class SymbolMap {
+    UNIT_SymbolMap symbol_map;
+
+public:
+    explicit SymbolMap(Context &ctx)
+    {
+        if (UNIT_FAILED(UNIT_SymbolMap_Init(&symbol_map, ctx.raw()))) {
+            throw error(ctx.raw());
+        }
+    }
+
+    ~SymbolMap()
+    {
+        UNIT_SymbolMap_Clear(&symbol_map);
+    }
+
+    SymbolMap(const SymbolMap &) = delete;
+    SymbolMap(SymbolMap &&) = delete;
+    SymbolMap &operator=(const SymbolMap &) = delete;
+    SymbolMap &operator=(SymbolMap &&) = delete;
+
+    void register_symbol(const std::string &name, void *address)
+    {
+        if (UNIT_FAILED(UNIT_SymbolMap_RegisterSymbol(&symbol_map,
+                                                      name.c_str(), address))) {
+            throw std::runtime_error("failed to register symbol");
+        }
+    }
+
+    [[nodiscard]] UNIT_SymbolMap *
+    raw()
+    {
+        return &symbol_map;
+    }
+};
+
 template <typename Function>
 class ExecutableBuffer {
     UNIT_ExecutableBuffer *buffer;
@@ -176,7 +212,18 @@ public:
     [[nodiscard]] ExecutableBuffer<Function>
     jit()
     {
-        UNIT_ExecutableBuffer *buffer = UNIT_CompiledProcedure_JIT(compiled);
+        UNIT_ExecutableBuffer *buffer = UNIT_CompiledProcedure_JIT(compiled, nullptr);
+        if (buffer == NULL) {
+            throw error(compiled->context);
+        }
+        return ExecutableBuffer<Function>(buffer);
+    }
+
+    template <typename Function>
+    [[nodiscard]] ExecutableBuffer<Function>
+    jit(SymbolMap &symbol_map)
+    {
+        UNIT_ExecutableBuffer *buffer = UNIT_CompiledProcedure_JIT(compiled, symbol_map.raw());
         if (buffer == NULL) {
             throw error(compiled->context);
         }

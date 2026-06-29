@@ -135,7 +135,7 @@ item_dead_in_block(_UNIT_BasicBlock *block, UNIT_Size start,
 }
 
 static UNIT_Status
-optimize_block_moves(_UNIT_BasicBlock *block, int8_t *did_change)
+optimize_block_loads(_UNIT_BasicBlock *block, int8_t *did_change)
 {
     assert(block != NULL);
     assert(did_change != NULL);
@@ -156,7 +156,7 @@ optimize_block_moves(_UNIT_BasicBlock *block, int8_t *did_change)
         _UNIT_MachineOperation *op = _UNIT_Vector_STEAL(instrs, index);
         assert(op != NULL);
 
-        if (op->instruction != _UNIT_I_MOVE) {
+        if (op->instruction != _UNIT_I_LOAD) {
             APPEND(op);
             continue;
         }
@@ -168,32 +168,32 @@ optimize_block_moves(_UNIT_BasicBlock *block, int8_t *did_change)
         assert(op->argument_2 == NULL);
 
         if (compare_items(destination, source)) {
-            // Self-move
+            // Self-load
             CONTINUE_AND_DISCARD(op);
         }
 
         int8_t destination_never_used = item_dead_in_block(block, index + 1, size, destination);
         if (destination_never_used == -1) {
-            return _UNIT_FAIL;
+            goto error;
         }
 
         if (destination_never_used) {
             CONTINUE_AND_DISCARD(op);
         }
 
-        // If the previous instruction produced src, and src is dead after this move,
-        // change the previous instruction's destination and delete the move.
+        // If the previous instruction produced src, and src is dead after this load,
+        // change the previous instruction's destination and delete the load.
         //
         // For example:
         // register_0 = ADD(register_1, 1)
-        // register_2 = MOVE(register_0)
+        // register_2 = LOAD(register_0)
         //
         // can be turned into
         //
         // register_2 = ADD(register_1, 1)
         int8_t source_never_used = item_dead_in_block(block, index + 1, size, source);
         if (source_never_used == -1) {
-            return _UNIT_FAIL;
+            goto error;
         }
         if (!source_never_used) {
             APPEND(op);
@@ -230,27 +230,178 @@ optimize_block_moves(_UNIT_BasicBlock *block, int8_t *did_change)
     _UNIT_Vector_Clear(&block->instructions);
     block->instructions = new_instructions;
     return _UNIT_OK;
+error:
+    _UNIT_Vector_Clear(&new_instructions);
+    return _UNIT_FAIL;
 }
 
+typedef struct {
+    int64_t value;
+    int8_t is_known;
+} RegisterValue;
+
+static int8_t
+fold_register_value(RegisterValue *register_values,
+                    _UNIT_MachineItem *operand)
+{
+    assert(register_values != NULL);
+    if (operand == NULL) {
+        return 0;
+    }
+
+    if (operand->type == _UNIT_TYPE_REGISTER
+        && register_values[operand->value].is_known) {
+        operand->type = _UNIT_TYPE_CONSTANT;
+        operand->value = register_values[operand->value].value;
+        return 1;
+    }
+
+    int8_t did_change = 0;
+    if (operand->type == _UNIT_TYPE_CALL_ARGS) {
+        UNIT_Size size = _UNIT_Vector_SIZE(operand->call_args);
+        assert(size >= 0);
+        for (UNIT_Size index = 0; index < size; ++index) {
+            _UNIT_MachineItem *arg = _UNIT_Vector_GET(operand->call_args, index);
+            if (fold_register_value(register_values, arg)) {
+                did_change = 1;
+            }
+        }
+    }
+
+    return 0;
+}
+
+static UNIT_Status
+optimize_block_folds(_UNIT_BasicBlock *block, int8_t num_registers, int8_t *did_change)
+{
+    assert(block != NULL);
+    assert(did_change != NULL);
+    *did_change = 0;
+    _UNIT_Vector *instructions = &block->instructions;
+    UNIT_Size size = _UNIT_Vector_SIZE(instructions);
+
+    _UNIT_Vector new_instructions;
+    if (UNIT_FAILED(_UNIT_Vector_Init(&new_instructions, block->context, size,
+                                      _UNIT_Dealloc))) {
+        return _UNIT_FAIL;
+    }
+
+    RegisterValue *register_values = _UNIT_Calloc(block->context, num_registers, sizeof(RegisterValue));
+    if (register_values == NULL) {
+        _UNIT_Vector_Clear(&new_instructions);
+        return _UNIT_FAIL;
+    }
+
+#define APPEND(op) _UNIT_Vector_APPEND(&new_instructions, op)
+#define CONTINUE_AND_DISCARD(op) *did_change = 1; _UNIT_Dealloc(block->context, op); continue
+
+    for (UNIT_Size index = 0; index < size; ++index) {
+        _UNIT_MachineOperation *op = _UNIT_Vector_STEAL(instructions, index);
+        assert(op != NULL);
+
+#define FOLD_REGISTER_VALUE(name)                           \
+        if (fold_register_value(register_values, name)) {   \
+            *did_change = 1;                                \
+        }
+
+        _UNIT_MachineItem *destination = _UNIT_MachineDestination_GetPointerNullable(op->destination);
+        if (destination != NULL && _UNIT_MachineDestination_IsInput(op->destination)) {
+            FOLD_REGISTER_VALUE(destination);
+        }
+        FOLD_REGISTER_VALUE(op->argument_1);
+        FOLD_REGISTER_VALUE(op->argument_2);
+
+#undef FOLD_REGISTER_VALUE
+
+        switch (op->instruction) {
+            case _UNIT_I_LOAD: {
+                assert(destination != NULL);
+                if (destination->type == _UNIT_TYPE_REGISTER
+                    && op->argument_1->type == _UNIT_TYPE_CONSTANT) {
+                    register_values[destination->value].value = op->argument_1->value;
+                    register_values[destination->value].is_known = 1;
+                    // TODO: We should delete the move if it's not used by a successor
+                    APPEND(op); //CONTINUE_AND_DISCARD(op);
+                    continue;
+                }
+                break;
+            }
+
+#define BINARY_OP(inst, operator)                                           \
+            case inst: {                                                    \
+                assert(destination != NULL);                                \
+                if (destination->type == _UNIT_TYPE_REGISTER                \
+                    && op->argument_1->type == _UNIT_TYPE_CONSTANT          \
+                    && op->argument_2->type == _UNIT_TYPE_CONSTANT) {       \
+                    register_values[destination->value].value = op->argument_1->value operator op->argument_2->value; \
+                    register_values[destination->value].is_known = 1;       \
+                    CONTINUE_AND_DISCARD(op);                               \
+                }                                                           \
+                break;                                                      \
+            }
+
+            BINARY_OP(_UNIT_I_ADD, +);
+            BINARY_OP(_UNIT_I_SUB, -);
+            BINARY_OP(_UNIT_I_MUL, *);
+            BINARY_OP(_UNIT_I_DIV, /);
+            BINARY_OP(_UNIT_I_MOD, %);
+
+            default:
+                break;
+
+#undef BINARY_OP
+        }
+
+        if (destination != NULL
+            && !_UNIT_MachineDestination_IsInput(op->destination)
+            && destination->type == _UNIT_TYPE_REGISTER) {
+            register_values[destination->value].is_known = 0;
+        }
+        APPEND(op);
+    }
+
+#undef APPEND
+#undef CONTINUE_AND_DISCARD
+
+    _UNIT_Dealloc(block->context, register_values);
+    _UNIT_Vector_Clear(&block->instructions);
+    block->instructions = new_instructions;
+    return _UNIT_OK;
+error:
+    _UNIT_Dealloc(block->context, register_values);
+    _UNIT_Vector_Clear(&new_instructions);
+    return _UNIT_FAIL;
+}
+
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+
 UNIT_Status
-_UNIT_Translation_Optimize(_UNIT_Translation *translation)
+_UNIT_Translation_Optimize(_UNIT_Translation *translation, int8_t num_registers)
 {
     assert(translation != NULL);
     UNIT_Size block_count = _UNIT_Vector_SIZE(&translation->blocks);
 
     for (UNIT_Size i = 0; i < block_count; ++i) {
-        while (true) {
+        int8_t any_did_change = 0;
+
+        do {
+            any_did_change = 0;
+
             _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks, i);
             assert(block != NULL);
             int8_t did_change;
-            if (UNIT_FAILED(optimize_block_moves(block, &did_change))) {
+            if (UNIT_FAILED(optimize_block_loads(block, &did_change))) {
                 return _UNIT_FAIL;
             }
 
-            if (!did_change) {
-                break;
+            any_did_change = MAX(did_change, any_did_change);
+
+            if (UNIT_FAILED(optimize_block_folds(block, num_registers, &did_change))) {
+                return _UNIT_FAIL;
             }
-        }
+
+            any_did_change = MAX(did_change, any_did_change);
+        } while (any_did_change);
     }
 
     return _UNIT_OK;

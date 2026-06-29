@@ -16,11 +16,12 @@ class TestFactorial(ExampleTestRunner, executable_name="unit_factorial"):
             (4, 24),
             (5, 120),
             (6, 720),
-            (7, 5040)
+            (7, 5040),
         ):
             with self.subTest(input=input, output=output):
                 result = self._run(input).strip("\n")
                 self.assertEqual(result, str(output))
+
 
 if __name__ == "__main__":
     unittest.main()

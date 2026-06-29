@@ -22,6 +22,7 @@ UNIT_Procedure_Init(UNIT_Procedure *procedure,
     assert(context != NULL);
     assert(name != NULL);
     procedure->context = context;
+    procedure->flags = UNIT_FLAG_NONE;
     procedure->name = _UNIT_StrDup(context, name);
     if (procedure->name == NULL) {
         return _UNIT_FAIL;
@@ -543,13 +544,9 @@ deduce_stack_effect(const UNIT_Procedure *procedure, const _UNIT_Operation *op,
     assert(context != NULL);
 
 #define POP()                                                                   \
-    if (_UNIT_Vector_SIZE(debug_stack) == 0) {                                  \
-        _UNIT_SetErrorFormat(context, UNIT_ERROR_INVALID_USAGE,                 \
-                      "stack underflow at %s",                                  \
-                      UNIT_Instruction_GetName(op->instruction));               \
-        return _UNIT_FAIL;                                                      \
+    if (_UNIT_Vector_SIZE(debug_stack) != 0) {                                  \
+        _UNIT_Dealloc(context, _UNIT_Vector_Pop(debug_stack));                  \
     }                                                                           \
-    _UNIT_Dealloc(context, _UNIT_Vector_Pop(debug_stack));
 
 #define PUSH(tp, the_value)                                                     \
     do {                                                                        \

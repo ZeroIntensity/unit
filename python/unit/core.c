@@ -38,6 +38,8 @@ set_py_error_from_context(_unit_state *state, UNIT_Context *context)
     assert(context != NULL);
     assert(state != NULL);
     assert(state->ErrorType != NULL);
+    assert(UNIT_GetErrorCode(context) != UNIT_ERROR_NONE);
+    assert(UNIT_GetErrorMessage(context) != NULL);
 
     PyErr_Format(state->ErrorType, "[%s] %s",
                  UNIT_ErrorCode_ToString(UNIT_GetErrorCode(context)),
@@ -255,13 +257,64 @@ CompiledProcedureObject_write_object_file(PyObject *op, PyObject *args)
 }
 
 static PyObject *
-CompiledProcedureObject_jit(PyObject *op, PyObject *unused)
+CompiledProcedureObject_jit(PyObject *op, PyObject *raw_symbols)
 {
     assert(op != NULL);
     CompiledProcedureObject *self = CompiledProcedureObject_CAST(op);
     _unit_state *state = get_state_from_object(op);
 
-    UNIT_ExecutableBuffer *buffer = UNIT_CompiledProcedure_JIT(self->compiled_procedure);
+    PyObject *symbols = PySequence_Fast(raw_symbols, "expected an iterable for symbols");
+    if (symbols == NULL) {
+        return NULL;
+    }
+
+    UNIT_SymbolMap symbol_map;
+    if (UNIT_FAILED(UNIT_SymbolMap_Init(&symbol_map, self->compiled_procedure->context))) {
+        Py_DECREF(symbols);
+        set_py_error_from_context(state, self->compiled_procedure->context);
+        return NULL;
+    }
+
+    Py_ssize_t size = PySequence_Fast_GET_SIZE(symbols);
+    for (Py_ssize_t index = 0; index < size; ++index) {
+        PyObject *item = PySequence_Fast_GET_ITEM(symbols, index);
+        assert(item != NULL);
+        if (!PyTuple_Check(item) || PyTuple_GET_SIZE(item) != 2) {
+            Py_DECREF(symbols);
+            PyErr_Format(PyExc_TypeError, "expected a tuple with 2 items, got %R",
+                         item);
+            UNIT_SymbolMap_Clear(&symbol_map);
+            return NULL;
+        }
+
+        PyObject *name_obj = PyTuple_GET_ITEM(item, 0);
+        const char *name = PyUnicode_AsUTF8(name_obj);
+        if (name == NULL) {
+            Py_DECREF(symbols);
+            UNIT_SymbolMap_Clear(&symbol_map);
+            return NULL;
+        }
+
+        PyObject *address_obj = PyTuple_GET_ITEM(item, 1);
+
+        void *address = PyLong_AsVoidPtr(address_obj);
+        if (address == NULL && PyErr_Occurred()) {
+            Py_DECREF(symbols);
+            UNIT_SymbolMap_Clear(&symbol_map);
+            return NULL;
+        }
+
+        if (UNIT_FAILED(UNIT_SymbolMap_RegisterSymbol(&symbol_map, name, address))) {
+            Py_DECREF(symbols);
+            UNIT_SymbolMap_Clear(&symbol_map);
+            set_py_error_from_context(state, self->compiled_procedure->context);
+            return NULL;
+        }
+    }
+
+    UNIT_ExecutableBuffer *buffer = UNIT_CompiledProcedure_JIT(self->compiled_procedure,
+                                                               &symbol_map);
+    UNIT_SymbolMap_Clear(&symbol_map);
     if (buffer == NULL) {
         set_py_error_from_context(state, self->compiled_procedure->context);
         return NULL;
@@ -315,7 +368,7 @@ CompiledProcedureObject_dealloc(PyObject *op)
 
 static PyMethodDef CompiledProcedureObject_methods[] = {
     {"write_object_file", CompiledProcedureObject_write_object_file, METH_VARARGS, NULL},
-    {"jit", CompiledProcedureObject_jit, METH_NOARGS, NULL},
+    {"jit", CompiledProcedureObject_jit, METH_O, NULL},
     {"print_translation", CompiledProcedureObject_print_translation, METH_NOARGS, NULL},
     {NULL},
 };
@@ -486,6 +539,31 @@ ProcedureObject_add_operation(PyObject *op, PyObject *args)
     }
 
     if (UNIT_FAILED(UNIT_Procedure_AddOperation(&self->procedure, instruction, oparg))) {
+        set_py_error_from_context(get_state_from_object(op), self->procedure.context);
+        return NULL;
+    }
+
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+ProcedureObject_load_string(PyObject *op, PyObject *string_obj)
+{
+    assert(op != NULL);
+    assert(string_obj != NULL);
+    ProcedureObject *self = ProcedureObject_CAST(op);
+
+    if (!PyUnicode_Check(string_obj)) {
+        PyErr_Format(PyExc_TypeError, "expected a string, got %R", string_obj);
+        return NULL;
+    }
+
+    const char *string = PyUnicode_AsUTF8(string_obj);
+    if (string == NULL) {
+        return NULL;
+    }
+
+    if (UNIT_FAILED(UNIT_Procedure_AddStringLoad(&self->procedure, string))) {
         set_py_error_from_context(get_state_from_object(op), self->procedure.context);
         return NULL;
     }
@@ -701,6 +779,7 @@ static PyMethodDef ProcedureObject_methods[] = {
     {"use_label", ProcedureObject_use_label, METH_O, NULL},
     {"add_call_name", ProcedureObject_add_call_name, METH_VARARGS, NULL},
     {"add_operation", ProcedureObject_add_operation, METH_VARARGS, NULL},
+    {"add_string_load", ProcedureObject_load_string, METH_O, NULL},
     {"compile", ProcedureObject_compile, METH_O, NULL},
     {"optimize", ProcedureObject_optimize, METH_NOARGS, NULL},
     {"set_flags", ProcedureObject_set_flags, METH_O, NULL},

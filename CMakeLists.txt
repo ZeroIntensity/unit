@@ -32,6 +32,9 @@ if(UNIT_BUILD_EXAMPLES)
 
     add_executable(unit_factorial "${CMAKE_SOURCE_DIR}/examples/factorial.cpp")
     target_link_libraries(unit_factorial PRIVATE unit)
+
+    add_executable(unit_collatz "${CMAKE_SOURCE_DIR}/examples/collatz.cpp")
+    target_link_libraries(unit_collatz PRIVATE unit)
 endif()
 
 option(UNIT_BUILD_TESTS "Build tests" OFF)

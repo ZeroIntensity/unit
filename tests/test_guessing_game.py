@@ -8,7 +8,9 @@ class TestGuessingGame(ExampleTestRunner, executable_name="unit_guess"):
         self.compile()
 
     def _run(self, *, seed: int, guesses: list[int]) -> str:
-        return self.run_program(args=[str(seed)], input='\n'.join([str(i) for i in guesses]))
+        return self.run_program(
+            args=[str(seed)], input="\n".join([str(i) for i in guesses])
+        )
 
     def _filter_results(self, raw: str) -> list[str]:
         results: list[str] = []

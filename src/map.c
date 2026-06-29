@@ -37,7 +37,7 @@ static inline uint64_t _wyr3(const uint8_t *p, size_t k) {
 #define WY_SECRET3 0x589965cc75374cc3ull
 
 UNIT_Size
-_UNIT_Map_HashString(void *key)
+_UNIT_Map_HashString(const void *key)
 {
     const uint8_t *p = (const uint8_t *)key;
     uint64_t seed = WY_SECRET0;
@@ -91,15 +91,21 @@ _UNIT_Map_HashString(void *key)
 }
 
 UNIT_Size
-_UNIT_Map_HashDirect(void *key)
+_UNIT_Map_HashDirect(const void *key)
 {
     return (UNIT_Size)key;
 }
 
 bool
-_UNIT_Map_CompareEqual(void *a, void *b)
+_UNIT_Map_CompareEqual(const void *a, const void *b)
 {
     return a == b;
+}
+
+bool
+_UNIT_Map_CompareString(const void *a, const void *b)
+{
+    return !strcmp(a, b);
 }
 
 UNIT_Status
@@ -199,7 +205,7 @@ expand(_UNIT_Map *map) {
 }
 
 void *
-_UNIT_Map_Get(_UNIT_Map *map, void *key)
+_UNIT_Map_Get(const _UNIT_Map *map, const void *key)
 {
     assert(map != NULL);
     assert(key != NULL);

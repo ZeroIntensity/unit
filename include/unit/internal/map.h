@@ -19,8 +19,8 @@ typedef struct {
     uint64_t hash;
 } _UNIT_MapPair;
 
-typedef UNIT_Size (*_UNIT_Map_Hash)(void *);
-typedef bool (*_UNIT_Map_Compare)(void *, void *);
+typedef UNIT_Size (*_UNIT_Map_Hash)(const void *);
+typedef bool (*_UNIT_Map_Compare)(const void *, const void *);
 
 typedef struct {
     UNIT_Context *context;
@@ -34,13 +34,16 @@ typedef struct {
 } _UNIT_Map;
 
 UNIT_Size
-_UNIT_Map_HashString(void *key);
+_UNIT_Map_HashString(const void *key);
 
 UNIT_Size
-_UNIT_Map_HashDirect(void *key);
+_UNIT_Map_HashDirect(const void *key);
 
 bool
-_UNIT_Map_CompareEqual(void *a, void *b);
+_UNIT_Map_CompareEqual(const void *a, const void *b);
+
+bool
+_UNIT_Map_CompareString(const void *a, const void *b);
 
 UNIT_Status
 _UNIT_Map_Init(_UNIT_Map *map, UNIT_Context *context,
@@ -61,7 +64,7 @@ _UNIT_Map_New(UNIT_Context *context,
 _UNIT_Structure_CLEAR_AND_FREE(_UNIT_Map);
 
 void *
-_UNIT_Map_Get(_UNIT_Map *map, void *key);
+_UNIT_Map_Get(const _UNIT_Map *map, const void *key);
 
 UNIT_Status
 _UNIT_Map_Set(_UNIT_Map *map, void *key, void *value);

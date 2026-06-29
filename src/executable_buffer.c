@@ -4,6 +4,55 @@
 #include <unit/executable_buffer.h>
 #include <unit/platform.h>
 
+UNIT_Status
+UNIT_SymbolMap_Init(UNIT_SymbolMap *symbol_map, UNIT_Context *context)
+{
+    assert(symbol_map != NULL);
+    assert(context != NULL);
+    symbol_map->context = context;
+    if (UNIT_FAILED(_UNIT_Map_Init(&symbol_map->_symbols, context, 8, _UNIT_Map_CompareString,
+                                   _UNIT_Map_HashString, _UNIT_Dealloc, NULL))) {
+        return _UNIT_FAIL;
+    }
+
+    return _UNIT_OK;
+}
+
+void
+UNIT_SymbolMap_Clear(UNIT_SymbolMap *symbol_map)
+{
+    assert(symbol_map != NULL);
+    _UNIT_Map_Clear(&symbol_map->_symbols);
+}
+
+UNIT_SymbolMap *
+UNIT_SymbolMap_New(UNIT_Context *context)
+{
+    _UNIT_Structure_NEW_IMPL(UNIT_SymbolMap, context);
+}
+
+_UNIT_Structure_DEFINE_PUBLIC_FREE(UNIT_SymbolMap);
+
+UNIT_Status
+UNIT_SymbolMap_RegisterSymbol(UNIT_SymbolMap *symbol_map, const char *name, void *address)
+{
+    assert(symbol_map != NULL);
+    assert(name != NULL);
+    assert(address != NULL);
+
+    char *name_copy = _UNIT_StrDup(symbol_map->context, name);
+    if (name_copy == NULL) {
+        return _UNIT_FAIL;
+    }
+
+    if (UNIT_FAILED(_UNIT_Map_Set(&symbol_map->_symbols, name_copy, address))) {
+        _UNIT_Dealloc(symbol_map->context, name_copy);
+        return _UNIT_FAIL;
+    }
+
+    return _UNIT_OK;
+}
+
 struct _UNIT_ExecutableBuffer {
     UNIT_Context *context;
     void *code;
@@ -33,12 +82,27 @@ struct _UNIT_ExecutableBuffer {
     #define JIT_RESOLVE_SYMBOL(name) dlsym(RTLD_DEFAULT, name)
 #endif
 
+void *
+resolve_symbol(const UNIT_SymbolMap *symbol_map, const char *name)
+{
+    if (symbol_map != NULL) {
+        void *result = _UNIT_Map_Get(&symbol_map->_symbols, name);
+        if (result != NULL) {
+            return result;
+        }
+    }
+
+    return JIT_RESOLVE_SYMBOL(name);
+}
+
 static UNIT_Status
 init_executable_buffer(const UNIT_CompiledProcedure *compiled,
-                       UNIT_ExecutableBuffer *buffer)
+                       UNIT_ExecutableBuffer *buffer,
+                       const UNIT_SymbolMap *symbol_map)
 {
     assert(compiled != NULL);
     assert(buffer != NULL);
+    // symbol_map may be NULL
 
     const _UNIT_CompileContext *compile_context = &compiled->_compile_context;
     UNIT_Size code_size = _UNIT_CodeBuffer_CurrentIndex(&compile_context->buffer);
@@ -75,7 +139,7 @@ init_executable_buffer(const UNIT_CompiledProcedure *compiled,
             if (symbol->is_defined) {
                 target = (char *)code + symbol->text_offset;
             } else {
-                target = JIT_RESOLVE_SYMBOL(symbol->name);
+                target = resolve_symbol(symbol_map, symbol->name);
                 if (target == NULL) {
                     JIT_FREE(code, total_size);
                     _UNIT_SetErrorFormat(compiled->context,
@@ -148,13 +212,14 @@ init_executable_buffer(const UNIT_CompiledProcedure *compiled,
 }
 
 UNIT_ExecutableBuffer *
-UNIT_CompiledProcedure_JIT(const UNIT_CompiledProcedure *compiled_procedure)
+UNIT_CompiledProcedure_JIT(const UNIT_CompiledProcedure *compiled_procedure,
+                           const UNIT_SymbolMap *symbol_map)
 {
     assert(compiled_procedure != NULL);
     UNIT_ExecutableBuffer *buffer = _UNIT_Alloc(compiled_procedure->context,
                                                 sizeof(UNIT_ExecutableBuffer));
     buffer->context = compiled_procedure->context;
-    if (UNIT_FAILED(init_executable_buffer(compiled_procedure, buffer))) {
+    if (UNIT_FAILED(init_executable_buffer(compiled_procedure, buffer, symbol_map))) {
         _UNIT_Dealloc(compiled_procedure->context, buffer);
         return NULL;
     }
