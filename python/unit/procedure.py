@@ -1,8 +1,7 @@
-import sys
 from unit.context import Context
 from unit.opcode import OpCode
 from unit import _core
-from typing import IO, Any, Literal, TypeAlias, TypeVar, Generic
+from typing import Any, Literal, TypeAlias, TypeVar, Generic
 from dataclasses import dataclass
 import ctypes
 
@@ -153,28 +152,54 @@ class JumpLabel:
         self._label = label
 
 
+Inlining: TypeAlias = Literal["force", "never"]
+
 class Procedure:
     def __init__(
         self,
         name: str,
         *,
         context: Context | None = None,
-        inlining: Literal["force", "never"] | None = None,
+        inlining: Inlining | None = None,
         optimize_translation: bool = True,
     ) -> None:
         self.context = context or Context.current_or_new()
         self.name = name
         self._procedure = _core.Procedure(self.context._context, name)
+        self._inlining: Inlining | None = inlining
+        self._optimize_translation = optimize_translation
+
+    @property
+    def inlining(self) -> Inlining | None:
+        return self._inlining
+
+    @inlining.setter
+    def inlining(self, value: Inlining | None) -> None:
+        self._inlining = value
+        self._update_flags()
+
+    @property
+    def optimize_translation(self) -> bool:
+        return self._optimize_translation
+
+    @optimize_translation.setter
+    def optimize_translation(self, value: bool) -> None:
+        self._optimize_translation = value
+        self._update_flags()
+
+    def _update_flags(self) -> None:
         flags = _core.UNIT_FLAG_NONE
 
-        if inlining == "force":
+        if self._inlining == "force":
             flags |= _core.UNIT_FLAG_FORCE_INLINE
-        elif inlining == "never":
+        elif self._inlining == "never":
             flags |= _core.UNIT_FLAG_FORCE_NO_INLINE
+        else:
+            assert self._inlining is None, "unknown value for inlining"
 
         # We don't need a case for True because translation optimization is
         # enabled by default.
-        if optimize_translation is False:
+        if self._optimize_translation is False:
             flags |= _core.UNIT_FLAG_NO_OPTIMIZE_TRANSLATION
 
         self._procedure.set_flags(flags)

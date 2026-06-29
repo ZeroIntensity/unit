@@ -8,11 +8,23 @@ class BasicTests(unittest.TestCase):
         return unit.Procedure(self.id())
 
     def compile_and_run(self, procedure: unit.Procedure, expected: Any, *args: Any):
+
+        procedure.optimize_translation = False
+        super_unoptimized_function = procedure.compile().jit()
+        self.assertEqual(super_unoptimized_function(*args), expected)
+
+        procedure.optimize_translation = True
         unoptimized_function = procedure.compile().jit()
         self.assertEqual(unoptimized_function(*args), expected)
+
+        procedure.optimize_translation = False
         procedure.optimize()
         optimized_function = procedure.compile().jit()
         self.assertEqual(optimized_function(*args), expected)
+
+        procedure.optimize_translation = True
+        super_optimized_function = procedure.compile().jit()
+        self.assertEqual(super_optimized_function(*args), expected)
 
     def test_return_constant(self):
         proc = self.make_procedure()
