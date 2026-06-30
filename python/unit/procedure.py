@@ -75,7 +75,9 @@ class CompiledProcedure:
             )
         self._compiled.write_object_file(path, format_enum)
 
-    def jit(self, extra_symbols: dict[str, int] | None = None) -> ExecutableBuffer[Any, Any]:
+    def jit(
+        self, extra_symbols: dict[str, int] | None = None
+    ) -> ExecutableBuffer[Any, Any]:
         symbols = []
         if extra_symbols is not None:
             for key, value in extra_symbols.items():
@@ -84,7 +86,6 @@ class CompiledProcedure:
 
     def translation_text(self) -> str:
         return self._compiled.print_translation()
-
 
 
 Architecture: TypeAlias = Literal["amd64", "aarch64"]
@@ -144,6 +145,7 @@ class Platform:
 
         return cls(architecture=architecture, abi=abi)
 
+
 class JumpLabel:
     def __init__(self, label: _core.JumpLabel) -> None:
         if __debug__ and not isinstance(label, _core.JumpLabel):
@@ -153,6 +155,7 @@ class JumpLabel:
 
 
 Inlining: TypeAlias = Literal["force", "never"]
+
 
 class Procedure:
     def __init__(
@@ -227,7 +230,9 @@ class Procedure:
 
     def create_jump_label(self, name: str) -> JumpLabel:
         if __debug__ and not isinstance(name, str):
-            raise TypeError(f"Expected a string for the jump label name, but got {name!r}")
+            raise TypeError(
+                f"Expected a string for the jump label name, but got {name!r}"
+            )
 
         return JumpLabel(self._procedure.create_jump_label(name))
 
@@ -272,7 +277,9 @@ class Procedure:
             raise TypeError(f"Expected a string for the symbol name, but got {name!r}")
 
         if __debug__ and not isinstance(num_args, int):
-            raise TypeError(f"Expected an integer for the number of arguments, but got {num_args!r}")
+            raise TypeError(
+                f"Expected an integer for the number of arguments, but got {num_args!r}"
+            )
 
         if num_args < 0:
             raise ValueError("Cannot have a negative number of arguments")

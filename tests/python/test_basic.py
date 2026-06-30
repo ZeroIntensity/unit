@@ -148,7 +148,6 @@ class BasicTests(unittest.TestCase):
 
         self.compile_and_run(proc, 1)
 
-
     def test_chained_arithmetic(self):
         # (2 + 3) * 4 = 20
         proc = self.make_procedure()
@@ -440,7 +439,6 @@ class BasicTests(unittest.TestCase):
         proc.return_value()
 
         self.compile_and_run(proc, 42)
-
 
     def test_countdown_loop(self):
         # sum = 0; i = 5; while (i != 0) { sum += i; i -= 1; } return sum

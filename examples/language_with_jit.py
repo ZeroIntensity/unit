@@ -1,6 +1,6 @@
 from collections.abc import Iterable, Iterator, Sequence
 import ctypes
-from typing import Any, ClassVar, Literal, overload
+from typing import IO, Any, ClassVar, Literal, overload
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from queue import LifoQueue
@@ -9,6 +9,7 @@ from enum import Enum, auto
 import operator as py_operators
 import unit
 import contextvars
+import sys
 
 import _pyrepl.readline as readline
 from _pyrepl.utils import ColorSpan, Span
@@ -257,8 +258,9 @@ class Function:
 
         procedure.optimize()
         compiled = procedure.compile()
-        print(f"SPECIALIZED {self.name}{arguments}:")
-        print(compiled.translation_text())
+
+        print(f"SPECIALIZED {self.name}{arguments}:", file=sys.stderr)
+        print(compiled.translation_text(), file=sys.stderr)
 
         trampoline_addresses: dict[str, int] = {}
         for name, trampoline in self.trampolines.items():
@@ -300,7 +302,7 @@ class Print(Statement):
         yield Instruction(OpCode.PRINT)
 
     def codegen_unit(self, procedure: unit.Procedure) -> None:
-        procedure.load_string("%d")
+        procedure.load_string("%d\n")
         self.value.codegen_unit(procedure)
         procedure.call_name("printf", 2)
         procedure.pop()
@@ -369,7 +371,7 @@ class Module:
         for statement in self.body:
             statement.codegen_unit(procedure)
 
-OPERATORS: set[str] = {"'", '"', "(", ")", "=", ",", " ", "+", "-", "*", "/", "{", "}"}
+OPERATORS: set[str] = {"'", '"', "(", ")", "=", ",", " ", "+", "-", "*", "/", "%", "{", "}"}
 
 def tokenize(source: str) -> Iterator[str]:
     for line in source.split("\n"):
@@ -602,10 +604,12 @@ class Stack[T]:
 class Interpreter:
     CURRENT_INTERPRETER = contextvars.ContextVar("CURRENT_INTERPRETER")
 
-    def __init__(self) -> None:
+    def __init__(self, *, out_file: IO[str] = sys.stdout, force_specialization: bool = False) -> None:
         self.variables: dict[str, Any] = {}
         self.functions: dict[str, Function] = {}
         self.stack = Stack[Any]()
+        self.out_file = out_file
+        self.force_specialization = force_specialization
         self._index = 0
 
     @classmethod
@@ -626,7 +630,11 @@ class Interpreter:
 
         return trampoline_call
 
-    def call(self, function: Function, arguments: tuple[Any, ...]) -> None:
+    def call(self, function: Function, arguments: tuple[Any, ...]) -> Any:
+        if self.force_specialization:
+            specialized = function.specialize(arguments)
+            return specialized()
+
         if arguments in function.observed_args:
             function.observed_args[arguments] += 1
             if function.observed_args[arguments] == 3:
@@ -634,7 +642,7 @@ class Interpreter:
         else:
             function.observed_args[arguments] = 1
 
-        interpreter = Interpreter()
+        interpreter = Interpreter(out_file=self.out_file, force_specialization=self.force_specialization)
         code = [inst for inst in function.body]
 
         # To allow recursive calls:
@@ -646,9 +654,9 @@ class Interpreter:
 
         interpreter.interpret(code)
         if interpreter.stack.is_empty():
-            self.stack.push(None)
+            return None
         else:
-            self.stack.push(interpreter.stack.pop())
+            return interpreter.stack.pop()
 
     def interpret_instruction(self, instruction: Instruction) -> None:
         opcode = instruction.opcode
@@ -668,7 +676,7 @@ class Interpreter:
                 raise RuntimeError(f"No variable named {oparg!r}") from None
         elif opcode == OpCode.PRINT:
             assert oparg is None
-            print(self.stack.pop())
+            print(self.stack.pop(), file=self.out_file)
         elif opcode == OpCode.STORE_FUNCTION:
             assert isinstance(oparg, Function)
             name = oparg.name
@@ -700,7 +708,7 @@ class Interpreter:
                 self.stack.push(specialized())
                 return
 
-            self.call(function, arguments)
+            self.stack.push(self.call(function, arguments))
         elif opcode == OpCode.POP_TOP:
             assert oparg is None
             self.stack.pop()
@@ -726,7 +734,7 @@ class Interpreter:
                 "+": py_operators.add,
                 "-": py_operators.sub,
                 "*": py_operators.mul,
-                "/": py_operators.truediv,
+                "/": py_operators.floordiv,
             }
             right = self.stack.pop()
             left = self.stack.pop()
