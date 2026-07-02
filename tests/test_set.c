@@ -70,10 +70,9 @@ static void test_remove_preserves_chain(UNIT_Context *context)
     // Force collisions by using values that hash to the same slot
     _UNIT_Set set;
     ASSERT_OK(context, _UNIT_Set_Init(&set, context, 4));
-    // Add several values — some will collide in a 4-slot table
     _UNIT_Set_Add(&set, PTR(0));
-    _UNIT_Set_Add(&set, PTR(4));  // same slot as 0 with capacity 4
-    _UNIT_Set_Add(&set, PTR(8));  // same slot again
+    _UNIT_Set_Add(&set, PTR(4)); // same slot as 0 with capacity 4
+    _UNIT_Set_Add(&set, PTR(8)); // same slot again
     _UNIT_Set_Remove(&set, PTR(0));
     ASSERT(!_UNIT_Set_Contains(&set, PTR(0)));
     ASSERT(_UNIT_Set_Contains(&set, PTR(4)));

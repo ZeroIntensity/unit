@@ -1,3 +1,5 @@
+.. _c-reference:
+
 C API Reference
 ===============
 

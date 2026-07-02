@@ -1,6 +1,6 @@
 .. _stack-machines:
 
-Stack Machines
+Stack machines
 ==============
 
 What is a stack machine?

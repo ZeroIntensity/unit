@@ -1,4 +1,4 @@
-The Basics of Procedures
+The basics of procedures
 ========================
 
 What is a "procedure"?

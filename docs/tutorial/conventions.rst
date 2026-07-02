@@ -1,5 +1,5 @@
-UNIT's C API
-============
+C API conventions
+=================
 
 Before we can start generating machine code, we have to know some background
 information about using UNIT's C API as a whole.

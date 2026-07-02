@@ -1,6 +1,6 @@
 .. _translation-pipeline:
 
-The Translation Pipeline
+The translation pipeline
 ========================
 
 .. note::

@@ -13,6 +13,7 @@ Contexts
    passing it explicitly.
 
    .. code-block:: python
+      :caption: :iconify:`akar-icons:python-fill` Example
 
       # Explicit context
       ctx = unit.Context()

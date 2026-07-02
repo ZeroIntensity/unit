@@ -8,6 +8,6 @@ This section teaches you how to use UNIT.
    :caption: Contents:
 
    introduction
-   the-api
+   conventions
    procedure-basics
    compilation

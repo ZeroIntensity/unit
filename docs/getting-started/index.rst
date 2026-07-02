@@ -8,4 +8,5 @@ This section walks you through getting a working executable with UNIT.
    :caption: Contents:
 
    installation
+   bindings
    first-program

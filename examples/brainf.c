@@ -242,7 +242,7 @@ codegen_body(UNIT_Procedure *procedure, FILE *file, int8_t in_loop)
                 break;
             }
             case ']':
-                return 1;  // return to caller's '[' handler
+                return 1; // return to caller's '[' handler
             default:
                 // Comment character
                 break;

@@ -1,3 +1,5 @@
+.. _cpp-reference:
+
 C++ API Reference
 =================
 
