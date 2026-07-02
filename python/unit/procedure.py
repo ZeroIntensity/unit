@@ -89,6 +89,7 @@ class CompiledProcedure:
         if extra_symbols is not None:
             for key, value in extra_symbols.items():
                 symbols.append((key, value))
+
         with Error.capture_internal_errors():
             return ExecutableBuffer(self._compiled.jit(symbols))
 
