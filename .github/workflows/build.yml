@@ -49,7 +49,12 @@ jobs:
                   python-version: "3.14"
 
             - name: Configure
-              run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DUNIT_BUILD_EXAMPLES=on -DUNIT_BUILD_TESTS=on
+              run: >
+                  cmake -B build
+                  -DCMAKE_BUILD_TYPE=${{ matrix.build-type }}
+                  -DUNIT_BUILD_EXAMPLES=on
+                  -DUNIT_BUILD_TESTS=on
+                  ${{ runner.os == 'Windows' && '-T ClangCL' || '' }}
 
             - name: Build
               run: cmake --build build
@@ -57,27 +62,9 @@ jobs:
             - name: Run tests
               run: cmake --build build --target tests --target python_tests
 
-    valgrind:
-        needs: [changes]
-        if: needs.changes.outputs.source == 'true'
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-              with:
-                  persist-credentials: false
-
-            - name: Install valgrind
-              run: sudo apt-get update && sudo apt-get install -y valgrind
-
-            - name: Configure
-              run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DUNIT_BUILD_EXAMPLES=on
-
-            - name: Build
-              run: cmake --build build
-
             - name: Run examples under valgrind
               run: |
-                  for example in build/examples/*; do
+                  for example in build/unit_*; do
                     if [ -x "$example" ] && [ -f "$example" ]; then
                       echo "=== Running $example ==="
                       valgrind --error-exitcode=1 --leak-check=full "$example" || exit 1
@@ -85,7 +72,7 @@ jobs:
                   done
 
     build-sdist:
-        needs: [test, valgrind]
+        needs: [test]
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -123,6 +110,7 @@ jobs:
                   CIBW_ARCHS_LINUX: x86_64
                   CIBW_ARCHS_MACOS: x86_64 arm64
                   CIBW_ARCHS_WINDOWS: AMD64
+                  CIBW_ENVIRONMENT_WINDOWS: CMAKE_GENERATOR_TOOLSET=ClangCL
                   # For when we add Mac and Windows support:
                   # CIBW_TEST_COMMAND: python -m unittest discover -s {project}/tests/python -v
 
