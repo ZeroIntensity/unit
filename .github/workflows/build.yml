@@ -56,7 +56,7 @@ jobs:
                   allow-prereleases: true
 
             - name: Run tests
-              run: cmake --build build --target tests --targets python_tests
+              run: cmake --build build --target tests --target python_tests
 
     valgrind:
         needs: [changes]
