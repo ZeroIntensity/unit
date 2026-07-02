@@ -44,16 +44,15 @@ jobs:
               with:
                   persist-credentials: false
 
+            - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+              with:
+                  python-version: "3.14"
+
             - name: Configure
               run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DUNIT_BUILD_EXAMPLES=on -DUNIT_BUILD_TESTS=on
 
             - name: Build
               run: cmake --build build
-
-            - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
-              with:
-                  python-version: "3.14"
-                  allow-prereleases: true
 
             - name: Run tests
               run: cmake --build build --target tests --target python_tests
@@ -71,7 +70,7 @@ jobs:
               run: sudo apt-get update && sudo apt-get install -y valgrind
 
             - name: Configure
-              run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DUNIT_BUILD_EXAMPLES=on -DUNIT_BUILD_TESTS=on
+              run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DUNIT_BUILD_EXAMPLES=on
 
             - name: Build
               run: cmake --build build
@@ -96,7 +95,6 @@ jobs:
             - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
               with:
                   python-version: "3.14"
-                  allow-prereleases: true
 
             - name: Build sdist
               run: pipx run build --sdist
