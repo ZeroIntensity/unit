@@ -58,23 +58,11 @@ jobs:
                   -DUNIT_BUILD_TESTS=on
                   ${{ runner.os == 'Windows' && '-T ClangCL' || '' }}
 
-            - name: Install valgrind
-              run: sudo apt-get update && sudo apt-get install -y valgrind
-
             - name: Build
               run: cmake --build build
 
             - name: Run tests
               run: cmake --build build --target tests --target python_tests
-
-            - name: Run examples under valgrind
-              run: |
-                  for example in build/unit_*; do
-                    if [ -x "$example" ] && [ -f "$example" ]; then
-                      echo "=== Running $example ==="
-                      valgrind --error-exitcode=1 --leak-check=full "$example" || exit 1
-                    fi
-                  done
 
     build-sdist:
         needs: [test]

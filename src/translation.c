@@ -1375,6 +1375,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
     LocalVariables_Clear(&locals);
     _UNIT_SizeSet_Clear(&address_taken_locals);
     _UNIT_Vector_Clear(&locals_snapshots);
+    _UNIT_Vector_Clear(&jump_labels);
     // This is so we can determine the size of the frame later
     translation->num_memory_slots = locals.next_stack_slot;
     return analyze_liveness(translation);
@@ -1385,6 +1386,7 @@ error:
     _UNIT_Vector_Clear(&translation->blocks);
     _UNIT_SizeSet_Clear(&address_taken_locals);
     _UNIT_Vector_Clear(&locals_snapshots);
+    _UNIT_Vector_Clear(&jump_labels);
     return _UNIT_FAIL;
 }
 
