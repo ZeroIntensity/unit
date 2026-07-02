@@ -28,14 +28,13 @@ IR.
       :link: concepts/index
       :link-type: doc
 
-      Understand stack machines, the compilation pipeline, and other important
-      concepts to know when learning how to use UNIT.
+      Understand important concepts to know when learning how to use UNIT.
 
    .. grid-item-card:: API Reference
       :link: reference/index
       :link-type: doc
 
-      Complete reference for UNIT's C API.
+      Complete reference for UNIT's API.
 
 .. toctree::
    :hidden:

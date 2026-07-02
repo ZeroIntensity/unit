@@ -21,12 +21,7 @@ Contexts and Errors
 
    .. cpp:function:: UNIT_Context *raw()
 
-      Get the raw :c:type:`UNIT_Context` that this class is wrapping.
-
-   .. cpp:function:: Context(const Context &) = delete
-   .. cpp:function:: Context &operator=(const Context &) = delete
-
-      These prevent implicit copying of this type.
+      Get the raw :c:type:`UNIT_Context` that this instance is wrapping.
 
 
 .. cpp:enum-class:: ErrorCode

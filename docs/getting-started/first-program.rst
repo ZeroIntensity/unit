@@ -1,11 +1,24 @@
 Your First Program With UNIT
 ============================
 
-This section provides instructions on how to build a "hello world" program
-with UNIT.
+Choosing an interface
+---------------------
 
-Example
--------
+UNIT is accessible as a library in three languages:
+
+1. C. This is the most native variation, as UNIT is itself written in C.
+2. C++. This is a thin wrapper over the C bindings.
+3. Python. This is very easy to use, but requires installing an additional PyPI package.
+
+Each option comes with its own benefits and tradeoffs.
+Choose the interface that best suits your needs.
+
+The Example
+-----------
+
+
+C Example
+---------
 
 Start with some C code using UNIT:
 
@@ -39,7 +52,7 @@ Start with some C code using UNIT:
         UNIT_Procedure_AddOperation(&procedure, UNIT_OP_RETURN_VALUE, 0 /* doesn't matter */);
 
         // Finally, we can compile our procedure into an object file
-        UNIT_CompiledProcedure *compiled = UNIT_Compile(&procedure, UNIT_ARCH_AMD64);
+        UNIT_CompiledProcedure *compiled = UNIT_Compile(&procedure, UNIT_HOST_PLATFORM);
         UNIT_CompiledProcedure_WriteObjectFile(compiled, "test.o", UNIT_FORMAT_ELF);
         UNIT_CompiledProcedure_Free(compiled);
 
@@ -52,7 +65,9 @@ Start with some C code using UNIT:
 .. note::
 
    The above code does not have proper error handling. In real applications,
-   each call needs to be inside of a ``UNIT_FAILED`` check.
+   most calls need to be inside of a :c:macro:`UNIT_FAILED` check.
+
+
 
 
 Compiling and running the example

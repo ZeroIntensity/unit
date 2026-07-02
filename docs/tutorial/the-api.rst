@@ -1,8 +1,8 @@
-The UNIT API
+UNIT's C API
 ============
 
 Before we can start generating machine code, we have to know some background
-information about using UNIT as a whole.
+information about using UNIT's C API as a whole.
 
 
 Naming conventions
@@ -20,8 +20,7 @@ strongly discouraged to use any APIs under that namespace.
    like available publicly, please open an issue on `the issue tracker
    <https://github.com/ZeroIntensity/unit/issues>`_.
 
-
-In general, every type in UNIT will be under its own namespace. So, for example,
+In general, every type in UNIT will be given its own namespace. So, for example,
 functions relating to a type called ``UNIT_SomeType`` will be named
 ``UNIT_SomeType_DoSomething``.
 
@@ -45,8 +44,7 @@ the error status (similar to ``errno``), is stored here.
 
 Generally speaking, you don't need to care much about what is actually stored
 on the context, but you do always need to have one. A context can be constructed
-using :c:func:`UNIT_Context_Init` or :c:func:`UNIT_Context_New`, like
-we learned above.
+using :c:func:`UNIT_Context_Init` or :c:func:`UNIT_Context_New` (more on this later).
 
 
 Error handling

@@ -7,6 +7,7 @@ This section teaches you how to use UNIT.
    :maxdepth: 2
    :caption: Contents:
 
+   introduction
    the-api
    procedure-basics
    compilation
