@@ -58,6 +58,9 @@ jobs:
                   -DUNIT_BUILD_TESTS=on
                   ${{ runner.os == 'Windows' && '-T ClangCL' || '' }}
 
+            - name: Install valgrind
+              run: sudo apt-get update && sudo apt-get install -y valgrind
+
             - name: Build
               run: cmake --build build
 
