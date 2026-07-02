@@ -857,39 +857,6 @@ func fib(n) {
 }
 """
 
-# Debug code, remove later
-code = """
-func fib(n) {
-    if n <= 0 {
-        return 0
-    }
-
-    if n == 1 {
-        return 1
-    }
-
-    return fib(n - 1) + fib(n - 2)
-}
-print fib(10)
-let x = 5
-print x
-if x == 5 {
-    print 2
-}
-
-if x == 2 {} else { print 3 }
-
-func test(n) {
-    print n
-}
-
-test(2)
-test(2)
-test(2)
-"""
-mod = Parser.parse(code)
-Interpreter().run(mod)
-
 
 class REPL:
     def __init__(self) -> None:
