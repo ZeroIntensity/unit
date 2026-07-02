@@ -1,79 +1,3 @@
-// ================================================================
-// HOW ELF WORKS (by Claude)
-// ================================================================
-//
-// An ELF (Executable and Linkable Format) object file is the
-// standard format for relocatable object files, shared libraries,
-// and executables on Linux and most Unix systems.
-//
-// The file is organized as:
-//
-//   +-------------------+
-//   | ELF Header        |  Fixed-size header at offset 0. Contains
-//   |                   |  the magic number (7f 45 4c 46), the
-//   |                   |  machine type, and a pointer to the
-//   |                   |  section header table.
-//   +-------------------+
-//   | Section Header    |  Array of section headers. Each entry
-//   | Table             |  describes one section: its type, file
-//   |                   |  offset, size, and flags.
-//   +-------------------+
-//   | .text             |  Machine code. Flagged as allocatable
-//   |                   |  and executable.
-//   +-------------------+
-//   | .rodata           |  Read-only data. String literals and
-//   |                   |  constants live here. Flagged as
-//   |                   |  allocatable but not writable or
-//   |                   |  executable.
-//   +-------------------+
-//   | .rela.text        |  Relocation entries for .text. Each one
-//   |                   |  says "at byte offset X, patch in the
-//   |                   |  address of symbol Y with addend Z."
-//   |                   |  The linker processes these to resolve
-//   |                   |  external function calls and data refs.
-//   +-------------------+
-//   | .symtab           |  Symbol table. Each entry has a name
-//   |                   |  (offset into .strtab), a type (function,
-//   |                   |  object, etc.), a binding (local/global),
-//   |                   |  and either a defined value (offset in a
-//   |                   |  section) or SHN_UNDEF for externals.
-//   +-------------------+
-//   | .strtab           |  String table for symbol names. Just a
-//   |                   |  blob of null-terminated strings packed
-//   |                   |  together. Symbol entries point into this
-//   |                   |  by byte offset.
-//   +-------------------+
-//   | .shstrtab         |  String table for section names. Same
-//   |                   |  format as .strtab but used by the
-//   |                   |  section headers instead of symbols.
-//   +-------------------+
-//
-// KEY RELATIONSHIPS:
-//
-//   - Section headers reference .shstrtab for their names (by
-//     byte offset into the string table).
-//
-//   - .symtab's sh_link points to .strtab so the linker knows
-//     where to find symbol name strings.
-//
-//   - .rela.text's sh_link points to .symtab (which symbols the
-//     relocations reference) and sh_info points to .text (which
-//     section the relocations patch).
-//
-//   - Relocations use R_AMD64_PLT32 for function calls. The
-//     linker computes: S + A - P, where S is the symbol address,
-//     A is the addend (-4, to account for the displacement being
-//     relative to the end of the instruction, not the start of
-//     the 4-byte field), and P is the patch location.
-//
-//   - String literals are stored in .rodata. Code references them
-//     via RIP-relative addressing with R_AMD64_PC32 relocations
-//     that point at the .rodata section symbol. The addend is the
-//     offset of the string within .rodata, minus 4 (for the same
-//     reason as PLT32).
-//
-// ================================================================
-
 #include <stdio.h>
 #include <string.h>
 
@@ -100,7 +24,7 @@ typedef struct {
     const char *section_string_table;
     UNIT_Size section_string_table_size;
     _UNIT_SizeMap symtab_indices;
-} _UNIT_ELF_Object;
+} ELF_Object;
 
 enum {
     SECTION_NULL = 0,
@@ -126,7 +50,7 @@ static const char section_string_table[] =
 // Returns the byte offset where the string starts, which is
 // what symbol and section header name fields expect.
 static UNIT_Size
-append_string(_UNIT_ELF_Object *object, const char *string)
+append_string(ELF_Object *object, const char *string)
 {
     assert(object != NULL);
     assert(string != NULL);
@@ -150,7 +74,7 @@ append_string(_UNIT_ELF_Object *object, const char *string)
 }
 
 static ELF_Symbol *
-create_and_store_symbol(_UNIT_ELF_Object *object)
+create_and_store_symbol(ELF_Object *object)
 {
     assert(object != NULL);
     ELF_Symbol *symbol = _UNIT_Alloc(object->context, sizeof(ELF_Symbol));
@@ -167,7 +91,7 @@ create_and_store_symbol(_UNIT_ELF_Object *object)
 /* Adds a null symbol at index 0 of the symbol table, because
  * the ELF spec mandates that the first entry is always zeroed. */
 static UNIT_Status
-add_null_symbol(_UNIT_ELF_Object *object)
+add_null_symbol(ELF_Object *object)
 {
     assert(object != NULL);
     assert(_UNIT_Vector_SIZE(&object->symbols) == 0);
@@ -182,7 +106,7 @@ add_null_symbol(_UNIT_ELF_Object *object)
  * that load string addresses point at this symbol, with an addend
  * equal to the string's byte offset within .rodata. */
 static UNIT_Status
-add_rodata_section_symbol(_UNIT_ELF_Object *object)
+add_rodata_section_symbol(ELF_Object *object)
 {
     assert(object != NULL);
     assert(_UNIT_Vector_SIZE(&object->symbols) == 1);
@@ -197,7 +121,7 @@ add_rodata_section_symbol(_UNIT_ELF_Object *object)
 }
 
 static UNIT_Status
-add_symbols(_UNIT_ELF_Object *object,
+add_symbols(ELF_Object *object,
             const _UNIT_CompileContext *compile_context)
 {
     UNIT_Size table_index = _UNIT_Vector_SIZE(&object->symbols);
@@ -243,7 +167,7 @@ add_symbols(_UNIT_ELF_Object *object,
  * String/data relocations use R_AMD64_PC32 and point at the
  * .rodata section symbol (index 1). */
 static UNIT_Status
-build_relocation_table(_UNIT_ELF_Object *object,
+build_relocation_table(ELF_Object *object,
                        const _UNIT_CompileContext *compile_context)
 {
     const _UNIT_Vector *relocations = &compile_context->symbol_table.relocations;
@@ -286,7 +210,7 @@ build_relocation_table(_UNIT_ELF_Object *object,
 /* Fills in the section header table. Computes file offsets for
  * each section based on the sizes of all preceding sections. */
 static void
-build_section_headers(_UNIT_ELF_Object *object,
+build_section_headers(ELF_Object *object,
                       const _UNIT_CompileContext *compile_context)
 {
     UNIT_Size header_size = sizeof(ELF_Header);
@@ -373,7 +297,7 @@ build_section_headers(_UNIT_ELF_Object *object,
 }
 
 static UNIT_Status
-build_symbol_table(_UNIT_ELF_Object *object, const _UNIT_CompileContext *context)
+build_symbol_table(ELF_Object *object, const _UNIT_CompileContext *context)
 {
     if (UNIT_FAILED(add_null_symbol(object))) {
         return _UNIT_FAIL;
@@ -391,7 +315,7 @@ build_symbol_table(_UNIT_ELF_Object *object, const _UNIT_CompileContext *context
 }
 
 static void
-populate_elf_data(_UNIT_ELF_Object *object,
+populate_elf_data(ELF_Object *object,
                   const _UNIT_CompileContext *compile_context)
 {
     object->constant_data = &compile_context->string_data.constant_buffer;
@@ -424,7 +348,7 @@ populate_elf_data(_UNIT_ELF_Object *object,
  * headers, symbol table, string tables, and relocation entries.
  * Does not write anything to disk. */
 static UNIT_Status
-build_elf_object(_UNIT_ELF_Object *object, const _UNIT_CompileContext *compile_context)
+build_elf_object(ELF_Object *object, const _UNIT_CompileContext *compile_context)
 {
     assert(object != NULL);
     assert(compile_context != NULL);
@@ -482,7 +406,7 @@ error:
 }
 
 static UNIT_Status
-write_object_to_file(const _UNIT_ELF_Object *object, const char *path)
+write_object_to_file(const ELF_Object *object, const char *path)
 {
     FILE *file = fopen(path, "wb");
     if (!file) {
@@ -539,7 +463,7 @@ _UNIT_ELF_WriteObjectFile(const _UNIT_CompileContext *context, const char *path)
 {
     assert(context != NULL);
     assert(path != NULL);
-    _UNIT_ELF_Object elf_object;
+    ELF_Object elf_object;
     if (UNIT_FAILED(build_elf_object(&elf_object, context))) {
         return _UNIT_FAIL;
     }
