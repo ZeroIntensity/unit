@@ -1,9 +1,13 @@
 from unit.context import Context
 from unit.opcode import OpCode
+from unit.error import Error
 from unit import _core
 from typing import Any, Literal, TypeAlias, TypeVar, Generic
 from dataclasses import dataclass
 import ctypes
+
+
+__all__ = "ExecutableBuffer", "CompiledProcedure", "Platform", "JumpLabel", "Procedure"
 
 ArgT = TypeVar("ArgT")
 ResT = TypeVar("ResT")
@@ -73,7 +77,8 @@ class CompiledProcedure:
             raise ValueError(
                 f"unknown format {format!r}, expected one of: elf, macho, pe"
             )
-        self._compiled.write_object_file(path, format_enum)
+        with Error.capture_internal_errors():
+            self._compiled.write_object_file(path, format_enum)
 
     def jit(
         self, extra_symbols: dict[str, int] | None = None
@@ -82,10 +87,12 @@ class CompiledProcedure:
         if extra_symbols is not None:
             for key, value in extra_symbols.items():
                 symbols.append((key, value))
-        return ExecutableBuffer(self._compiled.jit(symbols))
+        with Error.capture_internal_errors():
+            return ExecutableBuffer(self._compiled.jit(symbols))
 
     def translation_text(self) -> str:
-        return self._compiled.print_translation()
+        with Error.capture_internal_errors():
+            return self._compiled.print_translation()
 
 
 Architecture: TypeAlias = Literal["amd64", "aarch64"]
@@ -214,7 +221,8 @@ class Procedure:
         if __debug__ and not isinstance(oparg, int):
             raise TypeError(f"Expected an int oparg, but got {oparg!r}")
 
-        self._procedure.add_operation(opcode.value, oparg)
+        with Error.capture_internal_errors():
+            self._procedure.add_operation(opcode.value, oparg)
 
     def _add_op(self, opcode: OpCode) -> None:
         self._add_op_int(opcode, 0)
@@ -226,7 +234,8 @@ class Procedure:
         if __debug__ and not isinstance(label, JumpLabel):
             raise TypeError(f"Expected a JumpLabel object, but got {label!r}")
 
-        self._procedure.add_jump(opcode.value, label._label)
+        with Error.capture_internal_errors():
+            self._procedure.add_jump(opcode.value, label._label)
 
     def create_jump_label(self, name: str) -> JumpLabel:
         if __debug__ and not isinstance(name, str):
@@ -234,13 +243,20 @@ class Procedure:
                 f"Expected a string for the jump label name, but got {name!r}"
             )
 
-        return JumpLabel(self._procedure.create_jump_label(name))
+        with Error.capture_internal_errors():
+            return JumpLabel(self._procedure.create_jump_label(name))
 
     def load_integer(self, value: int, /) -> None:
         self._add_op_int(OpCode.LOAD_INTEGER, value)
 
     def load_string(self, value: str, /) -> None:
-        self._procedure.add_string_load(value)
+        if __debug__ and not isinstance(value, str):
+            raise TypeError(
+                f"Expected a string, but got {value!r}"
+            )
+
+        with Error.capture_internal_errors():
+            self._procedure.add_string_load(value)
 
     def store_local(self, id: int, /) -> None:
         self._add_op_int(OpCode.STORE_LOCAL, id)
@@ -284,7 +300,8 @@ class Procedure:
         if num_args < 0:
             raise ValueError("Cannot have a negative number of arguments")
 
-        self._procedure.add_call_name(name, num_args)
+        with Error.capture_internal_errors():
+            self._procedure.add_call_name(name, num_args)
 
     def compare_equal(self) -> None:
         self._add_op(OpCode.COMPARE_EQUAL)
@@ -317,7 +334,8 @@ class Procedure:
         if __debug__ and not isinstance(label, JumpLabel):
             raise TypeError(f"Expected a JumpLabel object, but got {label!r}")
 
-        self._procedure.use_label(label._label)
+        with Error.capture_internal_errors():
+            self._procedure.use_label(label._label)
 
     def copy(self, offset_from_top: int, /) -> None:
         self._add_op_int(OpCode.COPY, offset_from_top)
@@ -339,10 +357,13 @@ class Procedure:
 
     def compile(self, platform: Platform | None = None) -> CompiledProcedure:
         platform = platform or Platform.host()
-        return CompiledProcedure(self._procedure.compile(platform.to_value()))
+        with Error.capture_internal_errors():
+            return CompiledProcedure(self._procedure.compile(platform.to_value()))
 
     def optimize(self) -> None:
-        self._procedure.optimize()
+        with Error.capture_internal_errors():
+            self._procedure.optimize()
 
     def instructions_text(self, *, visualize_stack_effect: bool = True) -> None:
-        return self._procedure.print_instructions(int(visualize_stack_effect))
+        with Error.capture_internal_errors():
+            return self._procedure.print_instructions(int(visualize_stack_effect))

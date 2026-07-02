@@ -40,10 +40,42 @@ set_py_error_from_context(_unit_state *state, UNIT_Context *context)
     assert(state->ErrorType != NULL);
     assert(UNIT_GetErrorCode(context) != UNIT_ERROR_NONE);
     assert(UNIT_GetErrorMessage(context) != NULL);
+    UNIT_ErrorCode error_code = UNIT_GetErrorCode(context);
+    const char *message = UNIT_GetErrorMessage(context);
 
     PyErr_Format(state->ErrorType, "[%s] %s",
-                 UNIT_ErrorCode_ToString(UNIT_GetErrorCode(context)),
-                 UNIT_GetErrorMessage(context));
+                 UNIT_ErrorCode_ToString(error_code),
+                 message);
+    PyObject *exception = PyErr_GetRaisedException();
+    assert(exception != NULL);
+
+    PyObject *message_obj = PyUnicode_FromString(message);
+    if (message_obj == NULL) {
+        PyErr_FormatUnraisable("Exception ignored while creating str object for %R", exception);
+        goto finally;
+    }
+
+    if (PyObject_SetAttrString(exception, "message", message_obj) < 0) {
+        Py_DECREF(message_obj);
+        PyErr_FormatUnraisable("Exception ignored while setting 'message' for %R", exception);
+    }
+
+    Py_DECREF(message_obj);
+
+    PyObject *code_obj = PyLong_FromLong(error_code);
+    if (code_obj == NULL) {
+        PyErr_FormatUnraisable("Exception ignored while creating int object for %R", exception);
+        goto finally;
+    }
+
+    if (PyObject_SetAttrString(exception, "code", code_obj) < 0) {
+        Py_DECREF(code_obj);
+        PyErr_FormatUnraisable("Exception ignored while setting 'code' for %R", exception);
+    }
+
+    Py_DECREF(code_obj);
+finally:
+    PyErr_SetRaisedException(exception);
 }
 
 typedef struct {
@@ -916,6 +948,12 @@ _unit_modexec(PyObject *module)
     EXPORT_CONST(UNIT_FLAG_NO_OPTIMIZE_TRANSLATION);
     EXPORT_CONST(UNIT_FLAG_PRINT_TRANSLATION_PREOP);
     EXPORT_CONST(UNIT_FLAG_PRINT_TRANSLATION_POSTOP);
+
+    EXPORT_CONST(UNIT_ERROR_NONE);
+    EXPORT_CONST(UNIT_ERROR_INVALID_USAGE);
+    EXPORT_CONST(UNIT_ERROR_OS_FAILURE);
+    EXPORT_CONST(UNIT_ERROR_UNSUPPORTED_PLATFORM);
+    EXPORT_CONST(UNIT_ERROR_NO_MEMORY);
 
 #undef EXPORT_CONST
 

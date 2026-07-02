@@ -2,14 +2,10 @@ from unit import context as context
 from unit import opcode as opcode
 from unit import procedure as procedure
 
-from unit.context import Context as Context
-from unit.procedure import (
-    Procedure as Procedure,
-    CompiledProcedure as CompiledProcedure,
-    JumpLabel as JumpLabel,
-    ExecutableBuffer as ExecutableBuffer,
-)
-from unit.opcode import OpCode as OpCode
+from unit.context import *
+from unit.error import *
+from unit.procedure import *
+from unit.opcode import *
 
 try:
     from unit import _core
