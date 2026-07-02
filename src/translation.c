@@ -1109,7 +1109,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
                 break;
             }
 
-            case UNIT_OP_JUMP_TO: {
+            case UNIT_OP_JUMP: {
                 UNIT_JumpLabel *label;
                 _UNIT_MachineItem *item = get_jump_target_item(translation, &jump_labels,
                                                                operation->argument,

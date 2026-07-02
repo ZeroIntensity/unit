@@ -100,7 +100,7 @@ int main(void)
     ADDOP_LOAD_NAME(seed);
     ADDOP_CALL("srand", 1);
     ADDOP(UNIT_OP_POP);
-    ADDOP_JUMP(UNIT_OP_JUMP_TO, start_game);
+    ADDOP_JUMP(UNIT_OP_JUMP, start_game);
 
     USE_LABEL(invalid_seed);
     ADDOP_STR("Not a valid seed");
@@ -134,7 +134,7 @@ int main(void)
     ADDOP_CALL("printf", 2);
     ADDOP(UNIT_OP_POP);
 
-    ADDOP_JUMP(UNIT_OP_JUMP_TO, loop);
+    ADDOP_JUMP(UNIT_OP_JUMP, loop);
 
     USE_LABEL(invalid);
 
@@ -181,13 +181,13 @@ int main(void)
     ADDOP_CALL("puts", 1);
     ADDOP(UNIT_OP_POP);
 
-    ADDOP_JUMP(UNIT_OP_JUMP_TO, loop);
+    ADDOP_JUMP(UNIT_OP_JUMP, loop);
 
     USE_LABEL(greater);
     ADDOP_STR("Higher");
     ADDOP_CALL("puts", 1);
     ADDOP(UNIT_OP_POP);
-    ADDOP_JUMP(UNIT_OP_JUMP_TO, loop);
+    ADDOP_JUMP(UNIT_OP_JUMP, loop);
 
     USE_LABEL(correct);
     ADDOP_STR("You win!");

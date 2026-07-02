@@ -236,7 +236,7 @@ codegen_body(UNIT_Procedure *procedure, FILE *file, int8_t in_loop)
                     return -1;
                 }
 
-                ADDOP_JUMP(UNIT_OP_JUMP_TO, loop);
+                ADDOP_JUMP(UNIT_OP_JUMP, loop);
 
                 USE_LABEL(end);
                 break;

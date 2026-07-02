@@ -352,7 +352,7 @@ class If(Statement):
         if self.if_false is not None:
             self.if_false.codegen_unit(procedure)
 
-        procedure.jump_to(end)
+        procedure.jump(end)
 
         procedure.use_label(if_true)
         self.if_true.codegen_unit(procedure)

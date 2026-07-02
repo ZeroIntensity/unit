@@ -327,7 +327,7 @@ UNIT_Instruction_GetName(UNIT_Instruction instruction)
 
         case _UNIT_OP_JUMP_MARKER:
             return "_JUMP_MARKER";
-        NAME(JUMP_TO);
+        NAME(JUMP);
         NAME(JUMP_IF_FALSE);
         NAME(JUMP_IF_TRUE);
 
@@ -646,7 +646,7 @@ deduce_stack_effect(const UNIT_Procedure *procedure, const _UNIT_Operation *op,
 #undef BINARY_OP
 
         case _UNIT_OP_JUMP_MARKER:
-        case UNIT_OP_JUMP_TO: {
+        case UNIT_OP_JUMP: {
             break;
         }
 
@@ -851,7 +851,7 @@ UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure, FILE *stream,
                 PRINT(" (%s)", name);
                 break;
             }
-            case UNIT_OP_JUMP_TO:
+            case UNIT_OP_JUMP:
             case UNIT_OP_JUMP_IF_TRUE:
             case UNIT_OP_JUMP_IF_FALSE: {
                 UNIT_JumpLabel *label = _UNIT_Vector_GET(&procedure->_jump_labels,

@@ -14,7 +14,7 @@ class OpCode(Enum):
     MULTIPLY = _core.UNIT_OP_MULTIPLY
     DIVIDE = _core.UNIT_OP_DIVIDE
     MODULO = _core.UNIT_OP_MODULO
-    JUMP_TO = _core.UNIT_OP_JUMP_TO
+    JUMP = _core.UNIT_OP_JUMP
     JUMP_IF_FALSE = _core.UNIT_OP_JUMP_IF_FALSE
     JUMP_IF_TRUE = _core.UNIT_OP_JUMP_IF_TRUE
     EXIT = _core.UNIT_OP_EXIT

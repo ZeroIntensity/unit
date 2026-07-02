@@ -249,7 +249,7 @@ enum class OpCode
     DIVIDE = UNIT_OP_DIVIDE,
     MODULO = UNIT_OP_MODULO,
 
-    JUMP_TO = UNIT_OP_JUMP_TO,
+    JUMP = UNIT_OP_JUMP,
     JUMP_IF_FALSE = UNIT_OP_JUMP_IF_FALSE,
     JUMP_IF_TRUE = UNIT_OP_JUMP_IF_TRUE,
 
@@ -627,9 +627,9 @@ private:
 
 public:
     void
-    jump_to(JumpLabel label)
+    jump(JumpLabel label)
     {
-        add_op_jump(OpCode::JUMP_TO, label);
+        add_op_jump(OpCode::JUMP, label);
     }
 
     void

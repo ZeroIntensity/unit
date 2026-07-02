@@ -430,7 +430,7 @@ class BasicTests(unittest.TestCase):
     def test_unconditional_jump(self):
         proc = self.make_procedure()
         skip = proc.create_jump_label("skip")
-        proc.jump_to(skip)
+        proc.jump(skip)
         proc.load_integer(99)
         proc.return_value()
 
@@ -467,7 +467,7 @@ class BasicTests(unittest.TestCase):
         proc.subtract()
         proc.store_local(1)
 
-        proc.jump_to(loop)
+        proc.jump(loop)
 
         proc.use_label(end)
         proc.load_local(0)
@@ -513,7 +513,7 @@ class BasicTests(unittest.TestCase):
         proc.subtract()
         proc.store_local(1)
 
-        proc.jump_to(inner)
+        proc.jump(inner)
 
         proc.use_label(end_inner)
         proc.load_local(0)
@@ -521,7 +521,7 @@ class BasicTests(unittest.TestCase):
         proc.subtract()
         proc.store_local(0)
 
-        proc.jump_to(outer)
+        proc.jump(outer)
 
         proc.use_label(end_outer)
         proc.load_local(2)
@@ -548,7 +548,7 @@ class BasicTests(unittest.TestCase):
         proc.subtract()
         proc.store_local(0)
 
-        proc.jump_to(loop)
+        proc.jump(loop)
 
         proc.use_label(end)
         proc.load_local(0)
@@ -569,7 +569,7 @@ class BasicTests(unittest.TestCase):
 
         proc.load_integer(10)
         proc.store_local(0)
-        proc.jump_to(end)
+        proc.jump(end)
 
         proc.use_label(else_label)
         proc.load_integer(20)
@@ -740,7 +740,7 @@ class BasicTests(unittest.TestCase):
         proc.subtract()
         proc.store_local(1)
 
-        proc.jump_to(loop)
+        proc.jump(loop)
 
         proc.use_label(end)
         proc.load_local(0)

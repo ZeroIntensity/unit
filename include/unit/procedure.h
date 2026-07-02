@@ -33,7 +33,7 @@ typedef enum {
 
     // Jumps
     _UNIT_OP_JUMP_MARKER,
-    UNIT_OP_JUMP_TO,
+    UNIT_OP_JUMP,
     UNIT_OP_JUMP_IF_FALSE,
     UNIT_OP_JUMP_IF_TRUE,
 

@@ -321,8 +321,8 @@ class Procedure:
     def compare_less_equal(self) -> None:
         self._add_op(OpCode.COMPARE_LESS_EQUAL)
 
-    def jump_to(self, label: JumpLabel, /) -> None:
-        self._add_jump(OpCode.JUMP_TO, label)
+    def jump(self, label: JumpLabel, /) -> None:
+        self._add_jump(OpCode.JUMP, label)
 
     def jump_if_true(self, label: JumpLabel, /) -> None:
         self._add_jump(OpCode.JUMP_IF_TRUE, label)

@@ -65,14 +65,14 @@ int main(int argc, char **argv)
     procedure.add();
     // [(number * 3) + 1]
 
-    procedure.jump_to(loop);
+    procedure.jump(loop);
 
     procedure.use_label(is_even);
     // [number]
     procedure.load_integer(2);
     procedure.divide();
     // [number / 2]
-    procedure.jump_to(loop);
+    procedure.jump(loop);
 
     procedure.use_label(finished);
     procedure.pop();

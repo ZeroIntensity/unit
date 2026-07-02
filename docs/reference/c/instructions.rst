@@ -26,7 +26,7 @@ Instructions
    .. c:enumerator:: UNIT_OP_COMPARE_GREATER_EQUAL
    .. c:enumerator:: UNIT_OP_COMPARE_LESS
    .. c:enumerator:: UNIT_OP_COMPARE_LESS_EQUAL
-   .. c:enumerator:: UNIT_OP_JUMP_TO
+   .. c:enumerator:: UNIT_OP_JUMP
    .. c:enumerator:: UNIT_OP_JUMP_IF_TRUE
    .. c:enumerator:: UNIT_OP_JUMP_IF_FALSE
    .. c:enumerator:: UNIT_OP_COPY
@@ -161,7 +161,7 @@ Control Flow
    * - Opcode
      - Effect
      - Description
-   * - :c:enumerator:`UNIT_OP_JUMP_TO`
+   * - :c:enumerator:`UNIT_OP_JUMP`
      - ``goto jump_labels[oparg]``
      - Unconditionally jump to a label.
    * - :c:enumerator:`UNIT_OP_JUMP_IF_TRUE`

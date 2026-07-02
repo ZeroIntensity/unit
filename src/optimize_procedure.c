@@ -277,7 +277,7 @@ UNIT_Procedure_OptimizeFold(UNIT_Procedure *procedure)
 
             case UNIT_OP_RETURN_VALUE:
             case UNIT_OP_EXIT:
-            case UNIT_OP_JUMP_TO: {
+            case UNIT_OP_JUMP: {
                 dead_code = 1;
                 RESET_STACK();
                 break;
@@ -289,7 +289,7 @@ UNIT_Procedure_OptimizeFold(UNIT_Procedure *procedure)
                     ADD_NEW_INSTRUCTION(UNIT_OP_POP, 0);
 
                     if (top.value) {
-                        ADD_NEW_INSTRUCTION(UNIT_OP_JUMP_TO, op->argument);
+                        ADD_NEW_INSTRUCTION(UNIT_OP_JUMP, op->argument);
                         dead_code = 1;
                     }
                     CONTINUE_AND_DISCARD();
@@ -304,7 +304,7 @@ UNIT_Procedure_OptimizeFold(UNIT_Procedure *procedure)
                     ADD_NEW_INSTRUCTION(UNIT_OP_POP, 0);
 
                     if (!top.value) {
-                        ADD_NEW_INSTRUCTION(UNIT_OP_JUMP_TO, op->argument);
+                        ADD_NEW_INSTRUCTION(UNIT_OP_JUMP, op->argument);
                         dead_code = 1;
                     }
                     CONTINUE_AND_DISCARD();
@@ -520,7 +520,7 @@ remap_offsets(UNIT_Procedure *procedure,
 
         if (target_op->instruction == UNIT_OP_RETURN_VALUE) {
             ADD_NEW_INSTRUCTION(_UNIT_OP_STORE_LOCAL_NAME, return_local.id);
-            ADD_NEW_INSTRUCTION(UNIT_OP_JUMP_TO, end_label->id);
+            ADD_NEW_INSTRUCTION(UNIT_OP_JUMP, end_label->id);
 
             continue;
         }
@@ -542,7 +542,7 @@ remap_offsets(UNIT_Procedure *procedure,
                 break;
             }
 
-            case UNIT_OP_JUMP_TO:
+            case UNIT_OP_JUMP:
             case UNIT_OP_JUMP_IF_TRUE:
             case UNIT_OP_JUMP_IF_FALSE:
             case _UNIT_OP_JUMP_MARKER: {
