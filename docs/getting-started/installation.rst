@@ -35,67 +35,24 @@ This installs the library and headers to your system's default prefix
 Python bindings
 ***************
 
-Alternatively, if you plan on using the Python bindings without the C API or
-C++ API, you can solely install that using your preferred package manager:
+If you plan on using the Python bindings, you can install the ``unit-compiler``
+package from PyPI. UNIT is under heavy development, so it is recommended that
+you install the development package:
+
+.. code-block:: bash
+   :caption: :iconify:`devicon-plain:bash` bash
+
+   pip install --pre -i https://test.pypi.org/simple/ unit-compiler
 
 
-.. tabs::
+Alternatively, if you cloned UNIT and built from source, you can simply
+install from the root directory:
 
-   .. tab:: pip
+.. code-block:: bash
+   :caption: :iconify:`devicon-plain:bash` bash
 
-      .. code-block:: bash
-         :caption: :iconify:`devicon-plain:bash` bash
-
-         pip install unit-compiler
-
-   .. tab:: uv
-
-      .. code-block:: bash
-         :caption: :iconify:`devicon-plain:bash` bash
-
-         uv add unit-compiler
-
-   .. tab:: Poetry
-
-      .. code-block:: bash
-         :caption: :iconify:`devicon-plain:bash` bash
-
-         poetry add unit-compiler
-
-   .. tab:: PDM
-
-      .. code-block:: bash
-         :caption: :iconify:`devicon-plain:bash` bash
-
-         pdm add unit-compiler
-
-   .. tab:: pipenv
-
-      .. code-block:: bash
-         :caption: :iconify:`devicon-plain:bash` bash
-
-         pipenv install unit-compiler
-
-   .. tab:: Conda
-
-      .. code-block:: bash
-         :caption: :iconify:`devicon-plain:bash` bash
-
-         conda install -c conda-forge unit-compiler
-
-   .. tab:: Pixi
-
-      .. code-block:: bash
-         :caption: :iconify:`devicon-plain:bash` bash
-
-         pixi add unit-compiler
-
-   .. tab:: Hatch
-
-      .. code-block:: bash
-         :caption: :iconify:`devicon-plain:bash` bash
-
-         hatch dep add unit-compiler
+   cd unit
+   pip install .
 
 
 Using UNIT in your project

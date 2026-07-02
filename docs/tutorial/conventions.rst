@@ -32,8 +32,8 @@ functions relating to a type called ``UNIT_SomeType`` will be named
     the relevant functions.
 
 
-The global context
-------------------
+The context
+-----------
 
 UNIT focuses on being an embeddable C library. This means that UNIT will
 never cause any sort of side-effects to the program that is calling it.

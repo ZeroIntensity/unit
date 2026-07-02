@@ -34,7 +34,7 @@ sudo cmake --install build
 This installs the PyPI package into your local Python environment:
 
 ```bash
-pip install unit-compiler
+pip install --pre -i https://test.pypi.org/simple/ unit-compiler
 ```
 
 Alternatively, you can build it from source:

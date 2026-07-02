@@ -376,7 +376,6 @@ static void test_high_load_factor(UNIT_Context *context)
                                        hash_int, NULL, NULL));
     int keys[3];
     int values[3];
-    // 3/4 = 75% load — right at the expansion threshold
     for (int i = 0; i < 3; ++i) {
         keys[i] = i;
         values[i] = i * 100;

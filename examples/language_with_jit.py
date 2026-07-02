@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections.abc import Iterable, Iterator, Sequence
 import ctypes
 from typing import IO, Any, ClassVar, Literal, overload
@@ -12,8 +14,9 @@ import contextvars
 import sys
 
 import _pyrepl.readline as readline
-from _pyrepl.utils import ColorSpan, Span
+from _pyrepl.utils import ColorSpan
 import _pyrepl.utils
+
 
 class OpCode(Enum):
     LOAD_CONST = auto()
@@ -99,7 +102,6 @@ class FunctionCall(Expression):
         procedure.call_name(self.name, len(self.args))
 
 
-
 @dataclass(slots=True)
 class BinaryOperator(Expression):
     left: Expression
@@ -113,10 +115,10 @@ class BinaryOperator(Expression):
 
     def codegen_unit(self, procedure: unit.Procedure) -> None:
         operators = {
-            '+': procedure.add,
-            '-': procedure.subtract,
-            '*': procedure.multiply,
-            '/': procedure.divide,
+            "+": procedure.add,
+            "-": procedure.subtract,
+            "*": procedure.multiply,
+            "/": procedure.divide,
         }
 
         self.left.codegen_unit(procedure)
@@ -137,12 +139,12 @@ class Compare(Expression):
 
     def codegen_unit(self, procedure: unit.Procedure) -> None:
         operators = {
-            '==': procedure.compare_equal,
-            '!=': procedure.compare_not_equal,
-            '>': procedure.compare_greater,
-            '>=': procedure.compare_greater_equal,
-            '<': procedure.compare_less,
-            '<=': procedure.compare_less_equal
+            "==": procedure.compare_equal,
+            "!=": procedure.compare_not_equal,
+            ">": procedure.compare_greater,
+            ">=": procedure.compare_greater_equal,
+            "<": procedure.compare_less,
+            "<=": procedure.compare_less_equal,
         }
 
         self.left.codegen_unit(procedure)
@@ -203,6 +205,7 @@ class Let(Statement):
         yield Instruction(OpCode.STORE_NAME, self.name)
 
     def codegen_unit(self, procedure: unit.Procedure) -> None:
+        self.value.codegen_unit(procedure)
         function = Function.current()
         id = function.names.set_name(self.name)
         procedure.store_local(id)
@@ -233,11 +236,17 @@ class Function:
     body: Iterable[Code]
     original: FunctionDefinition
     observed_args: dict[tuple[Any, ...], int] = field(default_factory=dict, init=False)
-    specialized: dict[tuple[Any, ...], unit.procedure.ExecutableBuffer] = field(default_factory=dict, init=False)
-    trampolines: dict[str, ctypes._CFunctionType] = field(default_factory=dict, init=False)
+    specialized: dict[tuple[Any, ...], unit.procedure.ExecutableBuffer] = field(
+        default_factory=dict, init=False
+    )
+    trampolines: dict[str, ctypes._CFunctionType] = field(
+        default_factory=dict, init=False
+    )
     names: LocalNameManager = field(default_factory=LocalNameManager, init=False)
 
-    CURRENT_FUNCTION: ClassVar[contextvars.ContextVar] = contextvars.ContextVar("CURRENT_FUNCTION")
+    CURRENT_FUNCTION: ClassVar[contextvars.ContextVar] = contextvars.ContextVar(
+        "CURRENT_FUNCTION"
+    )
 
     @classmethod
     def current(cls) -> Function:
@@ -247,11 +256,17 @@ class Function:
         return f"{self.name}${'_'.join(str(arg) for arg in args)}"
 
     def specialize(self, arguments: tuple[Any, ...]) -> unit.ExecutableBuffer:
+        # Fresh name manager per specialization
+        self.names = LocalNameManager()
+
         procedure = unit.Procedure(self.specialized_name(arguments))
         for name, value in zip(self.parameters, arguments):
             Constant(value).codegen_unit(procedure)
             id = self.names.set_name(name)
             procedure.store_local(id)
+
+        interpreter = Interpreter.current()
+        self._register_nested_functions(interpreter)
 
         with self.CURRENT_FUNCTION.set(self):
             self.original.body.codegen_unit(procedure)
@@ -272,6 +287,13 @@ class Function:
 
         self.specialized[arguments] = executable
         return executable
+
+    def _register_nested_functions(self, interpreter: Interpreter) -> None:
+        for stmt in self.original.body.statements:
+            if isinstance(stmt, FunctionDefinition):
+                code = list(stmt.body.codegen())
+                func = Function(stmt.name, stmt.parameters, code, stmt)
+                interpreter.functions[stmt.name] = func
 
 
 @dataclass(slots=True)
@@ -302,7 +324,10 @@ class Print(Statement):
         yield Instruction(OpCode.PRINT)
 
     def codegen_unit(self, procedure: unit.Procedure) -> None:
-        procedure.load_string("%d\n")
+        if isinstance(self.value, Constant) and isinstance(self.value.value, str):
+            procedure.load_string("%s\n")
+        else:
+            procedure.load_string("%d\n")
         self.value.codegen_unit(procedure)
         procedure.call_name("printf", 2)
         procedure.pop()
@@ -371,7 +396,24 @@ class Module:
         for statement in self.body:
             statement.codegen_unit(procedure)
 
-OPERATORS: set[str] = {"'", '"', "(", ")", "=", ",", " ", "+", "-", "*", "/", "%", "{", "}"}
+
+OPERATORS: set[str] = {
+    "'",
+    '"',
+    "(",
+    ")",
+    "=",
+    ",",
+    " ",
+    "+",
+    "-",
+    "*",
+    "/",
+    "%",
+    "{",
+    "}",
+}
+
 
 def tokenize(source: str) -> Iterator[str]:
     for line in source.split("\n"):
@@ -604,7 +646,9 @@ class Stack[T]:
 class Interpreter:
     CURRENT_INTERPRETER = contextvars.ContextVar("CURRENT_INTERPRETER")
 
-    def __init__(self, *, out_file: IO[str] = sys.stdout, force_specialization: bool = False) -> None:
+    def __init__(
+        self, *, out_file: IO[str] = sys.stdout, force_specialization: bool = False
+    ) -> None:
         self.variables: dict[str, Any] = {}
         self.functions: dict[str, Function] = {}
         self.stack = Stack[Any]()
@@ -642,11 +686,12 @@ class Interpreter:
         else:
             function.observed_args[arguments] = 1
 
-        interpreter = Interpreter(out_file=self.out_file, force_specialization=self.force_specialization)
+        interpreter = Interpreter(
+            out_file=self.out_file, force_specialization=self.force_specialization
+        )
         code = [inst for inst in function.body]
 
-        # To allow recursive calls:
-        interpreter.functions[function.name] = function
+        interpreter.functions = self.functions.copy()
 
         for parameter, value in zip(function.parameters, arguments):
             assert parameter not in interpreter.variables
@@ -845,6 +890,7 @@ test(2)
 mod = Parser.parse(code)
 Interpreter().run(mod)
 
+
 class REPL:
     def __init__(self) -> None:
         self.interpreter = Interpreter()
@@ -892,6 +938,7 @@ class REPL:
 
         return "\n".join(lines)
 
+
 # TODO
 def patched_gen_colors(buffer: str) -> Iterator[ColorSpan]:
     if False:
@@ -903,6 +950,7 @@ def main():
     readline._setup({})
     repl = REPL()
     repl.run()
+
 
 if __name__ == "__main__":
     main()
