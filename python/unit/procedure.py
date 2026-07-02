@@ -178,6 +178,7 @@ class Procedure:
         self._procedure = _core.Procedure(self.context._context, name)
         self._inlining: Inlining | None = inlining
         self._optimize_translation = optimize_translation
+        self._update_flags()
 
     @property
     def inlining(self) -> Inlining | None:

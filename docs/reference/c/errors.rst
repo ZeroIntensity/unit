@@ -1,3 +1,5 @@
+.. _c-errors:
+
 Errors
 ======
 
@@ -15,31 +17,28 @@ Errors
         be used), such as from an FFI.
 
 
-    .. c:macro:: UNIT_FAILED(expr)
+.. c:macro:: UNIT_FAILED(expr)
 
-        Check if a :c:type:`UNIT_Status` returned by a function indicates failure.
-        This is almost always used in ``if`` statements or in assertions.
+   Check if a :c:type:`UNIT_Status` returned by a function indicates failure.
+   This is almost always used in ``if`` statements or in assertions.
 
-        .. code-block:: c
-           :linenos:
-           :caption: :iconify:`streamline-logos:c-language-logo-solid` Example
+   .. code-block:: c
+      :caption: :iconify:`streamline-logos:c-language-logo-solid` Example
 
-            if (UNIT_FAILED(UNIT_Context_Init(/* ... */))) {
-                /* Handle failure somehow. */
-                return -1;
-            }
+       if (UNIT_FAILED(UNIT_Context_Init(/* ... */))) {
+           /* Handle failure somehow. */
+           return -1;
+       }
 
-        .. admonition:: Looking for a ``UNIT_OK`` macro?
+   .. admonition:: Looking for a ``UNIT_OK`` macro?
 
-           UNIT does not provide a macro for checking if :c:type:`UNIT_Status`
-           indicates success. For this pattern, simply negate the result of
-           ``UNIT_FAILED``:
+      UNIT does not provide a macro for checking if :c:type:`UNIT_Status`
+      indicates success. For this pattern, simply negate the result of
+      ``UNIT_FAILED``:
 
-           .. code-block:: c
-              :caption: :iconify:`streamline-logos:c-language-logo-solid` C
+      .. code-block:: c
 
-              #define OK(expr) (!UNIT_FAILED(expr))
-
+         #define OK(expr) (!UNIT_FAILED(expr))
 
 
 .. c:enum:: UNIT_ErrorCode
@@ -75,10 +74,9 @@ Errors
    :return: The error code.
 
    .. code-block:: c
-      :linenos:
       :caption: :iconify:`streamline-logos:c-language-logo-solid` Example
 
-      if (UNIT_FAILED(UNIT_Procedure_Init(context, /* ... */))) {
+      if (UNIT_FAILED(UNIT_Procedure_Init(&procedure, context, "main"))) {
           if (UNIT_GetErrorCode(context) == UNIT_ERROR_OS_FAILURE) {
               perror("Error whilst initializing UNIT procedure");
               return 1;
@@ -96,10 +94,9 @@ Errors
             for managing the memory of this string.
 
    .. code-block:: c
-      :linenos:
       :caption: :iconify:`streamline-logos:c-language-logo-solid` Example
 
-      if (UNIT_FAILED(UNIT_Procedure_Init(context, /* ... */))) {
+      if (UNIT_FAILED(UNIT_Procedure_Init(&procedure, context, "main"))) {
          const char *error = UNIT_GetErrorMessage(context);
          fprintf(stderr, "Error whilst initializing UNIT procedure: %s\n", error);
          return 1;
@@ -116,11 +113,10 @@ Errors
    will result in the process crashing.
 
    .. code-block:: c
-      :linenos:
       :caption: :iconify:`streamline-logos:c-language-logo-solid` Example
 
-      if (UNIT_FAILED(UNIT_Procedure_Init(context, /* ... */))) {
-          UNIT_ErrorCode code = UNIT_GetErrorCode();
+      if (UNIT_FAILED(UNIT_Procedure_Init(&procedure, context, "main"))) {
+          UNIT_ErrorCode code = UNIT_GetErrorCode(context);
           const char *name = UNIT_ErrorCode_ToString(code);
           fprintf(stderr, "UNIT failed with error code %d (%s)\n", code, name);
           return 1;
@@ -129,7 +125,7 @@ Errors
 
 .. c:function:: void UNIT_PrintError(const UNIT_Context *context, FILE *stream)
 
-   Print out a formatted error message containing the error code and the error messaage
+   Print out a formatted error message containing the error code and the error message
    to a stream. If no error is set, nothing is written to the stream.
 
    :param context: The context holding the error state.
@@ -137,10 +133,9 @@ Errors
                   This is usually ``stderr``.
 
    .. code-block:: c
-      :linenos:
       :caption: :iconify:`streamline-logos:c-language-logo-solid` Example
 
-      if (UNIT_FAILED(UNIT_Procedure_Init(context, /* ... */))) {
+      if (UNIT_FAILED(UNIT_Procedure_Init(&procedure, context, "main"))) {
           UNIT_PrintError(context, stderr);
           return 1;
       }

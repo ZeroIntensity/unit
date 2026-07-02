@@ -7,7 +7,9 @@ This section contains technical reference for UNIT's C API.
    :maxdepth: 2
    :caption: Contents:
 
-   context
+   version
+   contexts
    errors
-   procedure
-   instructions
+   procedures
+   opcodes
+   compilation

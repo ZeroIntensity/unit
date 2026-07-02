@@ -1,11 +1,12 @@
+.. _c-contexts:
+
 Contexts
 ========
-
 
 .. c:type:: UNIT_Context
 
    Container type for all of UNIT's state. This structure has no public
-   fields, but it's size is available publicly (allowing for allocation on
+   fields, but its size is available publicly (allowing for allocation on
    the stack).
 
 
@@ -20,7 +21,6 @@ Contexts
             See :c:macro:`UNIT_FAILED`.
 
    .. code-block:: c
-      :linenos:
       :caption: :iconify:`streamline-logos:c-language-logo-solid` Example
 
       UNIT_Context context;
@@ -47,7 +47,6 @@ Contexts
             :c:func:`UNIT_Context_Free`.
 
    .. code-block:: c
-      :linenos:
       :caption: :iconify:`streamline-logos:c-language-logo-solid` Example
 
       UNIT_Context *context = UNIT_Context_New();
@@ -70,36 +69,10 @@ Contexts
 
    :param context: The context to clear.
 
-   .. code-block:: c
-      :linenos:
-      :caption: :iconify:`streamline-logos:c-language-logo-solid` Example
-
-      UNIT_Context context;
-      if (UNIT_FAILED(UNIT_Context_Init(&context))) {
-         /* ... */
-      }
-
-      /* ... */
-
-      UNIT_Context_Clear(&context);
-
 
 .. c:function:: void UNIT_Context_Free(UNIT_Context *context)
 
    Free memory allocated by :c:func:`UNIT_Context_New`. This will
-   also call :c:func:`UNIT_Context_Clear`.
+   also call :c:func:`UNIT_Context_Clear`. Safe to call with ``NULL``.
 
-   :param context: The context to free.
-
-   .. code-block:: c
-      :linenos:
-      :caption: :iconify:`streamline-logos:c-language-logo-solid` Example
-
-      UNIT_Context *context = UNIT_Context_New();
-      if (context == NULL) {
-         /* ... */
-      }
-
-      /* ... */
-
-      UNIT_Context_Clear(&context);
+   :param context: The context to free, or ``NULL``.

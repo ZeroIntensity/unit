@@ -13,10 +13,6 @@ UNIT is accessible as a library in three languages:
 Each option comes with its own benefits and tradeoffs.
 Choose the interface that best suits your needs.
 
-The Example
------------
-
-
 C Example
 ---------
 
@@ -66,6 +62,7 @@ Start with some C code using UNIT:
 
    The above code does not have proper error handling. In real applications,
    most calls need to be inside of a :c:macro:`UNIT_FAILED` check.
+
 
 
 
