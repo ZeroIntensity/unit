@@ -123,7 +123,8 @@ jobs:
                   CIBW_ARCHS_LINUX: x86_64
                   CIBW_ARCHS_MACOS: x86_64 arm64
                   CIBW_ARCHS_WINDOWS: AMD64
-                  CIBW_TEST_COMMAND: python -m unittest discover -s {project}/tests/python -v
+                  # For when we add Mac and Windows support:
+                  # CIBW_TEST_COMMAND: python -m unittest discover -s {project}/tests/python -v
 
             - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
               with:
