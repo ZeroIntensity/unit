@@ -463,6 +463,7 @@ _UNIT_ELF_WriteObjectFile(const _UNIT_CompileContext *context, const char *path)
 {
     assert(context != NULL);
     assert(path != NULL);
+
     ELF_Object elf_object;
     if (UNIT_FAILED(build_elf_object(&elf_object, context))) {
         return _UNIT_FAIL;
