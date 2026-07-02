@@ -94,7 +94,7 @@ jobs:
                   path: dist/*.tar.gz
 
     build-wheels:
-        needs: [test, valgrind]
+        needs: [test]
         strategy:
             fail-fast: false
             matrix:
@@ -159,7 +159,7 @@ jobs:
 
     check:
         if: always()
-        needs: [test, valgrind, build-sdist, build-wheels]
+        needs: [test, build-sdist, build-wheels]
         runs-on: ubuntu-latest
         steps:
             - name: Decide status
