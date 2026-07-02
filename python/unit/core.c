@@ -753,14 +753,15 @@ ProcedureObject_set_flags(PyObject *op, PyObject *value)
 }
 
 static PyObject *
-ProcedureObject_print_instructions(PyObject *op, PyObject *arg)
+ProcedureObject_print_instructions(PyObject *op, PyObject *args)
 {
     assert(op != NULL);
-    assert(arg != NULL);
     ProcedureObject *self = ProcedureObject_CAST(op);
 
-    int8_t visualize_stack_effect = PyLong_AsInt(arg);
-    if (visualize_stack_effect == -1) {
+    int visualize_stack_effect;
+    int ignore_errors;
+
+    if (!PyArg_ParseTuple(args, "ii", &visualize_stack_effect, &ignore_errors)) {
         return NULL;
     }
 
@@ -770,7 +771,8 @@ ProcedureObject_print_instructions(PyObject *op, PyObject *arg)
         return NULL;
     }
 
-    if (UNIT_FAILED(UNIT_Procedure_PrintInstructions(&self->procedure, stream, visualize_stack_effect))) {
+    if (UNIT_FAILED(UNIT_Procedure_PrintInstructions(&self->procedure, stream, visualize_stack_effect))
+        && !ignore_errors) {
         fclose(stream);
         set_py_error_from_context(get_state_from_object(op), self->procedure.context);
         return NULL;
@@ -821,7 +823,7 @@ static PyMethodDef ProcedureObject_methods[] = {
     {"compile", ProcedureObject_compile, METH_O, NULL},
     {"optimize", ProcedureObject_optimize, METH_NOARGS, NULL},
     {"set_flags", ProcedureObject_set_flags, METH_O, NULL},
-    {"print_instructions", ProcedureObject_print_instructions, METH_O, NULL},
+    {"print_instructions", ProcedureObject_print_instructions, METH_VARARGS, NULL},
     {NULL},
 };
 

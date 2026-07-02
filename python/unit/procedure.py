@@ -364,6 +364,6 @@ class Procedure:
         with Error.capture_internal_errors():
             self._procedure.optimize()
 
-    def instructions_text(self, *, visualize_stack_effect: bool = True) -> None:
+    def instructions_text(self, *, visualize_stack_effect: bool = True, ignore_errors: bool = True) -> None:
         with Error.capture_internal_errors():
-            return self._procedure.print_instructions(int(visualize_stack_effect))
+            return self._procedure.print_instructions(int(visualize_stack_effect), int(ignore_errors))
