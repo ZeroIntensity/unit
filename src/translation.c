@@ -436,7 +436,7 @@ stack_pop(_UNIT_BasicBlock *block, _UNIT_Vector *stack,
     if (_UNIT_Vector_SIZE(stack) == 0) {
         _UNIT_SetErrorFormat(block->context, UNIT_ERROR_INVALID_USAGE,
                              "stack underflow at %s",
-                             UNIT_Instruction_GetName(operation->instruction));
+                             UNIT_OperationCode_GetName(operation->instruction));
         return NULL;
     }
     _UNIT_MachineItem *result = _UNIT_Vector_Pop(stack);
@@ -917,7 +917,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
         if (!(condition)) {                                                                 \
             _UNIT_SetErrorFormat(_block->context, UNIT_ERROR_INVALID_USAGE,                 \
                                  "error at %s (index %d): " message,                        \
-                                 UNIT_Instruction_GetName(operation->instruction), index);  \
+                                 UNIT_OperationCode_GetName(operation->instruction), index);  \
             goto error;                                                                     \
         }
 
@@ -925,7 +925,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
         if (!(condition)) {                                                                 \
             _UNIT_SetErrorFormat(_block->context, UNIT_ERROR_INVALID_USAGE,                 \
                                  "error at %s (index %d): " message,                        \
-                                 UNIT_Instruction_GetName(operation->instruction), index,   \
+                                 UNIT_OperationCode_GetName(operation->instruction), index,   \
                                  __VA_ARGS__);                                              \
             goto error;                                                                     \
         }

@@ -31,7 +31,7 @@ typedef struct _UNIT_MachineItem {
         struct {
             struct _UNIT_MachineItem *left;
             struct _UNIT_MachineItem *right;
-            UNIT_Instruction type; // One of the comparison instructions
+            UNIT_OperationCode type; // One of the comparison instructions
         } comparison;
     };
     const char *hint;

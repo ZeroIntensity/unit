@@ -1,7 +1,7 @@
 Instructions
 ============
 
-.. c:enum:: UNIT_Instruction
+.. c:enum:: UNIT_OperationCode
 
    Enumerated type containing the ID for all UNIT stack-based instructions.
 

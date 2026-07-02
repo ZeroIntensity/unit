@@ -568,7 +568,7 @@ ProcedureObject_add_operation(PyObject *op, PyObject *args)
 {
     assert(op != NULL);
     ProcedureObject *self = ProcedureObject_CAST(op);
-    UNIT_Instruction instruction;
+    UNIT_OperationCode instruction;
     int64_t oparg;
 
     if (!PyArg_ParseTuple(args, "iL", &instruction, &oparg)) {
@@ -635,7 +635,7 @@ ProcedureObject_create_jump_label(PyObject *op, PyObject *name_obj)
 static PyObject *
 ProcedureObject_add_jump(PyObject *op, PyObject *args)
 {
-    UNIT_Instruction instruction;
+    UNIT_OperationCode instruction;
     PyObject *jump_label_obj;
     _unit_state *state = get_state_from_object(op);
 

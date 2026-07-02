@@ -3,7 +3,7 @@
 
 static UNIT_Status
 create_artificial_instruction(_UNIT_Vector *instructions,
-                              UNIT_Instruction opcode, int64_t oparg)
+                              UNIT_OperationCode opcode, int64_t oparg)
 {
     assert(instructions != NULL);
 
@@ -249,7 +249,7 @@ UNIT_Procedure_OptimizeFold(UNIT_Procedure *procedure)
                 POP();
                 _UNIT_Operation *previous = _UNIT_Vector_GET(&optimized, _UNIT_Vector_SIZE(&optimized) - 1);
                 assert(previous != NULL);
-                UNIT_Instruction kind = previous->instruction;
+                UNIT_OperationCode kind = previous->instruction;
                 switch (kind) {
                     case UNIT_OP_LOAD_INTEGER:
                     case UNIT_OP_ADD:

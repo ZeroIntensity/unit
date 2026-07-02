@@ -169,7 +169,7 @@ instruction set:
 2. The operation argument, often shortened to "oparg".
 
 Let's start with the operation ID and ignore the argument for now. In UNIT, all
-instructions are available in an enum called :c:enumerator:`UNIT_Instruction`.
+instructions are available in an enum called :c:enumerator:`UNIT_OperationCode`.
 The values of this enum are prefixed with ``UNIT_OP_``. But, how do we actually
 add instructions to the procedure?
 

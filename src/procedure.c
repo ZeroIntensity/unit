@@ -105,7 +105,7 @@ _UNIT_Structure_DEFINE_PUBLIC_FREE(UNIT_Procedure);
 
 UNIT_Status
 UNIT_Procedure_AddOperation(UNIT_Procedure *procedure,
-                            UNIT_Instruction instruction,
+                            UNIT_OperationCode instruction,
                             int64_t argument)
 {
     assert(procedure != NULL);
@@ -162,7 +162,7 @@ UNIT_Procedure_UseLabel(UNIT_Procedure *procedure,
 
 UNIT_Status
 UNIT_Procedure_AddJump(UNIT_Procedure *procedure,
-                       UNIT_Instruction instruction,
+                       UNIT_OperationCode instruction,
                        UNIT_JumpLabel *jump_label)
 {
     assert(procedure != NULL);
@@ -307,7 +307,7 @@ UNIT_Procedure_AddLoadName(UNIT_Procedure *procedure, UNIT_Local local)
 
 
 const char *
-UNIT_Instruction_GetName(UNIT_Instruction instruction)
+UNIT_OperationCode_GetName(UNIT_OperationCode instruction)
 {
 #define NAME(name) case UNIT_OP_ ##name: return #name
     switch (instruction) {
@@ -546,7 +546,7 @@ deduce_stack_effect(const UNIT_Procedure *procedure, const _UNIT_Operation *op,
 #define POP()                                                                                           \
     if (_UNIT_Vector_SIZE(debug_stack) == 0) {                                                          \
         _UNIT_SetErrorFormat(procedure->context, UNIT_ERROR_INVALID_USAGE,                              \
-                             "stack underflow at %s", UNIT_Instruction_GetName(op->instruction));       \
+                             "stack underflow at %s", UNIT_OperationCode_GetName(op->instruction));       \
     }                                                                                                   \
     _UNIT_Dealloc(context, _UNIT_Vector_Pop(debug_stack));                                              \
 
@@ -806,7 +806,7 @@ UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure, FILE *stream,
             continue;
         }
 
-        PRINT("    %ld    %s", index, UNIT_Instruction_GetName(operation->instruction));
+        PRINT("    %ld    %s", index, UNIT_OperationCode_GetName(operation->instruction));
         if (operation->argument != 0
             || operation->instruction == UNIT_OP_LOAD_INTEGER
             || operation->instruction == UNIT_OP_LOAD_ARGUMENT

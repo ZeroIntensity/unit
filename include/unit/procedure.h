@@ -67,10 +67,10 @@ typedef enum {
 
     // Casting
     UNIT_OP_CONVERT
-} UNIT_Instruction;
+} UNIT_OperationCode;
 
 typedef struct {
-    UNIT_Instruction instruction;
+    UNIT_OperationCode instruction;
     int64_t argument;
 } _UNIT_Operation;
 
@@ -130,7 +130,7 @@ UNIT_Procedure_Free(UNIT_Procedure *procedure);
 
 UNIT_Status
 UNIT_Procedure_AddOperation(UNIT_Procedure *procedure,
-                            UNIT_Instruction instruction,
+                            UNIT_OperationCode instruction,
                             int64_t argument);
 
 UNIT_JumpLabel *
@@ -142,7 +142,7 @@ UNIT_Procedure_UseLabel(UNIT_Procedure *procedure,
                         UNIT_JumpLabel *jump_label);
 
 UNIT_Status
-UNIT_Procedure_AddJump(UNIT_Procedure *procedure, UNIT_Instruction instruction,
+UNIT_Procedure_AddJump(UNIT_Procedure *procedure, UNIT_OperationCode instruction,
                        UNIT_JumpLabel *jump_label);
 
 UNIT_Status
@@ -169,7 +169,7 @@ UNIT_Procedure_AddCallProcedure(UNIT_Procedure *self,
                                 uint8_t nargs);
 
 const char *
-UNIT_Instruction_GetName(UNIT_Instruction instruction);
+UNIT_OperationCode_GetName(UNIT_OperationCode instruction);
 
 UNIT_Status
 UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure,

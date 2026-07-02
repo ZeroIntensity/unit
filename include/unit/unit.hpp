@@ -407,7 +407,7 @@ class Procedure {
     add_op_int(OpCode op, std::int64_t oparg)
     {
         if (UNIT_FAILED(UNIT_Procedure_AddOperation(&procedure,
-                                                    static_cast<UNIT_Instruction>(op),
+                                                    static_cast<UNIT_OperationCode>(op),
                                                     oparg))) {
             throw error(procedure.context);
         }
@@ -619,7 +619,7 @@ private:
     void
     add_op_jump(OpCode opcode, JumpLabel label)
     {
-        if (UNIT_FAILED(UNIT_Procedure_AddJump(&procedure, static_cast<UNIT_Instruction>(opcode),
+        if (UNIT_FAILED(UNIT_Procedure_AddJump(&procedure, static_cast<UNIT_OperationCode>(opcode),
                                                label.raw()))) {
             throw error(procedure.context);
         }
