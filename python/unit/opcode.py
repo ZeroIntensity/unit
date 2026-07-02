@@ -1,8 +1,11 @@
-from unit import _core
+from __future__ import annotations
 
 from enum import Enum
 
-__all__ = "OpCode",
+from unit import _core
+
+__all__ = ("OpCode",)
+
 
 class OpCode(Enum):
     LOAD_STRING = _core.UNIT_OP_LOAD_STRING

@@ -49,9 +49,8 @@ def process_line() -> None:
         procedure.modulo()
     else:
         print(
-            f"Unknown operator: {op}. "
-            "Valid operators are: +, -, *, /, %",
-            file=sys.stderr
+            f"Unknown operator: {op}. Valid operators are: +, -, *, /, %",
+            file=sys.stderr,
         )
         return
 

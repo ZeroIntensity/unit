@@ -8,7 +8,6 @@ class BasicTests(unittest.TestCase):
         return unit.Procedure(self.id())
 
     def compile_and_run(self, procedure: unit.Procedure, expected: Any, *args: Any):
-
         procedure.optimize_translation = False
         super_unoptimized_function = procedure.compile().jit()
         self.assertEqual(super_unoptimized_function(*args), expected)

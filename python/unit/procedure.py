@@ -1,11 +1,13 @@
-from unit.context import Context
-from unit.opcode import OpCode
-from unit.error import Error
-from unit import _core
-from typing import Any, Literal, TypeAlias, TypeVar, Generic
-from dataclasses import dataclass
-import ctypes
+from __future__ import annotations
 
+import ctypes
+from dataclasses import dataclass
+from typing import Any, Generic, Literal, TypeAlias, TypeVar
+
+from unit import _core
+from unit.context import Context
+from unit.error import Error
+from unit.opcode import OpCode
 
 __all__ = "ExecutableBuffer", "CompiledProcedure", "Platform", "JumpLabel", "Procedure"
 
@@ -252,9 +254,7 @@ class Procedure:
 
     def load_string(self, value: str, /) -> None:
         if __debug__ and not isinstance(value, str):
-            raise TypeError(
-                f"Expected a string, but got {value!r}"
-            )
+            raise TypeError(f"Expected a string, but got {value!r}")
 
         with Error.capture_internal_errors():
             self._procedure.add_string_load(value)
@@ -365,6 +365,10 @@ class Procedure:
         with Error.capture_internal_errors():
             self._procedure.optimize()
 
-    def instructions_text(self, *, visualize_stack_effect: bool = True, ignore_errors: bool = True) -> None:
+    def instructions_text(
+        self, *, visualize_stack_effect: bool = True, ignore_errors: bool = True
+    ) -> None:
         with Error.capture_internal_errors():
-            return self._procedure.print_instructions(int(visualize_stack_effect), int(ignore_errors))
+            return self._procedure.print_instructions(
+                int(visualize_stack_effect), int(ignore_errors)
+            )

@@ -1,12 +1,16 @@
-from typing import ClassVar
-from unit._core import Error as _Error
-from unit import _core
-from enum import Enum
-from dataclasses import dataclass
+from __future__ import annotations
+
 from collections.abc import Generator
 from contextlib import contextmanager
+from dataclasses import dataclass
+from enum import Enum
+from typing import ClassVar
+
+from unit import _core
+from unit._core import Error as _Error
 
 __all__ = "Error", "NoMemory", "InvalidUsage", "OSFailure", "UnsupportedPlatform"
+
 
 class ErrorCode(Enum):
     UNIT_ERROR_NONE = _core.UNIT_ERROR_NONE
@@ -31,7 +35,9 @@ class Error(_Error):
     def __init_subclass__(cls) -> None:
         super().__init_subclass__()
         assert cls.error_code != ErrorCode.UNIT_ERROR_NONE
-        assert cls.error_code not in CODES_TO_EXCEPTIONS, f"{cls.error_code} already set to a class"
+        assert cls.error_code not in CODES_TO_EXCEPTIONS, (
+            f"{cls.error_code} already set to a class"
+        )
         CODES_TO_EXCEPTIONS[cls.error_code] = cls
 
     @staticmethod
@@ -53,11 +59,14 @@ class Error(_Error):
 class NoMemory(MemoryError, Error):
     error_code = ErrorCode.UNIT_ERROR_NO_MEMORY
 
+
 class InvalidUsage(ValueError, Error):
     error_code = ErrorCode.UNIT_ERROR_INVALID_USAGE
 
+
 class OSFailure(OSError, Error):
     error_code = ErrorCode.UNIT_ERROR_OS_FAILURE
+
 
 class UnsupportedPlatform(Error):
     error_code = ErrorCode.UNIT_ERROR_UNSUPPORTED_PLATFORM

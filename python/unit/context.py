@@ -1,10 +1,12 @@
 from __future__ import annotations
+
+import contextvars
 from typing import Self
 
 from unit import _core
-import contextvars
 
-__all__ = "Context",
+__all__ = ("Context",)
+
 
 class Context:
     CURRENT_CONTEXT = contextvars.ContextVar["Context | None"](

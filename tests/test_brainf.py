@@ -26,10 +26,10 @@ class BrainfuckTests(ExampleTestRunner, executable_name="unit_brainf"):
             source += f"{pluses}>"
 
         for _ in range(count):
-            source += f"<"
+            source += "<"
 
         for _ in range(count):
-            source += f".>"
+            source += ".>"
 
         message = self._run(source)
         self.assertEqual(message, "a" * count)

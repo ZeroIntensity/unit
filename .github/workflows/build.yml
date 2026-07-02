@@ -45,7 +45,7 @@ jobs:
                   persist-credentials: false
 
             - name: Configure
-              run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build-type }}
+              run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DUNIT_BUILD_EXAMPLES=on -DUNIT_BUILD_TESTS=on
 
             - name: Build
               run: cmake --build build

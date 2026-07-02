@@ -1,11 +1,12 @@
+# ruff: noqa: F403
+
 from unit import context as context
 from unit import opcode as opcode
 from unit import procedure as procedure
-
 from unit.context import *
 from unit.error import *
-from unit.procedure import *
 from unit.opcode import *
+from unit.procedure import *
 
 try:
     from unit import _core
