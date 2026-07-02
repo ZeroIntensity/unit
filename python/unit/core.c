@@ -237,7 +237,7 @@ tmpfile_stream_to_text(FILE *stream)
 
     fclose(stream);
 
-    PyObject *result = PyUnicode_FromStringAndSize(buffer, size);
+    PyObject *result = PyUnicode_DecodeUTF8(buffer, size, "replace");
     PyMem_Free(buffer);
     return result;
 }
@@ -938,7 +938,7 @@ _unit_modexec(PyObject *module)
     EXPORT_CONST(_UNIT_ABI_MASK);
     EXPORT_CONST(UNIT_ABI_SYSTEMV);
     EXPORT_CONST(UNIT_ABI_APPLE);
-    EXPORT_CONST(UNIT_ABI_SYSTEMV);
+    EXPORT_CONST(UNIT_ABI_WIN64);
 
     EXPORT_CONST(_UNIT_ARCH_MASK);
     EXPORT_CONST(UNIT_ARCH_AMD64);

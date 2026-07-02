@@ -92,6 +92,16 @@ to an object file. For this, we can use
 that the object file will be stored in. For Linux, this is ELF, so we pass
 :c:macro:`UNIT_FORMAT_ELF`.
 
+.. note::
+
+    Windows uses the Portable Executable (PE) format (:c:macro:`UNIT_FORMAT_PE`),
+    and macOS uses the Mach Object (Mach-O) format (:c:macro:`UNIT_FORMAT_MACHO`).
+
+    UNIT does not support either of these at the moment; trying to pass them to
+    :c:func:`UNIT_CompiledProcedure_WriteObjectFile` will result in an error
+    being set at runtime.
+
+
 .. code-block:: c
 
     if (UNIT_FAILED(UNIT_CompiledProcedure_WriteObjectFile(compiled, "output.o",

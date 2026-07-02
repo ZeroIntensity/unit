@@ -749,6 +749,26 @@ class BasicTests(unittest.TestCase):
         self.compile_and_run(proc, 2, 1)
         self.compile_and_run(proc, 1024, 10)
 
+    # TODO: Remove when we support ARM
+    def test_aarch64_fails(self):
+        proc = self.make_procedure()
+        for abi in ("systemv", "apple", "win64"):
+            with self.subTest(abi=abi):
+                with self.assertRaises(unit.UnsupportedPlatform):
+                    proc.compile(
+                        platform=unit.Platform(architecture="aarch64", abi=abi)
+                    )
 
-if __name__ == "__main__":
-    unittest.main()
+    # TODO: Remove when we support Mach-O and PE
+    def test_non_elf_fails(self):
+        proc = self.make_procedure()
+        compiled = proc.compile()
+
+        with self.assertRaises(unit.UnsupportedPlatform):
+            compiled.write_object_file("test.o", "macho")
+
+        with self.assertRaises(unit.UnsupportedPlatform):
+            compiled.write_object_file("test.o", "pe")
+
+    if __name__ == "__main__":
+        unittest.main()
