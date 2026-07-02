@@ -118,7 +118,7 @@ jobs:
               with:
                   persist-credentials: false
 
-            - uses: pypa/cibuildwheel@0f50a099de4ef60c2e4c89b99158265364e3b82c # v2.22.0
+            - uses: pypa/cibuildwheel@f03ac7617d6cff873ccf24cc0d567ef5ba5a9e6d # v4.0.0
               env:
                   CIBW_BUILD: cp314-*
                   CIBW_SKIP: "*-musllinux_*"
