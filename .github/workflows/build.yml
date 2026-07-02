@@ -30,6 +30,7 @@ jobs:
                         - 'pyproject.toml'
                         - 'examples/**'
                         - 'tests/**'
+                        - '.github/workflows/build.yml'
 
     test:
         needs: [changes]
