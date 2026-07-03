@@ -71,6 +71,7 @@ struct _UNIT_ExecutableBuffer {
     #define JIT_FAILED(ptr) ((ptr) == NULL)
     #define JIT_RESOLVE_SYMBOL(name) GetProcAddress(GetModuleHandle(NULL), name)
 #else
+    #define _GNU_SOURCE
     #include <sys/mman.h>
     #include <dlfcn.h>
     #define JIT_ALLOC(size) mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0)

@@ -146,9 +146,9 @@ print_machine_item(FILE *stream, _UNIT_MachineItem *item, UNIT_Context *context)
 
     assert(item != NULL);
     if (item->type == _UNIT_TYPE_CONSTANT) {
-        PRINT("%ld", item->value);
+        PRINT("%lld", (long long)item->value);
     } else if (item->type == _UNIT_TYPE_LOCATION) {
-        PRINT("location_%ld", item->value);
+        PRINT("location_%lld", (long long)item->value);
     } else if (item->type == _UNIT_TYPE_CALL_ARGS) {
         PRINT("[");
         UNIT_Size size = _UNIT_Vector_SIZE(item->call_args);
@@ -194,10 +194,10 @@ print_machine_item(FILE *stream, _UNIT_MachineItem *item, UNIT_Context *context)
             return _UNIT_FAIL;
         }
     } else if (item->type == _UNIT_TYPE_MEMORY) {
-        PRINT("stack_slot_%ld", item->value);
+        PRINT("stack_slot_%lld", (long long)item->value);
     } else {
         assert(item->type == _UNIT_TYPE_REGISTER);
-        PRINT("register_%ld", item->value);
+        PRINT("register_%lld", (long long)item->value);
     }
 
     if (item->hint != NULL) {
@@ -227,7 +227,7 @@ print_instruction_stream(FILE *stream, _UNIT_Vector *instructions)
         if (operation->instruction == _UNIT_I_JUMP_LABEL) {
             // There should be a "block ..." right before this
             _UNIT_MachineItem *destination = _UNIT_MachineDestination_GetPointer(operation->destination);
-            PRINT(", label %s (%ld):\n", destination->hint, destination->value);
+            PRINT(", label %s (%lld):\n", destination->hint, (long long)destination->value);
             continue;
         }
         assert(operation != NULL);
@@ -295,7 +295,7 @@ _UNIT_Translation_PrintInstructions(const _UNIT_Translation *translation,
     for (UNIT_Size index = 0; index < size; ++index) {
         _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks, index);
         assert(block != NULL);
-        PRINT("    block %ld", block->id);
+        PRINT("    block %lld", (long long)block->id);
         if (block->label_id != _UNIT_BasicBlock_NO_LABEL) {
             // We don't have access to the label name here, but the
             // instructions do. The jump label will be the first instruction

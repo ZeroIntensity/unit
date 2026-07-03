@@ -462,12 +462,12 @@ print_debug_item(UNIT_Context *context, DebugStackItem *item, FILE *stream)
         }
 
         case DEBUG_TYPE_LOCAL: {
-            PRINT("local_%ld", item->value);
+            PRINT("local_%lld", (long long)item->value);
             break;
         }
 
         case DEBUG_TYPE_ARGUMENT: {
-            PRINT("argument_%ld", item->value);
+            PRINT("argument_%lld", (long long)item->value);
             break;
         }
 
@@ -623,9 +623,9 @@ deduce_stack_effect(const UNIT_Procedure *procedure, const _UNIT_Operation *op,
                                      "%ld is not a valid subprocedure index", oparg);
                 return _UNIT_FAIL;
             }
-            UNIT_Procedure *procedure = _UNIT_Vector_GET(&procedure->_subprocedures, oparg);
-            assert(procedure != NULL);
-            PUSH(DEBUG_TYPE_PROCEDURE_CALL_RESULT, procedure->name);
+            UNIT_Procedure *subprocedure = _UNIT_Vector_GET(&procedure->_subprocedures, oparg);
+            assert(subprocedure != NULL);
+            PUSH(DEBUG_TYPE_PROCEDURE_CALL_RESULT, subprocedure->name);
             break;
         }
 
@@ -754,7 +754,8 @@ deduce_stack_effect(const UNIT_Procedure *procedure, const _UNIT_Operation *op,
 
                 default: {
                     _UNIT_SetErrorFormat(context, UNIT_ERROR_INVALID_USAGE,
-                                         "can only read/write 1, 2, 4, or 8 bytes, not %ld");
+                                         "can only read/write 1, 2, 4, or 8 bytes, not %lld",
+                                         (long long)oparg);
                     break;
                 }
             }
@@ -806,7 +807,7 @@ UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure, FILE *stream,
             continue;
         }
 
-        PRINT("    %ld    %s", index, UNIT_OperationCode_GetName(operation->instruction));
+        PRINT("    %td    %s", index, UNIT_OperationCode_GetName(operation->instruction));
         if (operation->argument != 0
             || operation->instruction == UNIT_OP_LOAD_INTEGER
             || operation->instruction == UNIT_OP_LOAD_ARGUMENT
@@ -815,7 +816,7 @@ UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure, FILE *stream,
             || operation->instruction == _UNIT_OP_STORE_LOCAL_NAME
             || operation->instruction == _UNIT_OP_LOAD_LOCAL_NAME
             || operation->instruction == UNIT_OP_ADDRESS_OF) {
-            PRINT("  %ld", (long)operation->argument);
+            PRINT("  %lld", (long long)operation->argument);
         }
 
         switch (operation->instruction) {

@@ -18,9 +18,9 @@
 #define ASSERT_EQ(a, b)                                                     \
     do {                                                                    \
         if ((a) != (b)) {                                                   \
-            fprintf(stderr, "  %s FAIL: %s:%d: %s != %s (%ld != %ld)\n",    \
+            fprintf(stderr, "  %s FAIL: %s:%d: %s != %s (%lld != %lld)\n",  \
                     __func__, __FILE__, __LINE__, #a, #b,                   \
-                    (long)(a), (long)(b));                                  \
+                    (long long)(a), (long long)(b));                        \
             abort();                                                        \
         }                                                                   \
     } while (0)
