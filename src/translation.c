@@ -816,7 +816,6 @@ _UNIT_Translate(_UNIT_Translation *translation,
     }
     UNIT_Size _block_id = 0;
     UNIT_Size _location_id = 0;
-    _UNIT_Vector *_instructions;
     _UNIT_BasicBlock *_block;
 
     #define UNIQUE_ID() (++_location_id)
@@ -825,18 +824,15 @@ _UNIT_Translate(_UNIT_Translation *translation,
     // It also makes refactoring easier if we want to change where these are
     // stored.
     #define CURRENT_BLOCK() _block
-    #define INSTRUCTIONS() _instructions
 
     #define START_NEW_BLOCK()                                               \
         _block = push_new_block(translation, &_block_id);                   \
         if (_block == NULL) {                                               \
             goto error;                                                     \
         }                                                                   \
-        _instructions = &_block->instructions;
 
     #define START_EXISTING_BLOCK(name)                                      \
         _block = name;                                                      \
-        _instructions = &_block->instructions;                              \
         if (UNIT_FAILED(_UNIT_Vector_Append(&translation->blocks,           \
                                             name))) {                       \
             goto error;                                                     \

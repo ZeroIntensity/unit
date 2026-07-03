@@ -124,3 +124,209 @@ Build and run the compiler, then link the output:
    echo $?
 
 The last command prints ``0`` -- our procedure returned successfully!
+
+Now, before we start building things, let's go over some other important
+information about compilation.
+
+JIT compilation
+---------------
+
+Writing an object file and linking it is useful for ahead-of-time compilation,
+but sometimes you want to compile and run code immediately in the same process.
+This is called JIT (Just-In-Time) compilation.
+
+:c:func:`UNIT_CompiledProcedure_JIT` maps the compiled machine code into
+executable memory in a type known as :c:type:`UNIT_ExecutableBuffer`.
+We can get a pointer to the executable memory through
+:c:func:`UNIT_ExecutableBuffer_GetPointer`.
+
+Like with :c:type:`UNIT_CompiledProcedure`, a ``UNIT_ExecutableBuffer`` is
+heap-allocated memory and must be freed later (via :c:func:`UNIT_ExecutableBuffer_Free`).
+
+.. code-block:: c
+
+    UNIT_ExecutableBuffer *buf = UNIT_CompiledProcedure_JIT(compiled, NULL /* more on this in a moment */);
+    if (buf == NULL) {
+        UNIT_PrintError(&context, stderr);
+        UNIT_CompiledProcedure_Free(compiled);
+        UNIT_Procedure_Clear(&procedure);
+        UNIT_Context_Clear(&context);
+        return 1;
+    }
+
+    // Cast the raw pointer to a function pointer and call it
+    int64_t (*my_main)(void) = (int64_t (*)(void))UNIT_ExecutableBuffer_GetPointer(buf);
+
+    int64_t result = my_main();
+    printf("returned: %ld\n", result); // returned: 0
+
+    UNIT_ExecutableBuffer_Free(buf);
+
+The second argument to :c:func:`UNIT_CompiledProcedure_JIT` is a
+:c:struct:`UNIT_SymbolMap` for resolving external function names. We pass
+``NULL`` here because our procedure doesn't call any external functions yet.
+We will need it later when we call ``printf`` and ``scanf``.
+
+
+Optimization
+------------
+
+Before compiling, you can also run optimization passes on the procedure with
+:c:func:`UNIT_Procedure_Optimize`:
+
+.. code-block:: c
+
+    UNIT_Procedure_Optimize(&procedure);
+    UNIT_CompiledProcedure *compiled = UNIT_Compile(&procedure, UNIT_HOST_PLATFORM);
+
+This will modify the procedure's instructions to generally make it more efficient.
+Optimization is a one-way street; an optimized procedure cannot be "unoptimized".
+
+Optimization is optional but recommended. Note that UNIT runs two optimization passes.
+This one is only on the stack IR, but during compilation, there's a second, more simple
+pass on the translated register IR. This second optimization pass is enabled by default;
+it can be disabled by setting :c:macro:`UNIT_FLAG_NO_OPTIMIZE_TRANSLATION` on the procedure.
+
+For our simple "return 0" procedure, optimization has no effect, but as we
+add more instructions, it will make a noticeable difference.
+
+
+Debugging the output
+--------------------
+
+When things go wrong, it helps to see what UNIT is doing. UNIT provides two
+functions to help with this.
+
+First and foremost, :c:func:`UNIT_Procedure_PrintInstructions` prints the stack IR
+alongside a simulated stack state after each instruction.
+
+It can be used like this:
+
+.. code-block:: c
+
+    UNIT_Procedure_PrintInstructions(&procedure, stdout, /*visualize_stack_effect=*/1);
+
+Output:
+
+.. code-block::
+
+    procedure "main":
+        0    LOAD_INTEGER  0
+        [0]
+        1    RETURN_VALUE
+        []
+
+The other function is :c:func:`UNIT_CompiledProcedure_PrintTranslatedIR`.
+It prints the translated register IR with allocated registers, which is
+closer to what the CPU actually executes. This is very helpful for debugging
+logical errors in your IR.
+
+The usage is similar to ``UNIT_Procedure_PrintInstructions``, but there's
+no option for the stack effect:
+
+.. code-block:: c
+
+    UNIT_CompiledProcedure_PrintTranslatedIR(compiled, stdout);
+
+Output:
+
+.. code-block::
+
+    translation for "main":
+        block 0
+            RETURN_VALUE(0)
+        block 1
+
+.. hint::
+
+    During translation, UNIT splits up your code into blocks of linear control flow
+    (also known as a `basic block <https://en.wikipedia.org/wiki/Basic_block>`_)
+    for the sake of optimization and register allocation. Blocks will be
+    split at jumps and at returns.
+
+
+If the stack IR looks wrong, your instructions are wrong.
+If the stack IR looks right but the register IR looks wrong,
+you may have found a bug in UNIT -- please file an issue!
+
+
+Putting it together
+-------------------
+
+Here is the complete program so far. We use the object file approach for
+the guessing game since it needs to be the real ``main`` function:
+
+.. code-block:: c
+   :linenos:
+   :caption: :iconify:`streamline-logos:c-language-logo-solid` main.c
+
+    #include <unit/unit.h>
+    #include <stdio.h>
+
+    int main(void)
+    {
+        UNIT_Context context;
+        if (UNIT_FAILED(UNIT_Context_Init(&context))) {
+            fprintf(stderr, "failed to initialize context\n");
+            return 1;
+        }
+
+        UNIT_Procedure procedure;
+        if (UNIT_FAILED(UNIT_Procedure_Init(&procedure, &context, "main"))) {
+            UNIT_PrintError(&context, stderr);
+            UNIT_Context_Clear(&context);
+            return 1;
+        }
+
+    #define ADDOP_INT(op, value)                                                \
+        if (UNIT_FAILED(UNIT_Procedure_AddOperation(&procedure, op, value))) {  \
+            UNIT_PrintError(&context, stderr);                                  \
+            goto cleanup;                                                       \
+        }
+
+    #define ADDOP(op) ADDOP_INT(op, 0)
+
+        ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
+        ADDOP(UNIT_OP_RETURN_VALUE);
+
+        // Optimize
+        UNIT_Procedure_Optimize(&procedure);
+
+        // Compile
+        UNIT_CompiledProcedure *compiled = UNIT_Compile(&procedure, UNIT_HOST_PLATFORM);
+        if (compiled == NULL) {
+            UNIT_PrintError(&context, stderr);
+            goto cleanup;
+        }
+
+        // Write object file
+        if (UNIT_FAILED(UNIT_CompiledProcedure_WriteObjectFile(compiled, "output.o",
+                                                               UNIT_FORMAT_ELF))) {
+            UNIT_PrintError(&context, stderr);
+        }
+
+        printf("Wrote output.o\n");
+
+    #undef ADDOP_INT
+    #undef ADDOP
+
+        UNIT_CompiledProcedure_Free(compiled);
+    cleanup:
+        UNIT_Procedure_Clear(&procedure);
+        UNIT_Context_Clear(&context);
+        return 0;
+    }
+
+.. code-block:: bash
+
+   gcc main.c -lunit -o guessing_game
+   ./guessing_game
+   Wrote output.o
+   gcc output.o -o output
+   ./output
+   echo $?
+   0
+
+We now have a working compiler pipeline. In the next section, we will start
+building the actual guessing game by adding arithmetic, external function
+calls, and control flow.

@@ -127,34 +127,6 @@ potentially_rewrite_item(_UNIT_RegisterAllocator *allocator,
     return _UNIT_OK;
 }
 
-static UNIT_Status
-rewrite_block_locations(_UNIT_RegisterAllocator *allocator,
-                        _UNIT_BasicBlock *block)
-{
-    assert(allocator != NULL);
-    assert(block != NULL);
-    UNIT_Size size = _UNIT_Vector_SIZE(&block->instructions);
-    for (UNIT_Size index = 0; index < size; ++index) {
-        _UNIT_MachineOperation *operation = _UNIT_Vector_GET(&block->instructions,
-                                                             index);
-
-        if (UNIT_FAILED(potentially_rewrite_item(allocator,
-                                                 _UNIT_MachineDestination_GetPointerNullable(operation->destination)))) {
-            return _UNIT_FAIL;
-        }
-
-        if (UNIT_FAILED(potentially_rewrite_item(allocator, operation->argument_1))) {
-            return _UNIT_FAIL;
-        }
-
-        if (UNIT_FAILED(potentially_rewrite_item(allocator, operation->argument_2))) {
-            return _UNIT_FAIL;
-        }
-    }
-
-    return _UNIT_OK;
-}
-
 static void
 assign_destination_register(_UNIT_RegisterAllocator *allocator,
                             _UNIT_MachineOperation *op,

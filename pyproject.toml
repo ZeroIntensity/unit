@@ -20,4 +20,4 @@ classifiers = [
 [tool.scikit-build]
 cmake.args = ["-DUNIT_BUILD_PYTHON=ON"]
 wheel.packages = ["python/unit"]
-cmake.build-type = "Debug"
+cmake.build-type = "RelWithDebInfo"

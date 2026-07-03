@@ -447,7 +447,7 @@ print_debug_item(UNIT_Context *context, DebugStackItem *item, FILE *stream)
         }
 
         case DEBUG_TYPE_ADDRESS: {
-            PRINT("address_of_%ld", item->value);
+            PRINT("address_of_%lld", (long long)item->value);
             break;
         }
 
