@@ -357,7 +357,7 @@ Debugging
    .. code-block:: c
       :caption: :iconify:`streamline-logos:c-language-logo-solid` Example
 
-      UNIT_Procedure_PrintInstructions(&proc, stdout, 1);
+      UNIT_Procedure_PrintInstructions(&proc, stdout, /*visualize_stack_effect=*/1);
 
 .. c:function:: const char *UNIT_OperationCode_GetName(UNIT_OperationCode instruction)
 

@@ -971,14 +971,14 @@ _UNIT_Translate(_UNIT_Translation *translation,
 
                 UNIT_Size location_id = UNIQUE_ID();
                 LocalState *local_state = create_new_local(&locals,
-                                                                operation->argument,
-                                                                location_id);
+                                                           operation->argument,
+                                                           location_id);
                 if (local_state == NULL) {
                     goto error;
                 }
                 _UNIT_MachineItem *location = create_new_location(translation,
-                                                                CURRENT_BLOCK(),
-                                                                location_id);
+                                                                  CURRENT_BLOCK(),
+                                                                  location_id);
                 if (location == NULL) {
                     goto error;
                 }
@@ -990,7 +990,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
                 if (_UNIT_SizeSet_Contains(&address_taken_locals, operation->argument)) {
                     local_state->stack_slot = locals.next_stack_slot++;
                     _UNIT_MachineItem *slot = new_machine_item(translation, _UNIT_TYPE_MEMORY,
-                                                            local_state->stack_slot, hint);
+                                                               local_state->stack_slot, hint);
                     if (slot == NULL) {
                         goto error;
                     }
@@ -1014,7 +1014,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
                 }
 
                 _UNIT_MachineItem *location = new_machine_item(translation, _UNIT_TYPE_LOCATION,
-                                                           local_state->location_id, hint);
+                                                               local_state->location_id, hint);
                 if (location == NULL) {
                     goto error;
                 }

@@ -11,3 +11,4 @@ This section teaches you how to use UNIT.
    conventions
    procedure-basics
    compilation
+   guessing-game

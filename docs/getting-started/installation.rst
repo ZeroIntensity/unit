@@ -58,7 +58,6 @@ install from the root directory:
 Using UNIT in your project
 --------------------------
 
-
 .. tabs::
 
    .. tab:: CMake

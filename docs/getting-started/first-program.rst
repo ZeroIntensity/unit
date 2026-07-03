@@ -201,10 +201,61 @@ Call :c:func:`UNIT_Procedure_Optimize` before compiling:
    UNIT_Procedure_Optimize(&proc);
    UNIT_CompiledProcedure *compiled = UNIT_Compile(&proc, UNIT_HOST_PLATFORM);
 
-For our simple ``add`` function, optimization won't change anything. But
+For our simple ``add`` function, optimization won't change anything. But,
 for larger programs with constants, redundant loads, or inlineable function
-calls, it makes a real difference. The optimizer runs constant folding,
-dead code elimination, and function inlining.
+calls, it makes a real difference.
+
+
+Debugging
+---------
+
+When things go wrong, it helps to see what UNIT is doing. UNIT provides two
+functions to help with this.
+
+First and foremost, :c:func:`UNIT_Procedure_PrintInstructions` prints all the instructions
+in a procedure alongside a simulated stack state after each instruction.
+
+It can be used like this:
+
+.. code-block:: c
+
+    UNIT_Procedure_PrintInstructions(&procedure, stdout, /*visualize_stack_effect=*/1);
+
+Output:
+
+.. code-block::
+
+    procedure "add":
+        0    LOAD_ARGUMENT  0
+        [argument_0]
+        1    LOAD_ARGUMENT  1
+        [argument_0, argument_1]
+        2    ADD
+        [arithmetic_result]
+        3    RETURN_VALUE
+        []
+
+The other function is :c:func:`UNIT_CompiledProcedure_PrintTranslatedIR`,
+which prints the translated register IR with allocated registers, which is
+helpful for debugging logical errors in your IR.
+
+Usage:
+
+.. code-block:: c
+
+    UNIT_CompiledProcedure_PrintTranslatedIR(compiled, stdout);
+
+Output:
+
+.. code-block::
+
+    translation for "add":
+        block 0
+            register_0 = LOAD_ARGUMENT(0)
+            register_1 = LOAD_ARGUMENT(1)
+            register_2 = ADD(register_0, register_1)
+            RETURN_VALUE(register_2)
+        block 1
 
 
 Complete program

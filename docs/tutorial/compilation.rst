@@ -1,5 +1,5 @@
-Compilation
-===========
+Compiling a simple program
+==========================
 
 Compiling a procedure
 ---------------------
@@ -176,7 +176,9 @@ Before compiling, you can also run optimization passes on the procedure with
 
 .. code-block:: c
 
-    UNIT_Procedure_Optimize(&procedure);
+    if (UNIT_FAILED(UNIT_Procedure_Optimize(&procedure))) {
+        /* ... */
+    }
     UNIT_CompiledProcedure *compiled = UNIT_Compile(&procedure, UNIT_HOST_PLATFORM);
 
 This will modify the procedure's instructions to generally make it more efficient.
@@ -191,14 +193,27 @@ For our simple "return 0" procedure, optimization has no effect, but as we
 add more instructions, it will make a noticeable difference.
 
 
-Debugging the output
---------------------
+Debugging stack errors
+----------------------
 
-When things go wrong, it helps to see what UNIT is doing. UNIT provides two
-functions to help with this.
+When using UNIT, you'll likely run into an error like this at some point:
 
-First and foremost, :c:func:`UNIT_Procedure_PrintInstructions` prints the stack IR
-alongside a simulated stack state after each instruction.
+.. code-block::
+
+    [INVALID USAGE] stack underflow at SOME_INSTRUCTION
+
+Or this:
+
+.. code-block::
+
+    [INVALID USAGE] procedure did not consume entire stack
+
+This means that there is a stack-effect error somewhere in your IR.
+To debug this, we can use a function called :c:func:`UNIT_Procedure_PrintInstructions`,
+which prints all the instructions in a procedure alongside a simulated stack
+state after each instruction. This is very helpful for visualizing what your
+IR is doing at translation time, and often makes it very easy to determine
+what is wrong with your IR.
 
 It can be used like this:
 
@@ -216,19 +231,23 @@ Output:
         1    RETURN_VALUE
         []
 
-The other function is :c:func:`UNIT_CompiledProcedure_PrintTranslatedIR`.
-It prints the translated register IR with allocated registers, which is
-closer to what the CPU actually executes. This is very helpful for debugging
-logical errors in your IR.
 
-The usage is similar to ``UNIT_Procedure_PrintInstructions``, but there's
-no option for the stack effect:
+Debugging logical errors
+------------------------
+
+For debugging logical errors in your IR, another helpful function is
+:c:func:`UNIT_CompiledProcedure_PrintTranslatedIR`, which prints the translated
+register machine IR. For many people, this can be easier to read than the stack
+machine IR, because it resembles an actual programming language and also because
+it's closer to what your CPU actually executes.
+
+It can be used like this:
 
 .. code-block:: c
 
     UNIT_CompiledProcedure_PrintTranslatedIR(compiled, stdout);
 
-Output:
+Sample output:
 
 .. code-block::
 
@@ -243,7 +262,6 @@ Output:
     (also known as a `basic block <https://en.wikipedia.org/wiki/Basic_block>`_)
     for the sake of optimization and register allocation. Blocks will be
     split at jumps and at returns.
-
 
 If the stack IR looks wrong, your instructions are wrong.
 If the stack IR looks right but the register IR looks wrong,
@@ -278,43 +296,42 @@ the guessing game since it needs to be the real ``main`` function:
             return 1;
         }
 
-    #define ADDOP_INT(op, value)                                                \
-        if (UNIT_FAILED(UNIT_Procedure_AddOperation(&procedure, op, value))) {  \
-            UNIT_PrintError(&context, stderr);                                  \
-            goto cleanup;                                                       \
-        }
+        #define ADDOP_INT(op, value)                                                \
+            if (UNIT_FAILED(UNIT_Procedure_AddOperation(&procedure, op, value))) {  \
+                goto error;                                                         \
+            }
 
-    #define ADDOP(op) ADDOP_INT(op, 0)
+        #define ADDOP(op) ADDOP_INT(op, 0)
 
         ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
         ADDOP(UNIT_OP_RETURN_VALUE);
 
-        // Optimize
-        UNIT_Procedure_Optimize(&procedure);
-
-        // Compile
-        UNIT_CompiledProcedure *compiled = UNIT_Compile(&procedure, UNIT_HOST_PLATFORM);
-        if (compiled == NULL) {
-            UNIT_PrintError(&context, stderr);
-            goto cleanup;
+        if (UNIT_FAILED(UNIT_Procedure_Optimize(&procedure))) {
+            goto error;
         }
 
-        // Write object file
+        UNIT_CompiledProcedure *compiled = UNIT_Compile(&procedure, UNIT_HOST_PLATFORM);
+        if (compiled == NULL) {
+            goto error;
+        }
+
         if (UNIT_FAILED(UNIT_CompiledProcedure_WriteObjectFile(compiled, "output.o",
                                                                UNIT_FORMAT_ELF))) {
-            UNIT_PrintError(&context, stderr);
+            UNIT_CompiledProcedure_Free(compiled);
+            goto error;
         }
 
         printf("Wrote output.o\n");
 
-    #undef ADDOP_INT
-    #undef ADDOP
-
         UNIT_CompiledProcedure_Free(compiled);
-    cleanup:
         UNIT_Procedure_Clear(&procedure);
         UNIT_Context_Clear(&context);
         return 0;
+    error:
+        UNIT_PrintError(&context, stderr);
+        UNIT_Procedure_Clear(&procedure);
+        UNIT_Context_Clear(&context);
+        return 1;
     }
 
 .. code-block:: bash

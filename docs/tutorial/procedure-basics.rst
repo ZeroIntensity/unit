@@ -257,21 +257,21 @@ We can clean this up by adding some macros tailored to our function, like so:
             return 1;
         }
 
-    #define ADDOP_INT(op, value)                                                \
-        if (UNIT_FAILED(UNIT_Procedure_AddOperation(&procedure, op, value))) {  \
-            UNIT_PrintError(&context, stderr);                                  \
-            UNIT_Procedure_Clear(&context);                                     \
-            UNIT_Context_Clear(&procedure);                                     \
-            return 1;                                                           \
-        }
+        #define ADDOP_INT(op, value)                                                \
+            if (UNIT_FAILED(UNIT_Procedure_AddOperation(&procedure, op, value))) {  \
+                UNIT_PrintError(&context, stderr);                                  \
+                UNIT_Procedure_Clear(&context);                                     \
+                UNIT_Context_Clear(&procedure);                                     \
+                return 1;                                                           \
+            }
 
-    #define ADDOP(op) ADDOP_INT(op, 0)
+        #define ADDOP(op) ADDOP_INT(op, 0)
 
         ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
         ADDOP(UNIT_OP_RETURN_VALUE);
 
-    #undef ADDOP_INT
-    #undef ADDOP
+        #undef ADDOP_INT
+        #undef ADDOP
 
         UNIT_Procedure_Clear(&procedure)
         UNIT_Context_Clear(&context);
@@ -333,21 +333,21 @@ our code is running:
     int main(void) {
         /* ... */
 
-    #define ADDOP_INT(op, value)                                                \
-        if (UNIT_FAILED(UNIT_Procedure_AddOperation(&procedure, op, value))) {  \
-            UNIT_PrintError(&context, stderr);                                  \
-            UNIT_Procedure_Clear(&context);                                     \
-            UNIT_Context_Clear(&procedure);                                     \
-            return 1;                                                           \
-        }
+        #define ADDOP_INT(op, value)                                                \
+            if (UNIT_FAILED(UNIT_Procedure_AddOperation(&procedure, op, value))) {  \
+                UNIT_PrintError(&context, stderr);                                  \
+                UNIT_Procedure_Clear(&context);                                     \
+                UNIT_Context_Clear(&procedure);                                     \
+                return 1;                                                           \
+            }
 
-    #define ADDOP(op) ADDOP_INT(op, 0)
+        #define ADDOP(op) ADDOP_INT(op, 0)
 
         ADDOP_INT(UNIT_OP_LOAD_INTEGER, 1);
         ADDOP(UNIT_OP_RETURN_VALUE);
 
-    #undef ADDOP_INT
-    #undef ADDOP
+        #undef ADDOP_INT
+        #undef ADDOP
 
         /* ... */
     }

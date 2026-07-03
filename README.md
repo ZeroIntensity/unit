@@ -145,6 +145,8 @@ UNIT is missing support for the following features:
 - SSA (this is currently partial; locations are assigned once per block, but
   not once per procedure).
 
+These will be added in the future.
+
 ## Should I use UNIT?
 
 UNIT is **not yet suitable for production**.
