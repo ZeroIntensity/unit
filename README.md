@@ -52,6 +52,7 @@ use a virtual environment nonetheless.
 ### C Example
 
 ```c
+#include <stdio.h>
 #include <unit/unit.h>
 
 int main(void)
