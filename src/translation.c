@@ -744,8 +744,8 @@ handle_jump_snapshot(_UNIT_Translation *translation,
                 if (UNIT_FAILED(emit_machine_instruction(translation->context,
                                                          current_block,
                                                          _UNIT_I_LOAD,
-                                                         _UNIT_MachineDestination_FromDestination
-                                                             (dest),
+                                                         _UNIT_MachineDestination_FromDestination(
+                                                             dest),
                                                          item,
                                                          NULL))) {
                     return _UNIT_FAIL;
@@ -785,8 +785,7 @@ handle_jump_snapshot(_UNIT_Translation *translation,
         if (UNIT_FAILED(emit_machine_instruction(translation->context,
                                                  current_block,
                                                  _UNIT_I_LOAD,
-                                                 _UNIT_MachineDestination_FromDestination
-                                                     (dest),
+                                                 _UNIT_MachineDestination_FromDestination(dest),
                                                  src,
                                                  NULL))) {
             return _UNIT_FAIL;
@@ -814,8 +813,8 @@ handle_jump_snapshot(_UNIT_Translation *translation,
                 if (UNIT_FAILED(emit_machine_instruction(translation->context,
                                                          current_block,
                                                          _UNIT_I_LOAD,
-                                                         _UNIT_MachineDestination_FromDestination
-                                                             (dest),
+                                                         _UNIT_MachineDestination_FromDestination(
+                                                             dest),
                                                          item,
                                                          NULL))) {
                     return _UNIT_FAIL;
@@ -1031,48 +1030,44 @@ _UNIT_Translate(_UNIT_Translation *translation,
                 goto error;                                                         \
             }
 
-    #define EMIT_DEST(inst, dest)                                                             \
-            if (UNIT_FAILED(emit_machine_instruction(context,                                 \
-                                                     CURRENT_BLOCK(),                         \
-                                                     inst,                                    \
-                                                     _UNIT_MachineDestination_FromDestination \
-                                                         (dest),                              \
-                                                     NULL,                                    \
-                                                     NULL))) {                                \
-                goto error;                                                                   \
+    #define EMIT_DEST(inst, dest)                                                                    \
+            if (UNIT_FAILED(emit_machine_instruction(context,                                        \
+                                                     CURRENT_BLOCK(),                                \
+                                                     inst,                                           \
+                                                     _UNIT_MachineDestination_FromDestination(dest), \
+                                                     NULL,                                           \
+                                                     NULL))) {                                       \
+                goto error;                                                                          \
             }
 
-    #define EMIT_DEST_ONE(inst, dest, arg1)                                                   \
-            if (UNIT_FAILED(emit_machine_instruction(context,                                 \
-                                                     CURRENT_BLOCK(),                         \
-                                                     inst,                                    \
-                                                     _UNIT_MachineDestination_FromDestination \
-                                                         (dest),                              \
-                                                     arg1,                                    \
-                                                     NULL))) {                                \
-                goto error;                                                                   \
+    #define EMIT_DEST_ONE(inst, dest, arg1)                                                          \
+            if (UNIT_FAILED(emit_machine_instruction(context,                                        \
+                                                     CURRENT_BLOCK(),                                \
+                                                     inst,                                           \
+                                                     _UNIT_MachineDestination_FromDestination(dest), \
+                                                     arg1,                                           \
+                                                     NULL))) {                                       \
+                goto error;                                                                          \
             }
 
-    #define EMIT_DEST_TWO(inst, dest, arg1, arg2)                                             \
-            if (UNIT_FAILED(emit_machine_instruction(context,                                 \
-                                                     CURRENT_BLOCK(),                         \
-                                                     inst,                                    \
-                                                     _UNIT_MachineDestination_FromDestination \
-                                                         (dest),                              \
-                                                     arg1,                                    \
-                                                     arg2))) {                                \
-                goto error;                                                                   \
+    #define EMIT_DEST_TWO(inst, dest, arg1, arg2)                                                    \
+            if (UNIT_FAILED(emit_machine_instruction(context,                                        \
+                                                     CURRENT_BLOCK(),                                \
+                                                     inst,                                           \
+                                                     _UNIT_MachineDestination_FromDestination(dest), \
+                                                     arg1,                                           \
+                                                     arg2))) {                                       \
+                goto error;                                                                          \
             }
 
-    #define EMIT_THREE(inst, arg1, arg2, arg3)                                          \
-            if (UNIT_FAILED(emit_machine_instruction(context,                           \
-                                                     CURRENT_BLOCK(),                   \
-                                                     inst,                              \
-                                                     _UNIT_MachineDestination_FromInput \
-                                                         (arg1),                        \
-                                                     arg2,                              \
-                                                     arg3))) {                          \
-                goto error;                                                             \
+    #define EMIT_THREE(inst, arg1, arg2, arg3)                                                 \
+            if (UNIT_FAILED(emit_machine_instruction(context,                                  \
+                                                     CURRENT_BLOCK(),                          \
+                                                     inst,                                     \
+                                                     _UNIT_MachineDestination_FromInput(arg1), \
+                                                     arg2,                                     \
+                                                     arg3))) {                                 \
+                goto error;                                                                    \
             }
 
     #define CREATE_DESTINATION(name)                                       \
@@ -1629,8 +1624,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
                                                                 _UNIT_TYPE_CONSTANT,
                                                                 operation->
                                                                 argument,
-                                                                integer_type_name
-                                                                (
+                                                                integer_type_name(
                                                                     operation->
                                                                     argument));
                 if (type_item == NULL) {

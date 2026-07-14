@@ -81,12 +81,10 @@ struct _UNIT_ExecutableBuffer {
                          size,                     \
                          MEM_COMMIT | MEM_RESERVE, \
                          PAGE_READWRITE)
-    #define JIT_PROTECT_EXEC(ptr, size)                                         \
-            do { DWORD old; VirtualProtect(ptr, size, PAGE_EXECUTE_READ, &old); \
-            } while (0)
-    #define JIT_PROTECT_READ(ptr, size)                                     \
-            do { DWORD old; VirtualProtect(ptr, size, PAGE_READONLY, &old); \
-            } while (0)
+    #define JIT_PROTECT_EXEC(ptr, size) \
+            do { DWORD old; VirtualProtect(ptr, size, PAGE_EXECUTE_READ, &old);} while (0)
+    #define JIT_PROTECT_READ(ptr, size) \
+            do { DWORD old; VirtualProtect(ptr, size, PAGE_READONLY, &old);} while (0)
     #define JIT_FREE(ptr, size) VirtualFree(ptr, 0, MEM_RELEASE)
     #define JIT_FAILED(ptr) ((ptr) == NULL)
     #define JIT_RESOLVE_SYMBOL(name)              \

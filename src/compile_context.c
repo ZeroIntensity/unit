@@ -155,8 +155,7 @@ _UNIT_JumpTable_Init(_UNIT_JumpTable *jump_table,
     if (UNIT_FAILED(_UNIT_Vector_Init(&jump_table->pending_jumps,
                                       context,
                                       4,
-                                      (UNIT_Destructor)_UNIT_PendingJump_Free)))
-    {
+                                      (UNIT_Destructor)_UNIT_PendingJump_Free))) {
         return _UNIT_FAIL;
     }
 
