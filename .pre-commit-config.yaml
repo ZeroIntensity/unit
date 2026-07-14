@@ -19,3 +19,11 @@ repos:
           - id: ruff
             args: [--fix]
           - id: ruff-format
+
+    - repo: local
+      hooks:
+        - id: uncrustify
+          name: uncrustify
+          entry: uncrustify -c uncrustify.cfg --no-backup --replace
+          language: system
+          files: \.(c|h|cpp|hpp|cc|cxx)$

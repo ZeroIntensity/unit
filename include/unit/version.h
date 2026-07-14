@@ -12,26 +12,30 @@
 #define UNIT_VERSION_DEV 1  // 0 = release, 1+ = dev revision
 
 #define UNIT_PACK_VERSION(major, minor, patch) \
-    (((major) << 24) | ((minor) << 16) | ((patch) << 8) | 0xff)
+        (((major) << 24) | ((minor) << 16) | ((patch) << 8) | 0xff)
 
-#define UNIT_PACK_VERSION_FULL(major, minor, patch, dev) \
-    (((major) << 24) | ((minor) << 16) | ((patch) << 8) | ((dev) == 0 ? 0xff : (dev)))
+#define UNIT_PACK_VERSION_FULL(major, minor, patch, dev)                  \
+        (((major) << 24) | ((minor) << 16) | ((patch) << 8) | ((dev) ==   \
+                                                               0 ? 0xff : \
+                                                               (dev)))
 
-#define UNIT_VERSION_HEX \
-    UNIT_PACK_VERSION_FULL(UNIT_VERSION_MAJOR, UNIT_VERSION_MINOR, \
-                           UNIT_VERSION_PATCH, UNIT_VERSION_DEV)
+#define UNIT_VERSION_HEX                           \
+        UNIT_PACK_VERSION_FULL(UNIT_VERSION_MAJOR, \
+                               UNIT_VERSION_MINOR, \
+                               UNIT_VERSION_PATCH, \
+                               UNIT_VERSION_DEV)
 
 #if UNIT_VERSION_DEV == 0
-    #define UNIT_VERSION_STRING \
-        _UNIT_TOSTRING(UNIT_VERSION_MAJOR) "." \
-        _UNIT_TOSTRING(UNIT_VERSION_MINOR) "." \
-        _UNIT_TOSTRING(UNIT_VERSION_PATCH)
+    #define UNIT_VERSION_STRING                    \
+            _UNIT_TOSTRING(UNIT_VERSION_MAJOR) "." \
+            _UNIT_TOSTRING(UNIT_VERSION_MINOR) "." \
+            _UNIT_TOSTRING(UNIT_VERSION_PATCH)
 #else
-    #define UNIT_VERSION_STRING \
-        _UNIT_TOSTRING(UNIT_VERSION_MAJOR) "." \
-        _UNIT_TOSTRING(UNIT_VERSION_MINOR) "." \
-        _UNIT_TOSTRING(UNIT_VERSION_PATCH) ".dev" \
-        _UNIT_TOSTRING(UNIT_VERSION_DEV)
+    #define UNIT_VERSION_STRING                       \
+            _UNIT_TOSTRING(UNIT_VERSION_MAJOR) "."    \
+            _UNIT_TOSTRING(UNIT_VERSION_MINOR) "."    \
+            _UNIT_TOSTRING(UNIT_VERSION_PATCH) ".dev" \
+            _UNIT_TOSTRING(UNIT_VERSION_DEV)
 #endif
 
 #ifdef __cplusplus

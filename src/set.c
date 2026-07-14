@@ -11,8 +11,9 @@ hash_ptr(const void *ptr)
 }
 
 UNIT_Status
-_UNIT_Set_Init(_UNIT_Set *set, UNIT_Context *context,
-                UNIT_Size initial_capacity)
+_UNIT_Set_Init(_UNIT_Set *set,
+               UNIT_Context *context,
+               UNIT_Size initial_capacity)
 {
     assert(set != NULL);
     assert(context != NULL);
@@ -24,7 +25,8 @@ _UNIT_Set_Init(_UNIT_Set *set, UNIT_Context *context,
     set->context = context;
     set->len = 0;
     set->capacity = initial_capacity;
-    set->items = _UNIT_Calloc(context, initial_capacity,
+    set->items = _UNIT_Calloc(context,
+                              initial_capacity,
                               sizeof(_UNIT_SetItem));
     if (set->items == NULL) {
         return _UNIT_FAIL;
@@ -34,7 +36,8 @@ _UNIT_Set_Init(_UNIT_Set *set, UNIT_Context *context,
 }
 
 int8_t
-_UNIT_Set_Contains(_UNIT_Set *set, const void *value)
+_UNIT_Set_Contains(_UNIT_Set *set,
+                   const void *value)
 {
     assert(set != NULL);
     UNIT_Size index = hash_ptr(value) & (set->capacity - 1);
@@ -57,15 +60,18 @@ _UNIT_Set_Contains(_UNIT_Set *set, const void *value)
 }
 
 UNIT_Status
-_UNIT_Set_Add(_UNIT_Set *set, const void *value)
+_UNIT_Set_Add(_UNIT_Set *set,
+              const void *value)
 {
     assert(set != NULL);
     if (set->len >= (set->capacity * 3) / 4) {
         UNIT_Size new_capacity = set->capacity * 2;
         _UNIT_SetItem *new_items = _UNIT_Calloc(set->context,
-                                                  new_capacity,
-                                                  sizeof(_UNIT_SetItem));
-        if (new_items == NULL) return _UNIT_FAIL;
+                                                new_capacity,
+                                                sizeof(_UNIT_SetItem));
+        if (new_items == NULL) {
+            return _UNIT_FAIL;
+        }
         for (UNIT_Size i = 0; i < set->capacity; ++i) {
             if (set->items[i].is_populated) {
                 UNIT_Size idx = hash_ptr(set->items[i].value)
@@ -104,7 +110,8 @@ _UNIT_Set_Add(_UNIT_Set *set, const void *value)
 }
 
 void
-_UNIT_Set_Remove(_UNIT_Set *set, const void *value)
+_UNIT_Set_Remove(_UNIT_Set *set,
+                 const void *value)
 {
     assert(set != NULL);
     UNIT_Size index = hash_ptr(value) & (set->capacity - 1);
@@ -134,7 +141,9 @@ _UNIT_Set_Remove(_UNIT_Set *set, const void *value)
 
     // Rehash subsequent entries
     UNIT_Size next = index + 1;
-    if (next == set->capacity) next = 0;
+    if (next == set->capacity) {
+        next = 0;
+    }
     while (set->items[next].is_populated) {
         _UNIT_SetItem item = set->items[next];
         set->items[next].is_populated = 0;

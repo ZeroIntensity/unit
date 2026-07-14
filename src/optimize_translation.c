@@ -4,7 +4,8 @@
 #include <unit/internal/set.h>
 
 static int8_t
-compare_items(_UNIT_MachineItem *left, _UNIT_MachineItem *right)
+compare_items(_UNIT_MachineItem *left,
+              _UNIT_MachineItem *right)
 {
     assert(left != NULL);
     assert(right != NULL);
@@ -21,9 +22,11 @@ compare_items(_UNIT_MachineItem *left, _UNIT_MachineItem *right)
         }
 
         for (UNIT_Size index = 0; index < size; ++index) {
-            _UNIT_MachineItem *left_item = _UNIT_Vector_GET(left->call_args, index);
+            _UNIT_MachineItem *left_item = _UNIT_Vector_GET(left->call_args,
+                                                            index);
             assert(left_item != NULL);
-            _UNIT_MachineItem *right_item = _UNIT_Vector_GET(right->call_args, index);
+            _UNIT_MachineItem *right_item = _UNIT_Vector_GET(right->call_args,
+                                                             index);
             assert(right_item != NULL);
             if (!compare_items(left_item, right_item)) {
                 return 0;
@@ -37,7 +40,8 @@ compare_items(_UNIT_MachineItem *left, _UNIT_MachineItem *right)
 }
 
 static int8_t
-item_matches_or_contains(_UNIT_MachineItem *haystack, _UNIT_MachineItem *needle)
+item_matches_or_contains(_UNIT_MachineItem *haystack,
+                         _UNIT_MachineItem *needle)
 {
     if (haystack == NULL || needle == NULL) {
         return 0;
@@ -50,7 +54,9 @@ item_matches_or_contains(_UNIT_MachineItem *haystack, _UNIT_MachineItem *needle)
     if (haystack->type == _UNIT_TYPE_CALL_ARGS) {
         UNIT_Size size = _UNIT_Vector_SIZE(haystack->call_args);
         for (UNIT_Size index = 0; index < size; ++index) {
-            if (item_matches_or_contains(_UNIT_Vector_GET(haystack->call_args, index), needle)) {
+            if (item_matches_or_contains(_UNIT_Vector_GET(haystack->call_args,
+                                                          index),
+                                         needle)) {
                 return 1;
             }
         }
@@ -60,7 +66,8 @@ item_matches_or_contains(_UNIT_MachineItem *haystack, _UNIT_MachineItem *needle)
 }
 
 static int8_t
-compare_items_nullable(_UNIT_MachineItem *left, _UNIT_MachineItem *right)
+compare_items_nullable(_UNIT_MachineItem *left,
+                       _UNIT_MachineItem *right)
 {
     if (left == NULL) {
         return 0;
@@ -74,8 +81,11 @@ compare_items_nullable(_UNIT_MachineItem *left, _UNIT_MachineItem *right)
 }
 
 static int8_t
-item_dead_in_block_recursive(_UNIT_BasicBlock *block, UNIT_Size start,
-                             UNIT_Size end, _UNIT_MachineItem *item, _UNIT_Set *checked)
+item_dead_in_block_recursive(_UNIT_BasicBlock *block,
+                             UNIT_Size start,
+                             UNIT_Size end,
+                             _UNIT_MachineItem *item,
+                             _UNIT_Set *checked)
 {
     assert(block != NULL);
     assert(start >= 0);
@@ -88,13 +98,16 @@ item_dead_in_block_recursive(_UNIT_BasicBlock *block, UNIT_Size start,
     }
 
     for (UNIT_Size index = start; index < end; ++index) {
-        _UNIT_MachineOperation *operation = _UNIT_Vector_GET(instructions, index);
+        _UNIT_MachineOperation *operation = _UNIT_Vector_GET(instructions,
+                                                             index);
         assert(operation != NULL);
         if (operation == NULL) {
             continue;
         }
 
-        _UNIT_MachineItem *destination = _UNIT_MachineDestination_GetPointerNullable(operation->destination);
+        _UNIT_MachineItem *destination =
+            _UNIT_MachineDestination_GetPointerNullable(
+                operation->destination);
         if (item_matches_or_contains(destination, item)
             || item_matches_or_contains(operation->argument_1, item)
             || item_matches_or_contains(operation->argument_2, item)) {
@@ -103,15 +116,21 @@ item_dead_in_block_recursive(_UNIT_BasicBlock *block, UNIT_Size start,
     }
 
     UNIT_Size size = _UNIT_Vector_SIZE(&block->successors);
-    for (UNIT_Size successor_index = 0; successor_index < size; ++successor_index) {
-        _UNIT_BasicBlock *successor = _UNIT_Vector_GET(&block->successors, successor_index);
+    for (UNIT_Size successor_index = 0; successor_index < size;
+         ++successor_index) {
+        _UNIT_BasicBlock *successor = _UNIT_Vector_GET(&block->successors,
+                                                       successor_index);
         assert(successor != NULL);
         if (_UNIT_Set_Contains(checked, successor)) {
             continue;
         }
 
         UNIT_Size length = _UNIT_Vector_SIZE(&successor->instructions);
-        if (!item_dead_in_block_recursive(successor, 0, length, item, checked)) {
+        if (!item_dead_in_block_recursive(successor,
+                                          0,
+                                          length,
+                                          item,
+                                          checked)) {
             return 0;
         }
     }
@@ -120,22 +139,30 @@ item_dead_in_block_recursive(_UNIT_BasicBlock *block, UNIT_Size start,
 }
 
 static int8_t
-item_dead_in_block(_UNIT_BasicBlock *block, UNIT_Size start,
-                   UNIT_Size end, _UNIT_MachineItem *item)
+item_dead_in_block(_UNIT_BasicBlock *block,
+                   UNIT_Size start,
+                   UNIT_Size end,
+                   _UNIT_MachineItem *item)
 {
     _UNIT_Set checked;
-    if (UNIT_FAILED(_UNIT_Set_Init(&checked, block->context,
+    if (UNIT_FAILED(_UNIT_Set_Init(&checked,
+                                   block->context,
                                    _UNIT_Vector_SIZE(&block->successors)))) {
         return -1;
     }
 
-    int8_t result = item_dead_in_block_recursive(block, start, end, item, &checked);
+    int8_t result = item_dead_in_block_recursive(block,
+                                                 start,
+                                                 end,
+                                                 item,
+                                                 &checked);
     _UNIT_Set_Clear(&checked);
     return result;
 }
 
 static UNIT_Status
-optimize_block_loads(_UNIT_BasicBlock *block, int8_t *did_change)
+optimize_block_loads(_UNIT_BasicBlock *block,
+                     int8_t *did_change)
 {
     assert(block != NULL);
     assert(did_change != NULL);
@@ -144,13 +171,17 @@ optimize_block_loads(_UNIT_BasicBlock *block, int8_t *did_change)
     UNIT_Size size = _UNIT_Vector_SIZE(instrs);
 
     _UNIT_Vector new_instructions;
-    if (UNIT_FAILED(_UNIT_Vector_Init(&new_instructions, block->context, size,
+    if (UNIT_FAILED(_UNIT_Vector_Init(&new_instructions,
+                                      block->context,
+                                      size,
                                       _UNIT_Dealloc))) {
         return _UNIT_FAIL;
     }
 
 #define APPEND(op) _UNIT_Vector_APPEND(&new_instructions, op)
-#define CONTINUE_AND_DISCARD(op) *did_change = 1; _UNIT_Dealloc(block->context, op); continue
+#define CONTINUE_AND_DISCARD(op) \
+        *did_change = 1;         \
+        _UNIT_Dealloc(block->context, op); continue
 
     for (UNIT_Size index = 0; index < size; ++index) {
         _UNIT_MachineOperation *op = _UNIT_Vector_STEAL(instrs, index);
@@ -163,7 +194,8 @@ optimize_block_loads(_UNIT_BasicBlock *block, int8_t *did_change)
         assert(!_UNIT_MachineDestination_IsNull(op->destination));
         assert(!_UNIT_MachineDestination_IsInput(op->destination));
 
-        _UNIT_MachineItem *destination = _UNIT_MachineDestination_GetPointer(op->destination);
+        _UNIT_MachineItem *destination =
+            _UNIT_MachineDestination_GetPointer(op->destination);
         _UNIT_MachineItem *source = op->argument_1;
         assert(op->argument_2 == NULL);
 
@@ -172,7 +204,10 @@ optimize_block_loads(_UNIT_BasicBlock *block, int8_t *did_change)
             CONTINUE_AND_DISCARD(op);
         }
 
-        int8_t destination_never_used = item_dead_in_block(block, index + 1, size, destination);
+        int8_t destination_never_used = item_dead_in_block(block,
+                                                           index + 1,
+                                                           size,
+                                                           destination);
         if (destination_never_used == -1) {
             goto error;
         }
@@ -191,7 +226,10 @@ optimize_block_loads(_UNIT_BasicBlock *block, int8_t *did_change)
         // can be turned into
         //
         // register_2 = ADD(register_1, 1)
-        int8_t source_never_used = item_dead_in_block(block, index + 1, size, source);
+        int8_t source_never_used = item_dead_in_block(block,
+                                                      index + 1,
+                                                      size,
+                                                      source);
         if (source_never_used == -1) {
             goto error;
         }
@@ -201,7 +239,8 @@ optimize_block_loads(_UNIT_BasicBlock *block, int8_t *did_change)
         }
 
         _UNIT_MachineOperation *previous = NULL;
-        for (UNIT_Size sub_index = _UNIT_Vector_SIZE(&new_instructions); sub_index > 0; --sub_index) {
+        for (UNIT_Size sub_index = _UNIT_Vector_SIZE(&new_instructions);
+             sub_index > 0; --sub_index) {
             previous = _UNIT_Vector_GET(&new_instructions, sub_index - 1);
             if (previous != NULL) {
                 break;
@@ -213,14 +252,16 @@ optimize_block_loads(_UNIT_BasicBlock *block, int8_t *did_change)
             continue;
         }
 
-        _UNIT_MachineItem *previous_dest = _UNIT_MachineDestination_GetPointerNullable(previous->destination);
+        _UNIT_MachineItem *previous_dest =
+            _UNIT_MachineDestination_GetPointerNullable(previous->destination);
         if (!compare_items_nullable(previous_dest, source)) {
             APPEND(op);
             continue;
         }
 
         assert(!_UNIT_MachineDestination_IsInput(previous->destination));
-        previous->destination = _UNIT_MachineDestination_FromDestination(destination);
+        previous->destination =
+            _UNIT_MachineDestination_FromDestination(destination);
         CONTINUE_AND_DISCARD(op);
     }
 
@@ -261,7 +302,8 @@ fold_register_value(RegisterValue *register_values,
         UNIT_Size size = _UNIT_Vector_SIZE(operand->call_args);
         assert(size >= 0);
         for (UNIT_Size index = 0; index < size; ++index) {
-            _UNIT_MachineItem *arg = _UNIT_Vector_GET(operand->call_args, index);
+            _UNIT_MachineItem *arg = _UNIT_Vector_GET(operand->call_args,
+                                                      index);
             if (fold_register_value(register_values, arg)) {
                 did_change = 1;
             }
@@ -272,7 +314,9 @@ fold_register_value(RegisterValue *register_values,
 }
 
 static UNIT_Status
-optimize_block_folds(_UNIT_BasicBlock *block, int8_t num_registers, int8_t *did_change)
+optimize_block_folds(_UNIT_BasicBlock *block,
+                     int8_t num_registers,
+                     int8_t *did_change)
 {
     assert(block != NULL);
     assert(did_change != NULL);
@@ -281,31 +325,39 @@ optimize_block_folds(_UNIT_BasicBlock *block, int8_t num_registers, int8_t *did_
     UNIT_Size size = _UNIT_Vector_SIZE(instructions);
 
     _UNIT_Vector new_instructions;
-    if (UNIT_FAILED(_UNIT_Vector_Init(&new_instructions, block->context, size,
+    if (UNIT_FAILED(_UNIT_Vector_Init(&new_instructions,
+                                      block->context,
+                                      size,
                                       _UNIT_Dealloc))) {
         return _UNIT_FAIL;
     }
 
-    RegisterValue *register_values = _UNIT_Calloc(block->context, num_registers, sizeof(RegisterValue));
+    RegisterValue *register_values = _UNIT_Calloc(block->context,
+                                                  num_registers,
+                                                  sizeof(RegisterValue));
     if (register_values == NULL) {
         _UNIT_Vector_Clear(&new_instructions);
         return _UNIT_FAIL;
     }
 
 #define APPEND(op) _UNIT_Vector_APPEND(&new_instructions, op)
-#define CONTINUE_AND_DISCARD(op) *did_change = 1; _UNIT_Dealloc(block->context, op); continue
+#define CONTINUE_AND_DISCARD(op) \
+        *did_change = 1;         \
+        _UNIT_Dealloc(block->context, op); continue
 
     for (UNIT_Size index = 0; index < size; ++index) {
         _UNIT_MachineOperation *op = _UNIT_Vector_STEAL(instructions, index);
         assert(op != NULL);
 
-#define FOLD_REGISTER_VALUE(name)                           \
-        if (fold_register_value(register_values, name)) {   \
-            *did_change = 1;                                \
+#define FOLD_REGISTER_VALUE(name)                         \
+        if (fold_register_value(register_values, name)) { \
+            *did_change = 1;                              \
         }
 
-        _UNIT_MachineItem *destination = _UNIT_MachineDestination_GetPointerNullable(op->destination);
-        if (destination != NULL && _UNIT_MachineDestination_IsInput(op->destination)) {
+        _UNIT_MachineItem *destination =
+            _UNIT_MachineDestination_GetPointerNullable(op->destination);
+        if (destination != NULL &&
+            _UNIT_MachineDestination_IsInput(op->destination)) {
             FOLD_REGISTER_VALUE(destination);
         }
         FOLD_REGISTER_VALUE(op->argument_1);
@@ -314,31 +366,33 @@ optimize_block_folds(_UNIT_BasicBlock *block, int8_t num_registers, int8_t *did_
 #undef FOLD_REGISTER_VALUE
 
         switch (op->instruction) {
-            case _UNIT_I_LOAD: {
-                assert(destination != NULL);
-                if (destination->type == _UNIT_TYPE_REGISTER
-                    && op->argument_1->type == _UNIT_TYPE_CONSTANT) {
-                    register_values[destination->value].value = op->argument_1->value;
-                    register_values[destination->value].is_known = 1;
-                    // TODO: We should delete the move if it's not used by a successor
-                    APPEND(op); //CONTINUE_AND_DISCARD(op);
-                    continue;
-                }
-                break;
+        case _UNIT_I_LOAD: {
+            assert(destination != NULL);
+            if (destination->type == _UNIT_TYPE_REGISTER
+                && op->argument_1->type == _UNIT_TYPE_CONSTANT) {
+                register_values[destination->value].value =
+                    op->argument_1->value;
+                register_values[destination->value].is_known = 1;
+                // TODO: We should delete the move if it's not used by a successor
+                APPEND(op);     //CONTINUE_AND_DISCARD(op);
+                continue;
             }
+            break;
+        }
 
-#define BINARY_OP(inst, operator)                                           \
-            case inst: {                                                    \
-                assert(destination != NULL);                                \
-                if (destination->type == _UNIT_TYPE_REGISTER                \
-                    && op->argument_1->type == _UNIT_TYPE_CONSTANT          \
-                    && op->argument_2->type == _UNIT_TYPE_CONSTANT) {       \
-                    register_values[destination->value].value = op->argument_1->value operator op->argument_2->value; \
-                    register_values[destination->value].is_known = 1;       \
-                    CONTINUE_AND_DISCARD(op);                               \
-                }                                                           \
-                break;                                                      \
-            }
+#define BINARY_OP(inst, operator)                                             \
+        case inst: {                                                          \
+                assert(destination != NULL);                                  \
+                if (destination->type == _UNIT_TYPE_REGISTER                  \
+                    && op->argument_1->type == _UNIT_TYPE_CONSTANT            \
+                    && op->argument_2->type == _UNIT_TYPE_CONSTANT) {         \
+                    register_values[destination->value].value =               \
+                        op->argument_1->value operator op->argument_2->value; \
+                    register_values[destination->value].is_known = 1;         \
+                    CONTINUE_AND_DISCARD(op);                                 \
+                }                                                             \
+                break;                                                        \
+        }
 
             BINARY_OP(_UNIT_I_ADD, +);
             BINARY_OP(_UNIT_I_SUB, -);
@@ -346,8 +400,8 @@ optimize_block_folds(_UNIT_BasicBlock *block, int8_t num_registers, int8_t *did_
             BINARY_OP(_UNIT_I_DIV, /);
             BINARY_OP(_UNIT_I_MOD, %);
 
-            default:
-                break;
+        default:
+            break;
 
 #undef BINARY_OP
         }
@@ -376,7 +430,8 @@ error:
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 UNIT_Status
-_UNIT_Translation_Optimize(_UNIT_Translation *translation, int8_t num_registers)
+_UNIT_Translation_Optimize(_UNIT_Translation *translation,
+                           int8_t num_registers)
 {
     assert(translation != NULL);
     UNIT_Size block_count = _UNIT_Vector_SIZE(&translation->blocks);
@@ -387,7 +442,8 @@ _UNIT_Translation_Optimize(_UNIT_Translation *translation, int8_t num_registers)
         do {
             any_did_change = 0;
 
-            _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks, i);
+            _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks,
+                                                       i);
             assert(block != NULL);
             int8_t did_change;
             if (UNIT_FAILED(optimize_block_loads(block, &did_change))) {
@@ -396,7 +452,9 @@ _UNIT_Translation_Optimize(_UNIT_Translation *translation, int8_t num_registers)
 
             any_did_change = MAX(did_change, any_did_change);
 
-            if (UNIT_FAILED(optimize_block_folds(block, num_registers, &did_change))) {
+            if (UNIT_FAILED(optimize_block_folds(block,
+                                                 num_registers,
+                                                 &did_change))) {
                 return _UNIT_FAIL;
             }
 

@@ -43,8 +43,14 @@ static void
 test_set_and_get(UNIT_Context *context)
 {
     _UNIT_Map map;
-    ASSERT_OK(context, _UNIT_Map_Init(&map, context, 8, compare_strings,
-                                       hash_string, NULL, NULL));
+    ASSERT_OK(context,
+              _UNIT_Map_Init(&map,
+                             context,
+                             8,
+                             compare_strings,
+                             hash_string,
+                             NULL,
+                             NULL));
     char *key = "hello";
     int value = 42;
     ASSERT_OK(context, _UNIT_Map_Set(&map, key, &value));
@@ -58,8 +64,14 @@ static void
 test_missing_key(UNIT_Context *context)
 {
     _UNIT_Map map;
-    ASSERT_OK(context, _UNIT_Map_Init(&map, context, 8, compare_strings,
-                                       hash_string, NULL, NULL));
+    ASSERT_OK(context,
+              _UNIT_Map_Init(&map,
+                             context,
+                             8,
+                             compare_strings,
+                             hash_string,
+                             NULL,
+                             NULL));
     void *result = _UNIT_Map_Get(&map, "nonexistent");
     ASSERT(result == NULL);
     _UNIT_Map_Clear(&map);
@@ -69,8 +81,14 @@ static void
 test_overwrite(UNIT_Context *context)
 {
     _UNIT_Map map;
-    ASSERT_OK(context, _UNIT_Map_Init(&map, context, 8, compare_strings,
-                                       hash_string, NULL, NULL));
+    ASSERT_OK(context,
+              _UNIT_Map_Init(&map,
+                             context,
+                             8,
+                             compare_strings,
+                             hash_string,
+                             NULL,
+                             NULL));
     char *key = "hello";
     int val1 = 42, val2 = 99;
     _UNIT_Map_Set(&map, key, &val1);
@@ -85,8 +103,14 @@ static void
 test_multiple_keys(UNIT_Context *context)
 {
     _UNIT_Map map;
-    ASSERT_OK(context, _UNIT_Map_Init(&map, context, 4, compare_strings,
-                                       hash_string, NULL, NULL));
+    ASSERT_OK(context,
+              _UNIT_Map_Init(&map,
+                             context,
+                             4,
+                             compare_strings,
+                             hash_string,
+                             NULL,
+                             NULL));
     int a = 1, b = 2, c = 3;
     ASSERT_OK(context, _UNIT_Map_Set(&map, "alpha", &a));
     ASSERT_OK(context, _UNIT_Map_Set(&map, "beta", &b));
@@ -102,8 +126,14 @@ test_collision_all_same_hash(UNIT_Context *context)
 {
     // All keys hash to the same value, forcing linear probing
     _UNIT_Map map;
-    ASSERT_OK(context, _UNIT_Map_Init(&map, context, 8, compare_strings,
-                                       hash_constant, NULL, NULL));
+    ASSERT_OK(context,
+              _UNIT_Map_Init(&map,
+                             context,
+                             8,
+                             compare_strings,
+                             hash_constant,
+                             NULL,
+                             NULL));
     int a = 10;
     int b = 20;
     int c = 30;
@@ -124,8 +154,14 @@ test_collision_overwrite(UNIT_Context *context)
 {
     // Overwrite with all keys colliding
     _UNIT_Map map;
-    ASSERT_OK(context, _UNIT_Map_Init(&map, context, 8, compare_strings,
-                                       hash_constant, NULL, NULL));
+    ASSERT_OK(context,
+              _UNIT_Map_Init(&map,
+                             context,
+                             8,
+                             compare_strings,
+                             hash_constant,
+                             NULL,
+                             NULL));
     int a = 10;
     int b = 20;
     int c = 99;
@@ -142,8 +178,14 @@ test_collision_missing(UNIT_Context *context)
 {
     // Lookup a missing key when all slots in the chain are occupied
     _UNIT_Map map;
-    ASSERT_OK(context, _UNIT_Map_Init(&map, context, 8, compare_strings,
-                                       hash_constant, NULL, NULL));
+    ASSERT_OK(context,
+              _UNIT_Map_Init(&map,
+                             context,
+                             8,
+                             compare_strings,
+                             hash_constant,
+                             NULL,
+                             NULL));
     int a = 10, b = 20;
     _UNIT_Map_Set(&map, "one", &a);
     _UNIT_Map_Set(&map, "two", &b);
@@ -155,8 +197,14 @@ static void
 test_int_keys(UNIT_Context *context)
 {
     _UNIT_Map map;
-    ASSERT_OK(context, _UNIT_Map_Init(&map, context, 8, compare_ints,
-                                       hash_int, NULL, NULL));
+    ASSERT_OK(context,
+              _UNIT_Map_Init(&map,
+                             context,
+                             8,
+                             compare_ints,
+                             hash_int,
+                             NULL,
+                             NULL));
     int keys[] = {1, 2, 3, 4, 5};
     int values[] = {100, 200, 300, 400, 500};
     for (int i = 0; i < 5; ++i) {
@@ -175,8 +223,14 @@ test_grow_from_small(UNIT_Context *context)
 {
     // Start with capacity 2, insert many items to force multiple expansions
     _UNIT_Map map;
-    ASSERT_OK(context, _UNIT_Map_Init(&map, context, 2, compare_ints,
-                                       hash_int, NULL, NULL));
+    ASSERT_OK(context,
+              _UNIT_Map_Init(&map,
+                             context,
+                             2,
+                             compare_ints,
+                             hash_int,
+                             NULL,
+                             NULL));
     int keys[50];
     int values[50];
     for (int i = 0; i < 50; ++i) {
@@ -197,8 +251,14 @@ static void
 test_overwrite_after_grow(UNIT_Context *context)
 {
     _UNIT_Map map;
-    ASSERT_OK(context, _UNIT_Map_Init(&map, context, 2, compare_ints,
-                                       hash_int, NULL, NULL));
+    ASSERT_OK(context,
+              _UNIT_Map_Init(&map,
+                             context,
+                             2,
+                             compare_ints,
+                             hash_int,
+                             NULL,
+                             NULL));
     int keys[20];
     int values[20];
     for (int i = 0; i < 20; ++i) {
@@ -220,8 +280,14 @@ static void
 test_empty_string_key(UNIT_Context *context)
 {
     _UNIT_Map map;
-    ASSERT_OK(context, _UNIT_Map_Init(&map, context, 8, compare_strings,
-                                       hash_string, NULL, NULL));
+    ASSERT_OK(context,
+              _UNIT_Map_Init(&map,
+                             context,
+                             8,
+                             compare_strings,
+                             hash_string,
+                             NULL,
+                             NULL));
     int value = 77;
     ASSERT_OK(context, _UNIT_Map_Set(&map, "", &value));
     int *result = _UNIT_Map_Get(&map, "");
@@ -236,8 +302,14 @@ test_similar_keys(UNIT_Context *context)
 {
     // Keys that are similar but not equal
     _UNIT_Map map;
-    ASSERT_OK(context, _UNIT_Map_Init(&map, context, 8, compare_strings,
-                                       hash_string, NULL, NULL));
+    ASSERT_OK(context,
+              _UNIT_Map_Init(&map,
+                             context,
+                             8,
+                             compare_strings,
+                             hash_string,
+                             NULL,
+                             NULL));
     int a = 1;
     int b = 2;
     int c = 3;
@@ -258,8 +330,14 @@ test_null_value(UNIT_Context *context)
 {
     // Storing NULL as a value should be distinguishable from missing
     _UNIT_Map map;
-    ASSERT_OK(context, _UNIT_Map_Init(&map, context, 8, compare_strings,
-                                       hash_string, NULL, NULL));
+    ASSERT_OK(context,
+              _UNIT_Map_Init(&map,
+                             context,
+                             8,
+                             compare_strings,
+                             hash_string,
+                             NULL,
+                             NULL));
     ASSERT_OK(context, _UNIT_Map_Set(&map, "key", NULL));
     _UNIT_Map_Clear(&map);
 }
@@ -268,8 +346,14 @@ static void
 test_many_collisions_with_grow(UNIT_Context *context)
 {
     _UNIT_Map map;
-    ASSERT_OK(context, _UNIT_Map_Init(&map, context, 2, compare_strings,
-                                       hash_constant, NULL, NULL));
+    ASSERT_OK(context,
+              _UNIT_Map_Init(&map,
+                             context,
+                             2,
+                             compare_strings,
+                             hash_constant,
+                             NULL,
+                             NULL));
     char keys[20][8];
     int values[20];
     for (int i = 0; i < 20; ++i) {
@@ -290,8 +374,14 @@ test_set_get_set_get(UNIT_Context *context)
 {
     // Interleave sets and gets
     _UNIT_Map map;
-    ASSERT_OK(context, _UNIT_Map_Init(&map, context, 4, compare_strings,
-                                       hash_string, NULL, NULL));
+    ASSERT_OK(context,
+              _UNIT_Map_Init(&map,
+                             context,
+                             4,
+                             compare_strings,
+                             hash_string,
+                             NULL,
+                             NULL));
     int a = 1, b = 2, c = 3;
     ASSERT_OK(context, _UNIT_Map_Set(&map, "x", &a));
     ASSERT_EQ(*(int *)_UNIT_Map_Get(&map, "x"), 1);
@@ -308,16 +398,28 @@ static void
 test_reuse_after_clear(UNIT_Context *context)
 {
     _UNIT_Map map;
-    ASSERT_OK(context, _UNIT_Map_Init(&map, context, 8, compare_strings,
-                                       hash_string, NULL, NULL));
+    ASSERT_OK(context,
+              _UNIT_Map_Init(&map,
+                             context,
+                             8,
+                             compare_strings,
+                             hash_string,
+                             NULL,
+                             NULL));
     int a = 1;
     ASSERT_OK(context, _UNIT_Map_Set(&map, "first", &a));
     ASSERT(*(int *)_UNIT_Map_Get(&map, "first") == 1);
     _UNIT_Map_Clear(&map);
 
     // Reinitialize and use again
-    ASSERT_OK(context, _UNIT_Map_Init(&map, context, 8, compare_strings,
-                                       hash_string, NULL, NULL));
+    ASSERT_OK(context,
+              _UNIT_Map_Init(&map,
+                             context,
+                             8,
+                             compare_strings,
+                             hash_string,
+                             NULL,
+                             NULL));
     int b = 2;
     ASSERT_OK(context, _UNIT_Map_Set(&map, "second", &b));
     ASSERT(_UNIT_Map_Get(&map, "first") == NULL);
@@ -329,8 +431,14 @@ static void
 test_overwrite_repeatedly(UNIT_Context *context)
 {
     _UNIT_Map map;
-    ASSERT_OK(context, _UNIT_Map_Init(&map, context, 8, compare_strings,
-                                       hash_string, NULL, NULL));
+    ASSERT_OK(context,
+              _UNIT_Map_Init(&map,
+                             context,
+                             8,
+                             compare_strings,
+                             hash_string,
+                             NULL,
+                             NULL));
     int values[100];
     for (int i = 0; i < 100; ++i) {
         values[i] = i;
@@ -347,8 +455,14 @@ test_overwrite_with_collisions(UNIT_Context *context)
 {
     // Overwrite keys that all collide
     _UNIT_Map map;
-    ASSERT_OK(context, _UNIT_Map_Init(&map, context, 8, compare_strings,
-                                       hash_constant, NULL, NULL));
+    ASSERT_OK(context,
+              _UNIT_Map_Init(&map,
+                             context,
+                             8,
+                             compare_strings,
+                             hash_constant,
+                             NULL,
+                             NULL));
     int a = 1;
     int b = 2;
     int c = 3;
@@ -368,12 +482,19 @@ test_overwrite_with_collisions(UNIT_Context *context)
     _UNIT_Map_Clear(&map);
 }
 
-static void test_high_load_factor(UNIT_Context *context)
+static void
+test_high_load_factor(UNIT_Context *context)
 {
     // Fill to near capacity with small initial size
     _UNIT_Map map;
-    ASSERT_OK(context, _UNIT_Map_Init(&map, context, 4, compare_ints,
-                                       hash_int, NULL, NULL));
+    ASSERT_OK(context,
+              _UNIT_Map_Init(&map,
+                             context,
+                             4,
+                             compare_ints,
+                             hash_int,
+                             NULL,
+                             NULL));
     int keys[3];
     int values[3];
     for (int i = 0; i < 3; ++i) {
@@ -389,12 +510,19 @@ static void test_high_load_factor(UNIT_Context *context)
     _UNIT_Map_Clear(&map);
 }
 
-static void test_expansion_preserves_all(UNIT_Context *context)
+static void
+test_expansion_preserves_all(UNIT_Context *context)
 {
     // Force multiple expansions and verify nothing is lost
     _UNIT_Map map;
-    ASSERT_OK(context, _UNIT_Map_Init(&map, context, 2, compare_ints,
-                                       hash_int, NULL, NULL));
+    ASSERT_OK(context,
+              _UNIT_Map_Init(&map,
+                             context,
+                             2,
+                             compare_ints,
+                             hash_int,
+                             NULL,
+                             NULL));
     int keys[200];
     int values[200];
     for (int i = 0; i < 200; ++i) {
@@ -410,11 +538,18 @@ static void test_expansion_preserves_all(UNIT_Context *context)
     _UNIT_Map_Clear(&map);
 }
 
-static void test_collision_chain_not_broken_by_overwrite(UNIT_Context *context)
+static void
+test_collision_chain_not_broken_by_overwrite(UNIT_Context *context)
 {
     _UNIT_Map map;
-    ASSERT_OK(context, _UNIT_Map_Init(&map, context, 8, compare_strings,
-                                       hash_constant, NULL, NULL));
+    ASSERT_OK(context,
+              _UNIT_Map_Init(&map,
+                             context,
+                             8,
+                             compare_strings,
+                             hash_constant,
+                             NULL,
+                             NULL));
     int a = 1;
     int b = 2;
     int c = 3;
@@ -429,11 +564,18 @@ static void test_collision_chain_not_broken_by_overwrite(UNIT_Context *context)
     _UNIT_Map_Clear(&map);
 }
 
-static void test_overwrite_middle_of_chain(UNIT_Context *context)
+static void
+test_overwrite_middle_of_chain(UNIT_Context *context)
 {
     _UNIT_Map map;
-    ASSERT_OK(context, _UNIT_Map_Init(&map, context, 8, compare_strings,
-                                       hash_constant, NULL, NULL));
+    ASSERT_OK(context,
+              _UNIT_Map_Init(&map,
+                             context,
+                             8,
+                             compare_strings,
+                             hash_constant,
+                             NULL,
+                             NULL));
     int a = 1;
     int b = 2;
     int c = 3;
@@ -448,11 +590,18 @@ static void test_overwrite_middle_of_chain(UNIT_Context *context)
     _UNIT_Map_Clear(&map);
 }
 
-static void test_overwrite_end_of_chain(UNIT_Context *context)
+static void
+test_overwrite_end_of_chain(UNIT_Context *context)
 {
     _UNIT_Map map;
-    ASSERT_OK(context, _UNIT_Map_Init(&map, context, 8, compare_strings,
-                                       hash_constant, NULL, NULL));
+    ASSERT_OK(context,
+              _UNIT_Map_Init(&map,
+                             context,
+                             8,
+                             compare_strings,
+                             hash_constant,
+                             NULL,
+                             NULL));
     int a = 1;
     int b = 2;
     int c = 3;
@@ -467,12 +616,19 @@ static void test_overwrite_end_of_chain(UNIT_Context *context)
     _UNIT_Map_Clear(&map);
 }
 
-static void test_missing_after_collisions(UNIT_Context *context)
+static void
+test_missing_after_collisions(UNIT_Context *context)
 {
     // All collide, lookup a key that was never inserted
     _UNIT_Map map;
-    ASSERT_OK(context, _UNIT_Map_Init(&map, context, 4, compare_strings,
-                                       hash_constant, NULL, NULL));
+    ASSERT_OK(context,
+              _UNIT_Map_Init(&map,
+                             context,
+                             4,
+                             compare_strings,
+                             hash_constant,
+                             NULL,
+                             NULL));
     int a = 1;
     int b = 2;
     ASSERT_OK(context, _UNIT_Map_Set(&map, "exists1", &a));
@@ -482,12 +638,19 @@ static void test_missing_after_collisions(UNIT_Context *context)
     _UNIT_Map_Clear(&map);
 }
 
-static void test_overwrite_preserves_count(UNIT_Context *context)
+static void
+test_overwrite_preserves_count(UNIT_Context *context)
 {
     // Overwriting should not increment len
     _UNIT_Map map;
-    ASSERT_OK(context, _UNIT_Map_Init(&map, context, 8, compare_strings,
-                                       hash_string, NULL, NULL));
+    ASSERT_OK(context,
+              _UNIT_Map_Init(&map,
+                             context,
+                             8,
+                             compare_strings,
+                             hash_string,
+                             NULL,
+                             NULL));
     int a = 1;
     int b = 2;
     int c = 3;
@@ -500,12 +663,19 @@ static void test_overwrite_preserves_count(UNIT_Context *context)
     _UNIT_Map_Clear(&map);
 }
 
-static void test_many_overwrites_with_expansion(UNIT_Context *context)
+static void
+test_many_overwrites_with_expansion(UNIT_Context *context)
 {
     // Mix of new inserts and overwrites across expansions
     _UNIT_Map map;
-    ASSERT_OK(context, _UNIT_Map_Init(&map, context, 2, compare_ints,
-                                       hash_int, NULL, NULL));
+    ASSERT_OK(context,
+              _UNIT_Map_Init(&map,
+                             context,
+                             2,
+                             compare_ints,
+                             hash_int,
+                             NULL,
+                             NULL));
     int keys[50];
     int values[50];
     for (int i = 0; i < 50; ++i) {
@@ -526,12 +696,19 @@ static void test_many_overwrites_with_expansion(UNIT_Context *context)
     _UNIT_Map_Clear(&map);
 }
 
-static void test_get_full_table_missing_key(UNIT_Context *context)
+static void
+test_get_full_table_missing_key(UNIT_Context *context)
 {
     // Ensure Get() terminates even with high load
     _UNIT_Map map;
-    ASSERT_OK(context, _UNIT_Map_Init(&map, context, 4, compare_ints,
-                                       hash_int, NULL, NULL));
+    ASSERT_OK(context,
+              _UNIT_Map_Init(&map,
+                             context,
+                             4,
+                             compare_ints,
+                             hash_int,
+                             NULL,
+                             NULL));
     int keys[2];
     int values[2];
     // 2/4 = 50% load
@@ -545,7 +722,8 @@ static void test_get_full_table_missing_key(UNIT_Context *context)
     _UNIT_Map_Clear(&map);
 }
 
-int main(void)
+int
+main(void)
 {
     UNIT_Context context;
     ASSERT(!UNIT_FAILED(UNIT_Context_Init(&context)));

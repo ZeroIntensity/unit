@@ -5,7 +5,8 @@
 // Use small integers cast to pointers as test values
 #define PTR(n) ((void *)(uintptr_t)(n))
 
-static void test_add_and_contains(UNIT_Context *context)
+static void
+test_add_and_contains(UNIT_Context *context)
 {
     _UNIT_Set set;
     ASSERT_OK(context, _UNIT_Set_Init(&set, context, 8));
@@ -15,7 +16,8 @@ static void test_add_and_contains(UNIT_Context *context)
     _UNIT_Set_Clear(&set);
 }
 
-static void test_duplicate_add(UNIT_Context *context)
+static void
+test_duplicate_add(UNIT_Context *context)
 {
     _UNIT_Set set;
     ASSERT_OK(context, _UNIT_Set_Init(&set, context, 8));
@@ -26,7 +28,8 @@ static void test_duplicate_add(UNIT_Context *context)
     _UNIT_Set_Clear(&set);
 }
 
-static void test_multiple_values(UNIT_Context *context)
+static void
+test_multiple_values(UNIT_Context *context)
 {
     _UNIT_Set set;
     ASSERT_OK(context, _UNIT_Set_Init(&set, context, 8));
@@ -41,7 +44,8 @@ static void test_multiple_values(UNIT_Context *context)
     _UNIT_Set_Clear(&set);
 }
 
-static void test_remove(UNIT_Context *context)
+static void
+test_remove(UNIT_Context *context)
 {
     _UNIT_Set set;
     ASSERT_OK(context, _UNIT_Set_Init(&set, context, 8));
@@ -54,7 +58,8 @@ static void test_remove(UNIT_Context *context)
     _UNIT_Set_Clear(&set);
 }
 
-static void test_remove_nonexistent(UNIT_Context *context)
+static void
+test_remove_nonexistent(UNIT_Context *context)
 {
     _UNIT_Set set;
     ASSERT_OK(context, _UNIT_Set_Init(&set, context, 8));
@@ -65,7 +70,8 @@ static void test_remove_nonexistent(UNIT_Context *context)
     _UNIT_Set_Clear(&set);
 }
 
-static void test_remove_preserves_chain(UNIT_Context *context)
+static void
+test_remove_preserves_chain(UNIT_Context *context)
 {
     // Force collisions by using values that hash to the same slot
     _UNIT_Set set;
@@ -81,7 +87,8 @@ static void test_remove_preserves_chain(UNIT_Context *context)
     _UNIT_Set_Clear(&set);
 }
 
-static void test_grow(UNIT_Context *context)
+static void
+test_grow(UNIT_Context *context)
 {
     _UNIT_Set set;
     ASSERT_OK(context, _UNIT_Set_Init(&set, context, 4));
@@ -96,7 +103,8 @@ static void test_grow(UNIT_Context *context)
     _UNIT_Set_Clear(&set);
 }
 
-static void test_grow_preserves_all(UNIT_Context *context)
+static void
+test_grow_preserves_all(UNIT_Context *context)
 {
     _UNIT_Set set;
     ASSERT_OK(context, _UNIT_Set_Init(&set, context, 2));
@@ -110,7 +118,8 @@ static void test_grow_preserves_all(UNIT_Context *context)
     _UNIT_Set_Clear(&set);
 }
 
-static void test_null_pointer(UNIT_Context *context)
+static void
+test_null_pointer(UNIT_Context *context)
 {
     // NULL is a valid pointer value to store
     _UNIT_Set set;
@@ -121,7 +130,8 @@ static void test_null_pointer(UNIT_Context *context)
     _UNIT_Set_Clear(&set);
 }
 
-static void test_real_pointers(UNIT_Context *context)
+static void
+test_real_pointers(UNIT_Context *context)
 {
     int a, b, c;
     _UNIT_Set set;
@@ -135,7 +145,8 @@ static void test_real_pointers(UNIT_Context *context)
     _UNIT_Set_Clear(&set);
 }
 
-static void test_remove_then_readd(UNIT_Context *context)
+static void
+test_remove_then_readd(UNIT_Context *context)
 {
     _UNIT_Set set;
     ASSERT_OK(context, _UNIT_Set_Init(&set, context, 8));
@@ -149,7 +160,8 @@ static void test_remove_then_readd(UNIT_Context *context)
     _UNIT_Set_Clear(&set);
 }
 
-static void test_empty(UNIT_Context *context)
+static void
+test_empty(UNIT_Context *context)
 {
     _UNIT_Set set;
     ASSERT_OK(context, _UNIT_Set_Init(&set, context, 8));
@@ -158,7 +170,8 @@ static void test_empty(UNIT_Context *context)
     _UNIT_Set_Clear(&set);
 }
 
-int main(void)
+int
+main(void)
 {
     UNIT_Context context;
     ASSERT(!UNIT_FAILED(UNIT_Context_Init(&context)));

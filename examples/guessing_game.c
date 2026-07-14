@@ -1,6 +1,7 @@
 #include <unit/unit.h>
 
-int main(void)
+int
+main(void)
 {
 
     UNIT_Context context;
@@ -15,53 +16,58 @@ int main(void)
         return 1;
     }
 
-#define ADDOP_INT(name, value)                                                      \
-    if (UNIT_FAILED(UNIT_Procedure_AddOperation(&procedure, name, value))) {        \
-        goto error;                                                                 \
-    }
+#define ADDOP_INT(name, value)                                  \
+        if (UNIT_FAILED(UNIT_Procedure_AddOperation(&procedure, \
+                                                    name,       \
+                                                    value))) {  \
+            goto error;                                         \
+        }
 #define ADDOP(name) ADDOP_INT(name, 0)
 
-#define ADDOP_CALL(func, argc)                                                      \
-    if (UNIT_FAILED(UNIT_Procedure_AddCallName(&procedure, func, argc))) {          \
-        goto error;                                                                 \
-    }
+#define ADDOP_CALL(func, argc)                                                 \
+        if (UNIT_FAILED(UNIT_Procedure_AddCallName(&procedure, func, argc))) { \
+            goto error;                                                        \
+        }
 
-#define NEW_JUMP_LABEL(name)                                                        \
-    UNIT_JumpLabel *name = UNIT_Procedure_CreateJumpLabel(&procedure, #name);       \
-    if (name == NULL) {                                                             \
-        goto error;                                                                 \
-    }
+#define NEW_JUMP_LABEL(name)                                              \
+        UNIT_JumpLabel *name = UNIT_Procedure_CreateJumpLabel(&procedure, \
+                                                              #name);     \
+        if (name == NULL) {                                               \
+            goto error;                                                   \
+        }
 
-#define USE_LABEL(name)                                                         \
-    if (UNIT_FAILED(UNIT_Procedure_UseLabel(&procedure, name))) {               \
-        goto error;                                                             \
-    }
+#define USE_LABEL(name)                                               \
+        if (UNIT_FAILED(UNIT_Procedure_UseLabel(&procedure, name))) { \
+            goto error;                                               \
+        }
 
 #define ADDOP_JUMP(inst, label)                                             \
-    if (UNIT_FAILED(UNIT_Procedure_AddJump(&procedure, inst, label))) {     \
-        goto error;                                                         \
-    }
+        if (UNIT_FAILED(UNIT_Procedure_AddJump(&procedure, inst, label))) { \
+            goto error;                                                     \
+        }
 
-#define ADDOP_STR(str)                                                      \
-    if (UNIT_FAILED(UNIT_Procedure_AddStringLoad(&procedure, str))) {       \
-        goto error;                                                         \
-    }
+#define ADDOP_STR(str)                                                    \
+        if (UNIT_FAILED(UNIT_Procedure_AddStringLoad(&procedure, str))) { \
+            goto error;                                                   \
+        }
 
-#define NEW_NAME(name)                                                      \
-    UNIT_Local name;                                                        \
-    if (UNIT_FAILED(UNIT_Procedure_CreateLocal(&procedure, #name, &name))) {   \
-        goto error;                                                         \
-    }
+#define NEW_NAME(name)                                         \
+        UNIT_Local name;                                       \
+        if (UNIT_FAILED(UNIT_Procedure_CreateLocal(&procedure, \
+                                                   #name,      \
+                                                   &name))) {  \
+            goto error;                                        \
+        }
 
-#define ADDOP_STORE_NAME(name)                                                  \
-    if (UNIT_FAILED(UNIT_Procedure_AddStoreName(&procedure, name))) {           \
-        goto error;                                                             \
-    }
+#define ADDOP_STORE_NAME(name)                                            \
+        if (UNIT_FAILED(UNIT_Procedure_AddStoreName(&procedure, name))) { \
+            goto error;                                                   \
+        }
 
-#define ADDOP_LOAD_NAME(name)                                           \
-    if (UNIT_FAILED(UNIT_Procedure_AddLoadName(&procedure, name))) {    \
-        goto error;                                                     \
-    }
+#define ADDOP_LOAD_NAME(name)                                            \
+        if (UNIT_FAILED(UNIT_Procedure_AddLoadName(&procedure, name))) { \
+            goto error;                                                  \
+        }
 
     NEW_JUMP_LABEL(loop);
     NEW_JUMP_LABEL(correct);
@@ -77,7 +83,7 @@ int main(void)
     ADDOP_JUMP(UNIT_OP_JUMP_IF_TRUE, set_seed_from_time);
 
     ADDOP_INT(UNIT_OP_LOAD_ARGUMENT, 1); // argv
-    ADDOP_INT(UNIT_OP_LOAD_INTEGER, sizeof(char*));
+    ADDOP_INT(UNIT_OP_LOAD_INTEGER, sizeof(char *));
     ADDOP(UNIT_OP_ADD);
     // [argv + 8 (&argv[1])]
     ADDOP_INT(UNIT_OP_READ_BYTES, 8);
@@ -209,13 +215,15 @@ int main(void)
         goto error;
     }
 
-    UNIT_CompiledProcedure *compiled = UNIT_Compile(&procedure, UNIT_HOST_PLATFORM);
+    UNIT_CompiledProcedure *compiled = UNIT_Compile(&procedure,
+                                                    UNIT_HOST_PLATFORM);
     if (compiled == NULL) {
         goto error;
     }
 
     if (UNIT_FAILED(UNIT_CompiledProcedure_WriteObjectFile(compiled,
-                                                           "test.o", UNIT_FORMAT_ELF))) {
+                                                           "test.o",
+                                                           UNIT_FORMAT_ELF))) {
         UNIT_CompiledProcedure_Free(compiled);
         goto error;
     }

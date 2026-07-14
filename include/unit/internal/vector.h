@@ -21,11 +21,14 @@ typedef struct {
 } _UNIT_Vector;
 
 UNIT_Status
-_UNIT_Vector_Init(_UNIT_Vector *vector, UNIT_Context *context,
-                  UNIT_Size initial_capacity, UNIT_Destructor dealloc);
+_UNIT_Vector_Init(_UNIT_Vector *vector,
+                  UNIT_Context *context,
+                  UNIT_Size initial_capacity,
+                  UNIT_Destructor dealloc);
 
 static inline _UNIT_Vector *
-_UNIT_Vector_New(UNIT_Context *context, UNIT_Size initial_capacity,
+_UNIT_Vector_New(UNIT_Context *context,
+                 UNIT_Size initial_capacity,
                  UNIT_Destructor dealloc)
 {
     _UNIT_Structure_NEW_IMPL(_UNIT_Vector, context, initial_capacity, dealloc);
@@ -46,7 +49,8 @@ _UNIT_Vector_SIZE(const _UNIT_Vector *vector)
 }
 
 static inline bool
-_UNIT_Vector_INDEX_IS_VALID(const _UNIT_Vector *vector, UNIT_Size index)
+_UNIT_Vector_INDEX_IS_VALID(const _UNIT_Vector *vector,
+                            UNIT_Size index)
 {
     assert(vector != NULL);
     if (index < 0) {
@@ -57,7 +61,8 @@ _UNIT_Vector_INDEX_IS_VALID(const _UNIT_Vector *vector, UNIT_Size index)
 }
 
 static inline void *
-_UNIT_Vector_GET(const _UNIT_Vector *vector, UNIT_Size index)
+_UNIT_Vector_GET(const _UNIT_Vector *vector,
+                 UNIT_Size index)
 {
     assert(vector != NULL);
     assert(_UNIT_Vector_INDEX_IS_VALID(vector, index));
@@ -66,7 +71,9 @@ _UNIT_Vector_GET(const _UNIT_Vector *vector, UNIT_Size index)
 }
 
 static inline void
-_UNIT_Vector_SET(_UNIT_Vector *vector, UNIT_Size index, void *new_value)
+_UNIT_Vector_SET(_UNIT_Vector *vector,
+                 UNIT_Size index,
+                 void *new_value)
 {
     assert(vector != NULL);
     assert(_UNIT_Vector_INDEX_IS_VALID(vector, index));
@@ -79,7 +86,8 @@ _UNIT_Vector_SET(_UNIT_Vector *vector, UNIT_Size index, void *new_value)
 
 // Take an item out of a vector and set it to NULL, without running its deallocator.
 static inline void *
-_UNIT_Vector_STEAL(_UNIT_Vector *vector, UNIT_Size index)
+_UNIT_Vector_STEAL(_UNIT_Vector *vector,
+                   UNIT_Size index)
 {
     assert(vector != NULL);
     assert(_UNIT_Vector_INDEX_IS_VALID(vector, index));
@@ -90,9 +98,10 @@ _UNIT_Vector_STEAL(_UNIT_Vector *vector, UNIT_Size index)
 }
 
 /* Like _UNIT_Vector_Append(), but does not attempt to resize.
- * Only use if you're certain that the vector is big enough. */
+* Only use if you're certain that the vector is big enough. */
 static inline void
-_UNIT_Vector_APPEND(_UNIT_Vector *vector, void *item)
+_UNIT_Vector_APPEND(_UNIT_Vector *vector,
+                    void *item)
 {
     assert(vector != NULL);
     assert(vector->length < vector->capacity);

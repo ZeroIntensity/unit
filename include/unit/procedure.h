@@ -116,11 +116,13 @@ typedef struct {
 
 UNIT_Status
 UNIT_Procedure_Init(UNIT_Procedure *procedure,
-                    UNIT_Context *context, const char *name);
+                    UNIT_Context *context,
+                    const char *name);
 
 UNIT_Procedure *
 UNIT_Procedure_New(UNIT_Context *context,
-                   UNIT_Procedure *procedure, const char *name);
+                   UNIT_Procedure *procedure,
+                   const char *name);
 
 void
 UNIT_Procedure_Clear(UNIT_Procedure *procedure);
@@ -142,7 +144,8 @@ UNIT_Procedure_UseLabel(UNIT_Procedure *procedure,
                         UNIT_JumpLabel *jump_label);
 
 UNIT_Status
-UNIT_Procedure_AddJump(UNIT_Procedure *procedure, UNIT_OperationCode instruction,
+UNIT_Procedure_AddJump(UNIT_Procedure *procedure,
+                       UNIT_OperationCode instruction,
                        UNIT_JumpLabel *jump_label);
 
 UNIT_Status
@@ -154,8 +157,9 @@ UNIT_Status
 UNIT_Procedure_AddStringLoad(UNIT_Procedure *procedure, const char *str);
 
 UNIT_Status
-UNIT_Procedure_CreateLocal(UNIT_Procedure *procedure, const char *name,
-                        UNIT_Local *local_ptr);
+UNIT_Procedure_CreateLocal(UNIT_Procedure *procedure,
+                           const char *name,
+                           UNIT_Local *local_ptr);
 
 UNIT_Status
 UNIT_Procedure_AddStoreName(UNIT_Procedure *procedure, UNIT_Local local);
@@ -173,7 +177,8 @@ UNIT_OperationCode_GetName(UNIT_OperationCode instruction);
 
 UNIT_Status
 UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure,
-                                 FILE *stream, int8_t visualize_stack_effect);
+                                 FILE *stream,
+                                 int8_t visualize_stack_effect);
 
 #define UNIT_FLAG_NONE 0
 #define UNIT_FLAG_NO_OPTIMIZE_TRANSLATION (1 << 0)

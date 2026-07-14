@@ -6,7 +6,8 @@
 #define CODE_BUFFER_INITIAL_SIZE 256
 
 UNIT_Status
-_UNIT_CodeBuffer_Init(_UNIT_CodeBuffer *buffer, UNIT_Context *context)
+_UNIT_CodeBuffer_Init(_UNIT_CodeBuffer *buffer,
+                      UNIT_Context *context)
 {
     assert(buffer != NULL);
     assert(context != NULL);
@@ -31,7 +32,8 @@ _UNIT_CodeBuffer_Clear(_UNIT_CodeBuffer *buffer)
 }
 
 static inline UNIT_Status
-ensure_buffer_capacity(_UNIT_CodeBuffer *buffer, uint8_t amount_to_add)
+ensure_buffer_capacity(_UNIT_CodeBuffer *buffer,
+                       uint8_t amount_to_add)
 {
     assert(buffer != NULL);
     assert(buffer->size >= 0);
@@ -41,7 +43,8 @@ ensure_buffer_capacity(_UNIT_CodeBuffer *buffer, uint8_t amount_to_add)
         return _UNIT_OK;
     }
 
-    uint8_t *new_buffer = _UNIT_Realloc(buffer->context, buffer->data,
+    uint8_t *new_buffer = _UNIT_Realloc(buffer->context,
+                                        buffer->data,
                                         buffer->capacity * 2);
     if (new_buffer == NULL) {
         return _UNIT_FAIL;
@@ -52,7 +55,8 @@ ensure_buffer_capacity(_UNIT_CodeBuffer *buffer, uint8_t amount_to_add)
 }
 
 UNIT_Status
-_UNIT_CodeBuffer_Emit8(_UNIT_CodeBuffer *buffer, uint8_t value)
+_UNIT_CodeBuffer_Emit8(_UNIT_CodeBuffer *buffer,
+                       uint8_t value)
 {
     assert(buffer != NULL);
     if (UNIT_FAILED(ensure_buffer_capacity(buffer, 1))) {
@@ -63,7 +67,8 @@ _UNIT_CodeBuffer_Emit8(_UNIT_CodeBuffer *buffer, uint8_t value)
 }
 
 UNIT_Status
-_UNIT_CodeBuffer_Emit32(_UNIT_CodeBuffer *buffer, uint32_t value)
+_UNIT_CodeBuffer_Emit32(_UNIT_CodeBuffer *buffer,
+                        uint32_t value)
 {
     assert(buffer != NULL);
     if (UNIT_FAILED(ensure_buffer_capacity(buffer, 4))) {
@@ -75,7 +80,8 @@ _UNIT_CodeBuffer_Emit32(_UNIT_CodeBuffer *buffer, uint32_t value)
 }
 
 UNIT_Status
-_UNIT_CodeBuffer_Emit64(_UNIT_CodeBuffer *buffer, uint64_t value)
+_UNIT_CodeBuffer_Emit64(_UNIT_CodeBuffer *buffer,
+                        uint64_t value)
 {
     assert(buffer != NULL);
     if (UNIT_FAILED(ensure_buffer_capacity(buffer, 8))) {
@@ -100,7 +106,8 @@ _UNIT_CodeBuffer_Patch32(_UNIT_CodeBuffer *buffer,
 }
 
 UNIT_Size
-_UNIT_CodeBuffer_Reserve(_UNIT_CodeBuffer *buffer, UNIT_Size count)
+_UNIT_CodeBuffer_Reserve(_UNIT_CodeBuffer *buffer,
+                         UNIT_Size count)
 {
     UNIT_Size offset = buffer->size;
     for (UNIT_Size i = 0; i < count; ++i) {
@@ -110,8 +117,10 @@ _UNIT_CodeBuffer_Reserve(_UNIT_CodeBuffer *buffer, UNIT_Size count)
 }
 
 void
-_UNIT_CodeBuffer_PatchBytes(_UNIT_CodeBuffer *buffer, UNIT_Size offset,
-                            const uint8_t *bytes, UNIT_Size count)
+_UNIT_CodeBuffer_PatchBytes(_UNIT_CodeBuffer *buffer,
+                            UNIT_Size offset,
+                            const uint8_t *bytes,
+                            UNIT_Size count)
 {
     for (UNIT_Size i = 0; i < count; ++i) {
         buffer->data[offset + i] = bytes[i];

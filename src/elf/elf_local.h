@@ -110,7 +110,7 @@ enum {
 // The st_info field of a symbol packs binding and type into
 // one byte: (binding << 4) | (type & 0xf)
 #define ELF_SYMBOL_INFO(binding, type) \
-    (((binding) << 4) | ((type) & 0xf))
+        (((binding) << 4) | ((type) & 0xf))
 
 
 // Relocation types (AMD64)
@@ -127,11 +127,11 @@ enum {
 // The r_info field packs a symbol index and relocation type
 // into one 64-bit value: (symbol_index << 32) | type
 #define ELF_RELOCATION_INFO(symbol_index, type) \
-    (((uint64_t)(symbol_index) << 32) | (uint32_t)(type))
+        (((uint64_t)(symbol_index) << 32) | (uint32_t)(type))
 
 // The ELF file header. Appears at the very start of every ELF file.
 typedef struct {
-    uint8_t  identification[ELF_IDENT_SIZE];
+    uint8_t identification[ELF_IDENT_SIZE];
     uint16_t type;
     uint16_t machine;
     uint32_t version;
@@ -168,8 +168,8 @@ typedef struct {
 // associated string table.
 typedef struct {
     uint32_t name;
-    uint8_t  info;
-    uint8_t  other;
+    uint8_t info;
+    uint8_t other;
     uint16_t section_index;
     uint64_t value;
     uint64_t size;

@@ -1,6 +1,7 @@
 #include "test_util.h"
 
-static void test_set_and_get(UNIT_Context *context)
+static void
+test_set_and_get(UNIT_Context *context)
 {
     _UNIT_SizeMap map;
     ASSERT_OK(context, _UNIT_SizeMap_Init(&map, context, 8));
@@ -13,7 +14,8 @@ static void test_set_and_get(UNIT_Context *context)
     _UNIT_SizeMap_Clear(&map);
 }
 
-static void test_overwrite(UNIT_Context *context)
+static void
+test_overwrite(UNIT_Context *context)
 {
     _UNIT_SizeMap map;
     ASSERT_OK(context, _UNIT_SizeMap_Init(&map, context, 8));
@@ -27,7 +29,8 @@ static void test_overwrite(UNIT_Context *context)
     _UNIT_SizeMap_Clear(&map);
 }
 
-static void test_remove(UNIT_Context *context)
+static void
+test_remove(UNIT_Context *context)
 {
     _UNIT_SizeMap map;
     ASSERT_OK(context, _UNIT_SizeMap_Init(&map, context, 8));
@@ -40,7 +43,8 @@ static void test_remove(UNIT_Context *context)
     _UNIT_SizeMap_Clear(&map);
 }
 
-int main(void)
+int
+main(void)
 {
     UNIT_Context context;
     ASSERT(!UNIT_FAILED(UNIT_Context_Init(&context)));

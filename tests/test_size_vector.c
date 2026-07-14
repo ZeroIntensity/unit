@@ -3,7 +3,8 @@
 
 #include <unit/internal/size_vector.h>
 
-static void test_append_and_get(UNIT_Context *context)
+static void
+test_append_and_get(UNIT_Context *context)
 {
     _UNIT_SizeVector size_vector;
     ASSERT_OK(context, _UNIT_SizeVector_Init(&size_vector, context, 4));
@@ -17,7 +18,8 @@ static void test_append_and_get(UNIT_Context *context)
     _UNIT_SizeVector_Clear(&size_vector);
 }
 
-static void test_pop(UNIT_Context *context)
+static void
+test_pop(UNIT_Context *context)
 {
     _UNIT_SizeVector size_vector;
     ASSERT_OK(context, _UNIT_SizeVector_Init(&size_vector, context, 4));
@@ -33,7 +35,8 @@ static void test_pop(UNIT_Context *context)
     _UNIT_SizeVector_Clear(&size_vector);
 }
 
-static void test_set(UNIT_Context *context)
+static void
+test_set(UNIT_Context *context)
 {
     _UNIT_SizeVector size_vector;
     ASSERT_OK(context, _UNIT_SizeVector_Init(&size_vector, context, 4));
@@ -46,7 +49,8 @@ static void test_set(UNIT_Context *context)
     _UNIT_SizeVector_Clear(&size_vector);
 }
 
-static void test_append_unchecked(UNIT_Context *context)
+static void
+test_append_unchecked(UNIT_Context *context)
 {
     _UNIT_SizeVector size_vector;
     ASSERT_OK(context, _UNIT_SizeVector_Init(&size_vector, context, 4));
@@ -60,7 +64,8 @@ static void test_append_unchecked(UNIT_Context *context)
     _UNIT_SizeVector_Clear(&size_vector);
 }
 
-static void test_grow(UNIT_Context *context)
+static void
+test_grow(UNIT_Context *context)
 {
     _UNIT_SizeVector size_vector;
     ASSERT_OK(context, _UNIT_SizeVector_Init(&size_vector, context, 2));
@@ -74,7 +79,8 @@ static void test_grow(UNIT_Context *context)
     _UNIT_SizeVector_Clear(&size_vector);
 }
 
-static void test_empty(UNIT_Context *context)
+static void
+test_empty(UNIT_Context *context)
 {
     _UNIT_SizeVector size_vector;
     ASSERT_OK(context, _UNIT_SizeVector_Init(&size_vector, context, 4));
@@ -82,7 +88,8 @@ static void test_empty(UNIT_Context *context)
     _UNIT_SizeVector_Clear(&size_vector);
 }
 
-static void test_reuse_after_clear(UNIT_Context *context)
+static void
+test_reuse_after_clear(UNIT_Context *context)
 {
     _UNIT_SizeVector size_vector;
     ASSERT_OK(context, _UNIT_SizeVector_Init(&size_vector, context, 4));
@@ -97,7 +104,8 @@ static void test_reuse_after_clear(UNIT_Context *context)
     _UNIT_SizeVector_Clear(&size_vector);
 }
 
-static void test_push_pop_interleaved(UNIT_Context *context)
+static void
+test_push_pop_interleaved(UNIT_Context *context)
 {
     _UNIT_SizeVector size_vector;
     ASSERT_OK(context, _UNIT_SizeVector_Init(&size_vector, context, 4));
@@ -113,11 +121,12 @@ static void test_push_pop_interleaved(UNIT_Context *context)
     _UNIT_SizeVector_Clear(&size_vector);
 }
 
-static void test_large_values(UNIT_Context *context)
+static void
+test_large_values(UNIT_Context *context)
 {
     _UNIT_SizeVector size_vector;
     ASSERT_OK(context, _UNIT_SizeVector_Init(&size_vector, context, 4));
-    UNIT_Size large = (UNIT_Size)-1;
+    UNIT_Size large = (UNIT_Size) - 1;
     ASSERT_OK(context, _UNIT_SizeVector_Append(&size_vector, large));
     ASSERT_OK(context, _UNIT_SizeVector_Append(&size_vector, 0));
     ASSERT_OK(context, _UNIT_SizeVector_Append(&size_vector, large - 1));
@@ -127,7 +136,8 @@ static void test_large_values(UNIT_Context *context)
     _UNIT_SizeVector_Clear(&size_vector);
 }
 
-static void test_new_and_free(UNIT_Context *context)
+static void
+test_new_and_free(UNIT_Context *context)
 {
     _UNIT_SizeVector *size_vector = _UNIT_SizeVector_New(context, 4);
     ASSERT(size_vector != NULL);
@@ -139,7 +149,8 @@ static void test_new_and_free(UNIT_Context *context)
     _UNIT_SizeVector_Free(size_vector);
 }
 
-int main(void)
+int
+main(void)
 {
     UNIT_Context context;
     ASSERT(!UNIT_FAILED(UNIT_Context_Init(&context)));

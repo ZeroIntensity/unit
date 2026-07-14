@@ -1,6 +1,7 @@
 #include "test_util.h"
 
-static void test_append_and_get(UNIT_Context *context)
+static void
+test_append_and_get(UNIT_Context *context)
 {
     _UNIT_Vector vector;
     ASSERT_OK(context, _UNIT_Vector_Init(&vector, context, 4, NULL));
@@ -17,7 +18,8 @@ static void test_append_and_get(UNIT_Context *context)
     _UNIT_Vector_Clear(&vector);
 }
 
-static void test_pop(UNIT_Context *context)
+static void
+test_pop(UNIT_Context *context)
 {
     _UNIT_Vector vector;
     ASSERT_OK(context, _UNIT_Vector_Init(&vector, context, 4, NULL));
@@ -31,7 +33,8 @@ static void test_pop(UNIT_Context *context)
     _UNIT_Vector_Clear(&vector);
 }
 
-static void test_set(UNIT_Context *context)
+static void
+test_set(UNIT_Context *context)
 {
     _UNIT_Vector vector;
     ASSERT_OK(context, _UNIT_Vector_Init(&vector, context, 4, NULL));
@@ -43,7 +46,8 @@ static void test_set(UNIT_Context *context)
     _UNIT_Vector_Clear(&vector);
 }
 
-static void test_grow(UNIT_Context *context)
+static void
+test_grow(UNIT_Context *context)
 {
     _UNIT_Vector vector;
     ASSERT_OK(context, _UNIT_Vector_Init(&vector, context, 2, NULL));
@@ -59,7 +63,8 @@ static void test_grow(UNIT_Context *context)
     _UNIT_Vector_Clear(&vector);
 }
 
-static void test_reverse(UNIT_Context *context)
+static void
+test_reverse(UNIT_Context *context)
 {
     _UNIT_Vector vector;
     ASSERT_OK(context, _UNIT_Vector_Init(&vector, context, 4, NULL));
@@ -76,7 +81,8 @@ static void test_reverse(UNIT_Context *context)
     _UNIT_Vector_Clear(&vector);
 }
 
-static void test_empty(UNIT_Context *context)
+static void
+test_empty(UNIT_Context *context)
 {
     _UNIT_Vector vector;
     ASSERT_OK(context, _UNIT_Vector_Init(&vector, context, 4, NULL));
@@ -84,7 +90,8 @@ static void test_empty(UNIT_Context *context)
     _UNIT_Vector_Clear(&vector);
 }
 
-int main(void)
+int
+main(void)
 {
     UNIT_Context context;
     ASSERT(!UNIT_FAILED(UNIT_Context_Init(&context)));

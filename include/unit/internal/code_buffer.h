@@ -56,8 +56,10 @@ _UNIT_CodeBuffer_Reserve(_UNIT_CodeBuffer *buffer, UNIT_Size count);
 
 // Write a full instruction into reserved space
 void
-_UNIT_CodeBuffer_PatchBytes(_UNIT_CodeBuffer *buffer, UNIT_Size offset,
-                            const uint8_t *bytes, UNIT_Size count);
+_UNIT_CodeBuffer_PatchBytes(_UNIT_CodeBuffer *buffer,
+                            UNIT_Size offset,
+                            const uint8_t *bytes,
+                            UNIT_Size count);
 
 #ifdef __cplusplus
 }

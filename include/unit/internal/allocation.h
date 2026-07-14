@@ -15,10 +15,12 @@ extern "C" {
 
 #define _UNIT_Alloc(ctx, amount) malloc(amount)
 static inline void
-_UNIT_Dealloc(UNIT_Context *ctx, void *ptr)
+_UNIT_Dealloc(UNIT_Context *ctx,
+              void *ptr)
 {
     free(ptr);
 }
+
 #define _UNIT_Realloc(ctx, ptr, newsize) realloc(ptr, newsize)
 #define _UNIT_Calloc(ctx, count, size) calloc(count, size)
 #define _UNIT_StrDup(ctx, src) strdup(src)

@@ -7,7 +7,7 @@
 typedef uint32_t UNIT_Platform;
 
 #define _UNIT_ARCH_BITS 0
-#define _UNIT_ABI_BITS  8
+#define _UNIT_ABI_BITS 8
 
 typedef enum {
     UNIT_ARCH_AMD64 = (1 << _UNIT_ARCH_BITS),
@@ -51,7 +51,7 @@ UNIT_Platform_GET_ARCH(UNIT_Platform platform)
     #elif defined(__APPLE__)
         #define UNIT_HOST_PLATFORM (UNIT_ARCH_AMD64 | UNIT_ABI_SYSTEMV)
     #elif defined(__linux__) || defined(__FreeBSD__) || defined(__OpenBSD__) \
-          || defined(__NetBSD__) || defined(__DragonFly__) || defined(__sun)
+    || defined(__NetBSD__) || defined(__DragonFly__) || defined(__sun)
         #define UNIT_HOST_PLATFORM (UNIT_ARCH_AMD64 | UNIT_ABI_SYSTEMV)
     #endif
 #elif defined(__aarch64__) || defined(_M_ARM64)
@@ -60,7 +60,7 @@ UNIT_Platform_GET_ARCH(UNIT_Platform platform)
     #elif defined(__APPLE__)
         #define UNIT_HOST_PLATFORM (UNIT_ARCH_AARCH64 | UNIT_ABI_APPLE)
     #elif defined(__linux__) || defined(__FreeBSD__) || defined(__OpenBSD__) \
-          || defined(__NetBSD__) || defined(__DragonFly__) || defined(__sun)
+    || defined(__NetBSD__) || defined(__DragonFly__) || defined(__sun)
         #define UNIT_HOST_PLATFORM (UNIT_ARCH_AARCH64 | UNIT_ABI_SYSTEMV)
     #endif
 #endif

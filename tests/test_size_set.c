@@ -1,6 +1,7 @@
 #include "test_util.h"
 
-static void test_add_and_contains(UNIT_Context *context)
+static void
+test_add_and_contains(UNIT_Context *context)
 {
     _UNIT_SizeSet set;
     ASSERT_OK(context, _UNIT_SizeSet_Init(&set, context, 8));
@@ -10,7 +11,8 @@ static void test_add_and_contains(UNIT_Context *context)
     _UNIT_SizeSet_Clear(&set);
 }
 
-static void test_duplicate_add(UNIT_Context *context)
+static void
+test_duplicate_add(UNIT_Context *context)
 {
     _UNIT_SizeSet set;
     ASSERT_OK(context, _UNIT_SizeSet_Init(&set, context, 8));
@@ -20,7 +22,8 @@ static void test_duplicate_add(UNIT_Context *context)
     _UNIT_SizeSet_Clear(&set);
 }
 
-static void test_remove(UNIT_Context *context)
+static void
+test_remove(UNIT_Context *context)
 {
     _UNIT_SizeSet set;
     ASSERT_OK(context, _UNIT_SizeSet_Init(&set, context, 8));
@@ -32,7 +35,8 @@ static void test_remove(UNIT_Context *context)
     _UNIT_SizeSet_Clear(&set);
 }
 
-static void test_remove_preserves_chain(UNIT_Context *context)
+static void
+test_remove_preserves_chain(UNIT_Context *context)
 {
     // Insert values that collide, remove the first, ensure the second is still found
     _UNIT_SizeSet set;
@@ -46,7 +50,8 @@ static void test_remove_preserves_chain(UNIT_Context *context)
     _UNIT_SizeSet_Clear(&set);
 }
 
-static void test_many_values(UNIT_Context *context)
+static void
+test_many_values(UNIT_Context *context)
 {
     _UNIT_SizeSet set;
     ASSERT_OK(context, _UNIT_SizeSet_Init(&set, context, 4));
@@ -60,7 +65,8 @@ static void test_many_values(UNIT_Context *context)
     _UNIT_SizeSet_Clear(&set);
 }
 
-int main(void)
+int
+main(void)
 {
     UNIT_Context context;
     ASSERT(!UNIT_FAILED(UNIT_Context_Init(&context)));

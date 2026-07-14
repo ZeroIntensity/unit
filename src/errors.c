@@ -9,18 +9,24 @@ const char *
 UNIT_ErrorCode_ToString(UNIT_ErrorCode code)
 {
     switch (code) {
-        case UNIT_ERROR_NONE:
-            return "NONE";
-        case UNIT_ERROR_INVALID_USAGE:
-            return "INVALID_USAGE";
-        case UNIT_ERROR_NO_MEMORY:
-            return "NO_MEMORY";
-        case UNIT_ERROR_OS_FAILURE:
-            return "OS_FAILURE";
-        case UNIT_ERROR_UNSUPPORTED_PLATFORM:
-            return "UNSUPPORTED_PLATFORM";
-        default:
-            _UNIT_Unreachable();
+    case UNIT_ERROR_NONE: {
+        return "NONE";
+    }
+    case UNIT_ERROR_INVALID_USAGE: {
+        return "INVALID_USAGE";
+    }
+    case UNIT_ERROR_NO_MEMORY: {
+        return "NO_MEMORY";
+    }
+    case UNIT_ERROR_OS_FAILURE: {
+        return "OS_FAILURE";
+    }
+    case UNIT_ERROR_UNSUPPORTED_PLATFORM: {
+        return "UNSUPPORTED_PLATFORM";
+    }
+    default: {
+        _UNIT_Unreachable();
+    }
     }
 }
 
@@ -52,19 +58,24 @@ UNIT_GetErrorMessage(const UNIT_Context *context)
 }
 
 void
-UNIT_PrintError(const UNIT_Context *context, FILE *stream)
+UNIT_PrintError(const UNIT_Context *context,
+                FILE *stream)
 {
     assert(context != NULL);
     assert(stream != NULL);
     UNIT_ErrorCode code = context->_internal.error.code;
     if (code != UNIT_ERROR_NONE) {
-        fprintf(stream, "%s: %s\n", UNIT_ErrorCode_ToString(code),
+        fprintf(stream,
+                "%s: %s\n",
+                UNIT_ErrorCode_ToString(code),
                 context->_internal.error.message);
     }
 }
 
 void
-_UNIT_SetError(UNIT_Context *context, UNIT_ErrorCode code, const char *message)
+_UNIT_SetError(UNIT_Context *context,
+               UNIT_ErrorCode code,
+               const char *message)
 {
     assert(context != NULL);
     assert(message != NULL);
@@ -79,8 +90,10 @@ _UNIT_SetError(UNIT_Context *context, UNIT_ErrorCode code, const char *message)
 }
 
 void
-_UNIT_SetErrorFormat(UNIT_Context *context, UNIT_ErrorCode code,
-                     const char *format, ...)
+_UNIT_SetErrorFormat(UNIT_Context *context,
+                     UNIT_ErrorCode code,
+                     const char *format,
+                     ...)
 {
     assert(context != NULL);
     assert(format != NULL);
@@ -92,9 +105,13 @@ _UNIT_SetErrorFormat(UNIT_Context *context, UNIT_ErrorCode code,
 }
 
 void
-_UNIT_SetOSError(UNIT_Context *context, const char *what)
+_UNIT_SetOSError(UNIT_Context *context,
+                 const char *what)
 {
-    _UNIT_SetErrorFormat(context, UNIT_ERROR_OS_FAILURE,
-                         "OS error while %s (errno %d): %s", what,
-                         errno, strerror(errno));
+    _UNIT_SetErrorFormat(context,
+                         UNIT_ERROR_OS_FAILURE,
+                         "OS error while %s (errno %d): %s",
+                         what,
+                         errno,
+                         strerror(errno));
 }

@@ -44,7 +44,8 @@ _UNIT_BasicBlock_Free(UNIT_Context *context, void *ptr);
 
 /* Call this in a loop until *changed is zero. */
 UNIT_Status
-_UNIT_BasicBlock_PopulateLivenessStep(_UNIT_BasicBlock *block, int8_t *changed);
+_UNIT_BasicBlock_PopulateLivenessStep(_UNIT_BasicBlock *block,
+                                      int8_t *changed);
 
 #ifdef __cplusplus
 }

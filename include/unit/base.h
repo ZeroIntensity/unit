@@ -17,23 +17,23 @@ typedef struct {
 #define UNIT_FAILED(status) (((UNIT_Status)(status))._status == -1)
 
 #if defined(__GNUC__) || defined(__clang__)
-    #define _UNIT_Unreachable()                                         \
-        do {                                                            \
-            assert(0 && "unreachable");                                 \
-            __builtin_unreachable();                                    \
-        } while (0)
+    #define _UNIT_Unreachable()             \
+            do {                            \
+                assert(0 && "unreachable"); \
+                __builtin_unreachable();    \
+            } while (0)
 #elif defined(_MSC_VER)
-    #define _UNIT_Unreachable()                                         \
-        do {                                                            \
-            assert(0 && "unreachable");                                 \
-            __assume(0);                                                \
-        } while (0)
+    #define _UNIT_Unreachable()             \
+            do {                            \
+                assert(0 && "unreachable"); \
+                __assume(0);                \
+            } while (0)
 #else
-    #define _UNIT_Unreachable()                                         \
-        do {                                                            \
-            assert(0 && "unreachable");                                 \
-            abort();                                                    \
-        } while (0)
+    #define _UNIT_Unreachable()             \
+            do {                            \
+                assert(0 && "unreachable"); \
+                abort();                    \
+            } while (0)
 #endif
 
 #endif

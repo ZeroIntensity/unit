@@ -47,7 +47,9 @@ typedef struct {
     uintptr_t _tagged;
 } _UNIT_MachineDestination;
 
-#define _UNIT_MachineDestination_NULL ((_UNIT_MachineDestination) {._tagged = 0})
+#define _UNIT_MachineDestination_NULL           \
+        ((_UNIT_MachineDestination) {._tagged = \
+                                         0})
 
 static inline _UNIT_MachineDestination
 _UNIT_MachineDestination_FromDestination(_UNIT_MachineItem *item)
@@ -157,11 +159,13 @@ void
 _UNIT_Translation_Clear(_UNIT_Translation *translation);
 
 UNIT_Status
-_UNIT_Translation_PrintInstructions(const _UNIT_Translation *translation, const char *name,
+_UNIT_Translation_PrintInstructions(const _UNIT_Translation *translation,
+                                    const char *name,
                                     FILE *stream);
 
 UNIT_Status
-_UNIT_Translation_Optimize(_UNIT_Translation *translation, int8_t num_registers);
+_UNIT_Translation_Optimize(_UNIT_Translation *translation,
+                           int8_t num_registers);
 
 #ifdef __cplusplus
 }

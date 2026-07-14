@@ -18,11 +18,13 @@ typedef struct {
 } _UNIT_SizeVector;
 
 UNIT_Status
-_UNIT_SizeVector_Init(_UNIT_SizeVector *size_vector, UNIT_Context *context,
+_UNIT_SizeVector_Init(_UNIT_SizeVector *size_vector,
+                      UNIT_Context *context,
                       UNIT_Size initial_capacity);
 
 static inline _UNIT_SizeVector *
-_UNIT_SizeVector_New(UNIT_Context *context, UNIT_Size initial_capacity)
+_UNIT_SizeVector_New(UNIT_Context *context,
+                     UNIT_Size initial_capacity)
 {
     _UNIT_Structure_NEW_IMPL(_UNIT_SizeVector, context, initial_capacity);
 }
@@ -42,7 +44,8 @@ _UNIT_SizeVector_SIZE(const _UNIT_SizeVector *size_vector)
 }
 
 static inline UNIT_Size
-_UNIT_SizeVector_GET(const _UNIT_SizeVector *size_vector, UNIT_Size index)
+_UNIT_SizeVector_GET(const _UNIT_SizeVector *size_vector,
+                     UNIT_Size index)
 {
     assert(size_vector != NULL);
     assert(index >= 0);
@@ -51,7 +54,9 @@ _UNIT_SizeVector_GET(const _UNIT_SizeVector *size_vector, UNIT_Size index)
 }
 
 static inline void
-_UNIT_SizeVector_SET(_UNIT_SizeVector *size_vector, UNIT_Size index, UNIT_Size new_value)
+_UNIT_SizeVector_SET(_UNIT_SizeVector *size_vector,
+                     UNIT_Size index,
+                     UNIT_Size new_value)
 {
     assert(size_vector != NULL);
     assert(index >= 0);
@@ -62,7 +67,8 @@ _UNIT_SizeVector_SET(_UNIT_SizeVector *size_vector, UNIT_Size index, UNIT_Size n
 /* Like _UNIT_SizeVector_Append(), but does not attempt to resize.
  * Only use if you're certain that the vector is big enough. */
 static inline void
-_UNIT_SizeVector_APPEND(_UNIT_SizeVector *size_vector, UNIT_Size item)
+_UNIT_SizeVector_APPEND(_UNIT_SizeVector *size_vector,
+                        UNIT_Size item)
 {
     assert(size_vector != NULL);
     assert(size_vector->length < size_vector->capacity);

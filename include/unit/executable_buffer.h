@@ -26,7 +26,9 @@ void
 UNIT_SymbolMap_Free(UNIT_SymbolMap *symbol_map);
 
 UNIT_Status
-UNIT_SymbolMap_RegisterSymbol(UNIT_SymbolMap *symbol_map, const char *name, void *address);
+UNIT_SymbolMap_RegisterSymbol(UNIT_SymbolMap *symbol_map,
+                              const char *name,
+                              void *address);
 
 typedef struct _UNIT_ExecutableBuffer UNIT_ExecutableBuffer;
 

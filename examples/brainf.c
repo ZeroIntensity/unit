@@ -2,54 +2,55 @@
 #include <stdio.h>
 #include <string.h>
 
-#define ADDOP_INT(op, value)                                                \
-    if (UNIT_FAILED(UNIT_Procedure_AddOperation(procedure, op, value))) {   \
-        return -1;                                                          \
-    }
+#define ADDOP_INT(op, value)                                                  \
+        if (UNIT_FAILED(UNIT_Procedure_AddOperation(procedure, op, value))) { \
+            return -1;                                                        \
+        }
 
 #define ADDOP(op) ADDOP_INT(op, 0)
 
-#define ADDOP_CALL(name, argc)                                              \
-    if (UNIT_FAILED(UNIT_Procedure_AddCallName(procedure, name, argc))) {   \
-        return -1;                                                          \
-    }
+#define ADDOP_CALL(name, argc)                                                \
+        if (UNIT_FAILED(UNIT_Procedure_AddCallName(procedure, name, argc))) { \
+            return -1;                                                        \
+        }
 
 #define NEW_NAME(name)                                                          \
-    UNIT_Local name;                                                            \
-    if (UNIT_FAILED(UNIT_Procedure_CreateLocal(procedure, #name, &name))) {        \
-        return -1;                                                              \
-    }
+        UNIT_Local name;                                                        \
+        if (UNIT_FAILED(UNIT_Procedure_CreateLocal(procedure, #name, &name))) { \
+            return -1;                                                          \
+        }
 
-#define ADDOP_STORE_NAME(name)                                                  \
-    if (UNIT_FAILED(UNIT_Procedure_AddStoreName(procedure, name))) {            \
-        return -1;                                                              \
-    }
+#define ADDOP_STORE_NAME(name)                                           \
+        if (UNIT_FAILED(UNIT_Procedure_AddStoreName(procedure, name))) { \
+            return -1;                                                   \
+        }
 
 #define ADDOP_LOAD_NAME(name)                                           \
-    if (UNIT_FAILED(UNIT_Procedure_AddLoadName(procedure, name))) {     \
-        return -1;                                                      \
-    }
+        if (UNIT_FAILED(UNIT_Procedure_AddLoadName(procedure, name))) { \
+            return -1;                                                  \
+        }
 
-#define NEW_JUMP_LABEL(name)                                                    \
-    UNIT_JumpLabel *name = UNIT_Procedure_CreateJumpLabel(procedure, #name);    \
-    if (name == NULL) {                                                         \
-        return -1;                                                              \
-    }
+#define NEW_JUMP_LABEL(name)                                             \
+        UNIT_JumpLabel *name = UNIT_Procedure_CreateJumpLabel(procedure, \
+                                                              #name);    \
+        if (name == NULL) {                                              \
+            return -1;                                                   \
+        }
 
-#define USE_LABEL(name)                                                         \
-    if (UNIT_FAILED(UNIT_Procedure_UseLabel(procedure, name))) {                \
-        return -1;                                                              \
-    }
+#define USE_LABEL(name)                                              \
+        if (UNIT_FAILED(UNIT_Procedure_UseLabel(procedure, name))) { \
+            return -1;                                               \
+        }
 
 #define ADDOP_JUMP(op, name)                                            \
-    if (UNIT_FAILED(UNIT_Procedure_AddJump(procedure, op, name))) {     \
-        return -1;                                                      \
-    }
+        if (UNIT_FAILED(UNIT_Procedure_AddJump(procedure, op, name))) { \
+            return -1;                                                  \
+        }
 
-#define ADDOP_STR(str)                                                      \
-    if (UNIT_FAILED(UNIT_Procedure_AddStringLoad(procedure, str))) {        \
-        return -1;                                                          \
-    }
+#define ADDOP_STR(str)                                                   \
+        if (UNIT_FAILED(UNIT_Procedure_AddStringLoad(procedure, str))) { \
+            return -1;                                                   \
+        }
 
 static int8_t
 codegen_prelude(UNIT_Procedure *procedure)
@@ -166,7 +167,6 @@ codegen_input(UNIT_Procedure *procedure)
     return 0;
 }
 
-
 static int8_t
 codegen_final(UNIT_Procedure *procedure)
 {
@@ -203,55 +203,68 @@ codegen_body(UNIT_Procedure *procedure, FILE *file, int8_t in_loop)
     while ((ch = fgetc(file)) != EOF) {
         switch (ch) {
             #define CODEGEN(name)                               \
-                {                                               \
-                    if (codegen_ ##name (procedure) < 0) {      \
-                        return -1;                              \
-                    }                                           \
-                    break;                                      \
-                }
+                    {                                           \
+                        if (codegen_ ## name (procedure) < 0) { \
+                            return -1;                          \
+                        }                                       \
+                        break;                                  \
+                    }
 
-            case '>': CODEGEN(right);
-            case '<': CODEGEN(left);
-            case '+': CODEGEN(add);
-            case '-': CODEGEN(sub);
-            case '.': CODEGEN(print);
-            case ',': CODEGEN(input);
-            case '[': {
-                NEW_JUMP_LABEL(loop);
-                NEW_JUMP_LABEL(end);
+        case '>': {
+            CODEGEN(right);
+        }
+        case '<': {
+            CODEGEN(left);
+        }
+        case '+': {
+            CODEGEN(add);
+        }
+        case '-': {
+            CODEGEN(sub);
+        }
+        case '.': {
+            CODEGEN(print);
+        }
+        case ',': {
+            CODEGEN(input);
+        }
+        case '[': {
+            NEW_JUMP_LABEL(loop);
+            NEW_JUMP_LABEL(end);
 
-                USE_LABEL(loop);
+            USE_LABEL(loop);
 
-                ADDOP_INT(UNIT_OP_LOAD_LOCAL, 0);
-                ADDOP_INT(UNIT_OP_READ_BYTES, 1);
-                ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
-                // [*ptr, 0]
-                ADDOP(UNIT_OP_COMPARE_EQUAL);
+            ADDOP_INT(UNIT_OP_LOAD_LOCAL, 0);
+            ADDOP_INT(UNIT_OP_READ_BYTES, 1);
+            ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
+            // [*ptr, 0]
+            ADDOP(UNIT_OP_COMPARE_EQUAL);
 
-                // [*ptr == 0]
-                ADDOP_JUMP(UNIT_OP_JUMP_IF_TRUE, end);
-                int8_t result = codegen_body(procedure, file, /*in_loop=*/1);
-                if ((result != 1) && in_loop) {
-                    puts("error: loop was never closed (missing ])");
-                    return -1;
-                }
-
-                ADDOP_JUMP(UNIT_OP_JUMP, loop);
-
-                USE_LABEL(end);
-                break;
+            // [*ptr == 0]
+            ADDOP_JUMP(UNIT_OP_JUMP_IF_TRUE, end);
+            int8_t result = codegen_body(procedure, file, /*in_loop=*/ 1);
+            if ((result != 1) && in_loop) {
+                puts("error: loop was never closed (missing ])");
+                return -1;
             }
-            case ']':
-                return 1; // return to caller's '[' handler
-            default:
-                // Comment character
-                break;
+
+            ADDOP_JUMP(UNIT_OP_JUMP, loop);
+
+            USE_LABEL(end);
+            break;
+        }
+        case ']': {
+            return 1;     // return to caller's '[' handler
+        } default:
+            // Comment character
+            break;
         }
     }
     return 0;
 }
 
-int main(int argc, char **argv)
+int
+main(int argc, char **argv)
 {
     char *path;
     if (argc < 2) {
@@ -285,7 +298,7 @@ int main(int argc, char **argv)
         goto error;
     }
 
-    int8_t result = codegen_body(&procedure, file, /*in_loop=*/0);
+    int8_t result = codegen_body(&procedure, file, /*in_loop=*/ 0);
     if (result < 0) {
         goto error;
     }
@@ -311,14 +324,17 @@ int main(int argc, char **argv)
         goto error;
     }
 
-    UNIT_CompiledProcedure *compiled = UNIT_Compile(&procedure, UNIT_HOST_PLATFORM);
+    UNIT_CompiledProcedure *compiled = UNIT_Compile(&procedure,
+                                                    UNIT_HOST_PLATFORM);
     if (compiled == NULL) {
         goto error;
     }
 
     UNIT_CompiledProcedure_PrintTranslatedIR(compiled, stdout);
 
-    if (UNIT_FAILED(UNIT_CompiledProcedure_WriteObjectFile(compiled, "test.o", UNIT_FORMAT_ELF))) {
+    if (UNIT_FAILED(UNIT_CompiledProcedure_WriteObjectFile(compiled,
+                                                           "test.o",
+                                                           UNIT_FORMAT_ELF))) {
         UNIT_CompiledProcedure_Free(compiled);
         goto error;
     }

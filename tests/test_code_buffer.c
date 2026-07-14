@@ -1,6 +1,7 @@
 #include "test_util.h"
 
-static void test_emit8(UNIT_Context *context)
+static void
+test_emit8(UNIT_Context *context)
 {
     _UNIT_CodeBuffer buf;
     ASSERT_OK(context, _UNIT_CodeBuffer_Init(&buf, context));
@@ -12,7 +13,8 @@ static void test_emit8(UNIT_Context *context)
     _UNIT_CodeBuffer_Clear(&buf);
 }
 
-static void test_emit32(UNIT_Context *context)
+static void
+test_emit32(UNIT_Context *context)
 {
     _UNIT_CodeBuffer buf;
     ASSERT_OK(context, _UNIT_CodeBuffer_Init(&buf, context));
@@ -26,7 +28,8 @@ static void test_emit32(UNIT_Context *context)
     _UNIT_CodeBuffer_Clear(&buf);
 }
 
-static void test_emit64(UNIT_Context *context)
+static void
+test_emit64(UNIT_Context *context)
 {
     _UNIT_CodeBuffer buf;
     ASSERT_OK(context, _UNIT_CodeBuffer_Init(&buf, context));
@@ -37,7 +40,8 @@ static void test_emit64(UNIT_Context *context)
     _UNIT_CodeBuffer_Clear(&buf);
 }
 
-static void test_patch32(UNIT_Context *context)
+static void
+test_patch32(UNIT_Context *context)
 {
     _UNIT_CodeBuffer buf;
     ASSERT_OK(context, _UNIT_CodeBuffer_Init(&buf, context));
@@ -50,7 +54,8 @@ static void test_patch32(UNIT_Context *context)
     _UNIT_CodeBuffer_Clear(&buf);
 }
 
-static void test_reserve(UNIT_Context *context)
+static void
+test_reserve(UNIT_Context *context)
 {
     _UNIT_CodeBuffer buf;
     ASSERT_OK(context, _UNIT_CodeBuffer_Init(&buf, context));
@@ -63,7 +68,8 @@ static void test_reserve(UNIT_Context *context)
     _UNIT_CodeBuffer_Clear(&buf);
 }
 
-static void test_grow(UNIT_Context *context)
+static void
+test_grow(UNIT_Context *context)
 {
     _UNIT_CodeBuffer buf;
     ASSERT_OK(context, _UNIT_CodeBuffer_Init(&buf, context));
@@ -76,7 +82,8 @@ static void test_grow(UNIT_Context *context)
     _UNIT_CodeBuffer_Clear(&buf);
 }
 
-int main(void)
+int
+main(void)
 {
     UNIT_Context context;
     ASSERT(!UNIT_FAILED(UNIT_Context_Init(&context)));

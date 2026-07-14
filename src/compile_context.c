@@ -1,10 +1,13 @@
 #include <unit/internal/compile_context.h>
 
 _UNIT_Relocation *
-new_relocation(UNIT_Context *context, UNIT_Size offset, UNIT_Size symbol_index,
+new_relocation(UNIT_Context *context,
+               UNIT_Size offset,
+               UNIT_Size symbol_index,
                _UNIT_RelocationType type)
 {
-    _UNIT_Relocation *relocation = _UNIT_Alloc(context, sizeof(_UNIT_Relocation));
+    _UNIT_Relocation *relocation = _UNIT_Alloc(context,
+                                               sizeof(_UNIT_Relocation));
     if (relocation == NULL) {
         return NULL;
     }
@@ -16,28 +19,32 @@ new_relocation(UNIT_Context *context, UNIT_Size offset, UNIT_Size symbol_index,
 }
 
 _UNIT_Relocation *
-_UNIT_Relocation_NewCall(UNIT_Context *context, UNIT_Size offset,
+_UNIT_Relocation_NewCall(UNIT_Context *context,
+                         UNIT_Size offset,
                          UNIT_Size symbol_index)
 {
     return new_relocation(context, offset, symbol_index, RELOCATION_CALL);
 }
 
 _UNIT_Relocation *
-_UNIT_Relocation_NewData(UNIT_Context *context, UNIT_Size offset,
+_UNIT_Relocation_NewData(UNIT_Context *context,
+                         UNIT_Size offset,
                          UNIT_Size symbol_index)
 {
     return new_relocation(context, offset, symbol_index, RELOCATION_DATA);
 }
 
 void
-_UNIT_Relocation_Free(UNIT_Context *context, _UNIT_Relocation *relocation)
+_UNIT_Relocation_Free(UNIT_Context *context,
+                      _UNIT_Relocation *relocation)
 {
     assert(relocation != NULL);
     _UNIT_Dealloc(context, relocation);
 }
 
 _UNIT_Symbol *
-_UNIT_Symbol_New(UNIT_Context *context, const char *name)
+_UNIT_Symbol_New(UNIT_Context *context,
+                 const char *name)
 {
     assert(context != NULL);
     assert(name != NULL);
@@ -59,7 +66,8 @@ _UNIT_Symbol_New(UNIT_Context *context, const char *name)
 }
 
 static void
-free_symbol(UNIT_Context *context, void *symbol_ptr)
+free_symbol(UNIT_Context *context,
+            void *symbol_ptr)
 {
     assert(symbol_ptr != NULL);
     _UNIT_Symbol *symbol = (_UNIT_Symbol *)symbol_ptr;
@@ -68,15 +76,22 @@ free_symbol(UNIT_Context *context, void *symbol_ptr)
 }
 
 UNIT_Status
-_UNIT_SymbolTable_Init(_UNIT_SymbolTable *symbol_table, UNIT_Context *context,
+_UNIT_SymbolTable_Init(_UNIT_SymbolTable *symbol_table,
+                       UNIT_Context *context,
                        const _UNIT_Vector *names)
 {
     assert(symbol_table != NULL);
-    if (UNIT_FAILED(_UNIT_Vector_Init(&symbol_table->relocations, context, 16, _UNIT_Dealloc))) {
+    if (UNIT_FAILED(_UNIT_Vector_Init(&symbol_table->relocations,
+                                      context,
+                                      16,
+                                      _UNIT_Dealloc))) {
         return _UNIT_FAIL;
     }
 
-    if (UNIT_FAILED(_UNIT_Vector_Init(&symbol_table->symbols, context, 8, free_symbol))) {
+    if (UNIT_FAILED(_UNIT_Vector_Init(&symbol_table->symbols,
+                                      context,
+                                      8,
+                                      free_symbol))) {
         _UNIT_Vector_Clear(&symbol_table->relocations);
         return _UNIT_FAIL;
     }
@@ -107,11 +122,13 @@ _UNIT_SymbolTable_Clear(_UNIT_SymbolTable *symbol_table)
 
 _UNIT_PendingJump *
 _UNIT_PendingJump_New(UNIT_Context *context,
-                      UNIT_Size patch_offset, UNIT_Size label_index)
+                      UNIT_Size patch_offset,
+                      UNIT_Size label_index)
 {
     assert(patch_offset > 0);
     assert(label_index >= 0);
-    _UNIT_PendingJump *pending_jump = _UNIT_Alloc(context, sizeof(_UNIT_PendingJump));
+    _UNIT_PendingJump *pending_jump = _UNIT_Alloc(context,
+                                                  sizeof(_UNIT_PendingJump));
     if (pending_jump == NULL) {
         return NULL;
     }
@@ -122,23 +139,29 @@ _UNIT_PendingJump_New(UNIT_Context *context,
 }
 
 void
-_UNIT_PendingJump_Free(UNIT_Context *context, _UNIT_PendingJump *pending_jump)
+_UNIT_PendingJump_Free(UNIT_Context *context,
+                       _UNIT_PendingJump *pending_jump)
 {
     assert(pending_jump != NULL);
     _UNIT_Dealloc(context, pending_jump);
 }
 
 UNIT_Status
-_UNIT_JumpTable_Init(_UNIT_JumpTable *jump_table, UNIT_Context *context)
+_UNIT_JumpTable_Init(_UNIT_JumpTable *jump_table,
+                     UNIT_Context *context)
 {
     assert(jump_table != NULL);
     if (UNIT_FAILED(_UNIT_Vector_Init(&jump_table->pending_jumps,
-                                      context, 4,
-                                      (UNIT_Destructor)_UNIT_PendingJump_Free))) {
+                                      context,
+                                      4,
+                                      (UNIT_Destructor)_UNIT_PendingJump_Free)))
+    {
         return _UNIT_FAIL;
     }
 
-    if (UNIT_FAILED(_UNIT_SizeMap_Init(&jump_table->label_offsets, context, 4))) {
+    if (UNIT_FAILED(_UNIT_SizeMap_Init(&jump_table->label_offsets,
+                                       context,
+                                       4))) {
         _UNIT_Vector_Clear(&jump_table->pending_jumps);
         return _UNIT_FAIL;
     }
@@ -155,14 +178,18 @@ _UNIT_JumpTable_Clear(_UNIT_JumpTable *jump_table)
 }
 
 UNIT_Status
-_UNIT_StringData_Init(_UNIT_StringData *string_data, UNIT_Context *context)
+_UNIT_StringData_Init(_UNIT_StringData *string_data,
+                      UNIT_Context *context)
 {
     assert(string_data != NULL);
-    if (UNIT_FAILED(_UNIT_SizeMap_Init(&string_data->string_offsets, context, 8))) {
+    if (UNIT_FAILED(_UNIT_SizeMap_Init(&string_data->string_offsets,
+                                       context,
+                                       8))) {
         return _UNIT_FAIL;
     }
 
-    if (UNIT_FAILED(_UNIT_CodeBuffer_Init(&string_data->constant_buffer, context))) {
+    if (UNIT_FAILED(_UNIT_CodeBuffer_Init(&string_data->constant_buffer,
+                                          context))) {
         _UNIT_SizeMap_Clear(&string_data->string_offsets);
         return _UNIT_FAIL;
     }
@@ -179,7 +206,8 @@ _UNIT_StringData_Clear(_UNIT_StringData *string_data)
 }
 
 void
-init_stack_frame(_UNIT_StackFrame *frame, UNIT_Size reserved_slots)
+init_stack_frame(_UNIT_StackFrame *frame,
+                 UNIT_Size reserved_slots)
 {
     assert(frame != NULL);
     frame->next_slot = reserved_slots;
@@ -206,7 +234,8 @@ _UNIT_StackFrame_AllocateSlot(_UNIT_StackFrame *frame)
 }
 
 void
-_UNIT_StackFrame_FreeSlotID(_UNIT_StackFrame *frame, UNIT_Size slot_id)
+_UNIT_StackFrame_FreeSlotID(_UNIT_StackFrame *frame,
+                            UNIT_Size slot_id)
 {
     assert(frame != NULL);
     assert(slot_id >= frame->reserved_slots); // can't free memory variable slots
@@ -215,7 +244,8 @@ _UNIT_StackFrame_FreeSlotID(_UNIT_StackFrame *frame, UNIT_Size slot_id)
 }
 
 void
-_UNIT_StackFrame_FreeSlot(_UNIT_StackFrame *frame, UNIT_Size slot_id)
+_UNIT_StackFrame_FreeSlot(_UNIT_StackFrame *frame,
+                          UNIT_Size slot_id)
 {
     assert(frame != NULL);
     assert(slot_id >= 0);
@@ -268,20 +298,23 @@ _UNIT_CompileContext_Init(_UNIT_CompileContext *compile_context,
     }
 
     if (UNIT_FAILED(_UNIT_SymbolTable_Init(&compile_context->symbol_table,
-                                           context, &procedure->_symbols))) {
+                                           context,
+                                           &procedure->_symbols))) {
         _UNIT_CodeBuffer_Clear(&compile_context->buffer);
         _UNIT_StringData_Clear(&compile_context->string_data);
         return _UNIT_FAIL;
     }
 
-    if (UNIT_FAILED(_UNIT_JumpTable_Init(&compile_context->jump_table, context))) {
+    if (UNIT_FAILED(_UNIT_JumpTable_Init(&compile_context->jump_table,
+                                         context))) {
         _UNIT_CodeBuffer_Clear(&compile_context->buffer);
         _UNIT_StringData_Clear(&compile_context->string_data);
         _UNIT_SymbolTable_Clear(&compile_context->symbol_table);
         return _UNIT_FAIL;
     }
 
-    init_stack_frame(&compile_context->stack_frame, translation->num_memory_slots);
+    init_stack_frame(&compile_context->stack_frame,
+                     translation->num_memory_slots);
     return _UNIT_OK;
 }
 

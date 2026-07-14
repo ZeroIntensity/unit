@@ -14,20 +14,34 @@
 
 // wyhash final3 - https://github.com/wangyi-fudan/wyhash
 // Public domain
-static inline uint64_t _wyrot(uint64_t x) { return (x >> 32) | (x << 32); }
-static inline void _wymix(uint64_t *a, uint64_t *b) {
+static inline uint64_t
+_wyrot(uint64_t x)
+{
+    return (x >> 32) | (x << 32);
+}
+
+static inline void
+_wymix(uint64_t *a,
+       uint64_t *b) {
     *a ^= *b;
     __uint128_t r = (__uint128_t)(*a) * (*b);
     *a = (uint64_t)r;
     *b = (uint64_t)(r >> 64);
 }
-static inline uint64_t _wyr8(const uint8_t *p) {
+
+static inline uint64_t
+_wyr8(const uint8_t *p) {
     uint64_t v; memcpy(&v, p, 8); return v;
 }
-static inline uint64_t _wyr4(const uint8_t *p) {
+
+static inline uint64_t
+_wyr4(const uint8_t *p) {
     uint32_t v; memcpy(&v, p, 4); return v;
 }
-static inline uint64_t _wyr3(const uint8_t *p, size_t k) {
+
+static inline uint64_t
+_wyr3(const uint8_t *p,
+      size_t k) {
     return (((uint64_t)p[0]) << 16) | (((uint64_t)p[k >> 1]) << 8) | p[k - 1];
 }
 
@@ -47,7 +61,8 @@ _UNIT_Map_HashString(const void *key)
     if (LIKELY(len <= 16)) {
         if (LIKELY(len >= 4)) {
             a = (_wyr4(p) << 32) | _wyr4(p + ((len >> 3) << 2));
-            b = (_wyr4(p + len - 4) << 32) | _wyr4(p + len - 4 - ((len >> 3) << 2));
+            b = (_wyr4(p + len - 4) <<
+                 32) | _wyr4(p + len - 4 - ((len >> 3) << 2));
         } else if (LIKELY(len > 0)) {
             a = _wyr3(p, len);
             b = 0;
@@ -59,7 +74,7 @@ _UNIT_Map_HashString(const void *key)
         if (UNLIKELY(i > 48)) {
             uint64_t see1 = seed, see2 = seed;
             do {
-                uint64_t r0 = _wyr8(p),      r1 = _wyr8(p + 8);
+                uint64_t r0 = _wyr8(p), r1 = _wyr8(p + 8);
                 uint64_t r2 = _wyr8(p + 16), r3 = _wyr8(p + 24);
                 uint64_t r4 = _wyr8(p + 32), r5 = _wyr8(p + 40);
                 seed ^= WY_SECRET0; see1 ^= WY_SECRET1; see2 ^= WY_SECRET2;
@@ -97,21 +112,26 @@ _UNIT_Map_HashDirect(const void *key)
 }
 
 bool
-_UNIT_Map_CompareEqual(const void *a, const void *b)
+_UNIT_Map_CompareEqual(const void *a,
+                       const void *b)
 {
     return a == b;
 }
 
 bool
-_UNIT_Map_CompareString(const void *a, const void *b)
+_UNIT_Map_CompareString(const void *a,
+                        const void *b)
 {
     return !strcmp(a, b);
 }
 
 UNIT_Status
-_UNIT_Map_Init(_UNIT_Map *map, UNIT_Context *context,
-               UNIT_Size inital_capacity, _UNIT_Map_Compare compare_key,
-               _UNIT_Map_Hash hash_key, UNIT_Destructor dealloc_key,
+_UNIT_Map_Init(_UNIT_Map *map,
+               UNIT_Context *context,
+               UNIT_Size inital_capacity,
+               _UNIT_Map_Compare compare_key,
+               _UNIT_Map_Hash hash_key,
+               UNIT_Destructor dealloc_key,
                UNIT_Destructor dealloc_value)
 {
     map->context = context;
@@ -129,14 +149,12 @@ _UNIT_Map_Init(_UNIT_Map *map, UNIT_Context *context,
 }
 
 static int8_t
-set_entry(
-    _UNIT_Map *map,
-    _UNIT_MapPair *items,
-    UNIT_Size new_capacity,
-    void *key,
-    void *value,
-    uint64_t hash
-) {
+set_entry(_UNIT_Map *map,
+          _UNIT_MapPair *items,
+          UNIT_Size new_capacity,
+          void *key,
+          void *value,
+          uint64_t hash) {
     assert(map != NULL);
     assert(items != NULL);
     assert(key != NULL);
@@ -175,10 +193,12 @@ set_entry(
 }
 
 static UNIT_Status
-expand(_UNIT_Map *map) {
+expand(_UNIT_Map *map)
+{
     assert(map != NULL);
     UNIT_Size new_capacity = map->capacity * 2;
-    _UNIT_MapPair *new_items = _UNIT_Calloc(map->context, new_capacity,
+    _UNIT_MapPair *new_items = _UNIT_Calloc(map->context,
+                                            new_capacity,
                                             sizeof(_UNIT_MapPair));
     if (UNLIKELY(new_items == NULL)) {
         return _UNIT_FAIL;
@@ -205,7 +225,8 @@ expand(_UNIT_Map *map) {
 }
 
 void *
-_UNIT_Map_Get(const _UNIT_Map *map, const void *key)
+_UNIT_Map_Get(const _UNIT_Map *map,
+              const void *key)
 {
     assert(map != NULL);
     assert(key != NULL);
@@ -232,7 +253,9 @@ _UNIT_Map_Get(const _UNIT_Map *map, const void *key)
 }
 
 UNIT_Status
-_UNIT_Map_Set(_UNIT_Map *map, void *key, void *value) {
+_UNIT_Map_Set(_UNIT_Map *map,
+              void *key,
+              void *value) {
     assert(map != NULL);
     assert(key != NULL);
 

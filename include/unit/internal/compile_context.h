@@ -25,11 +25,13 @@ typedef struct {
 } _UNIT_Relocation;
 
 _UNIT_Relocation *
-_UNIT_Relocation_NewCall(UNIT_Context *context, UNIT_Size offset,
+_UNIT_Relocation_NewCall(UNIT_Context *context,
+                         UNIT_Size offset,
                          UNIT_Size symbol_index);
 
 _UNIT_Relocation *
-_UNIT_Relocation_NewData(UNIT_Context *context, UNIT_Size offset,
+_UNIT_Relocation_NewData(UNIT_Context *context,
+                         UNIT_Size offset,
                          UNIT_Size symbol_index);
 
 void
@@ -49,7 +51,8 @@ typedef struct {
 } _UNIT_SymbolTable;
 
 UNIT_Status
-_UNIT_SymbolTable_Init(_UNIT_SymbolTable *symbol_table, UNIT_Context *context,
+_UNIT_SymbolTable_Init(_UNIT_SymbolTable *symbol_table,
+                       UNIT_Context *context,
                        const _UNIT_Vector *names);
 
 void
@@ -61,7 +64,8 @@ typedef struct {
 } _UNIT_PendingJump;
 
 _UNIT_PendingJump *
-_UNIT_PendingJump_New(UNIT_Context *context, UNIT_Size patch_offset,
+_UNIT_PendingJump_New(UNIT_Context *context,
+                      UNIT_Size patch_offset,
                       UNIT_Size label_index);
 
 void

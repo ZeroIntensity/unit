@@ -17,14 +17,14 @@ typedef enum {
     UNIT_ERROR_UNSUPPORTED_PLATFORM
 } UNIT_ErrorCode;
 
-#define SIZE_CLASS(size) \
-    _UNIT_Freelist *freelist_ ##size
-
 typedef struct _UNIT_Freelist _UNIT_Freelist;
 
 struct _UNIT_Freelist {
     _UNIT_Freelist *next;
 };
+
+#define SIZE_CLASS(size) \
+        _UNIT_Freelist *freelist_ ## size
 
 typedef struct {
     struct {

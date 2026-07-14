@@ -2,7 +2,8 @@
 #include <unit/internal/size_map.h>
 
 UNIT_Status
-_UNIT_SizeMap_Init(_UNIT_SizeMap *size_map, UNIT_Context *context,
+_UNIT_SizeMap_Init(_UNIT_SizeMap *size_map,
+                   UNIT_Context *context,
                    UNIT_Size inital_capacity)
 {
     assert(size_map != NULL);
@@ -11,7 +12,8 @@ _UNIT_SizeMap_Init(_UNIT_SizeMap *size_map, UNIT_Context *context,
     size_map->context = context;
     size_map->len = 0;
     size_map->capacity = inital_capacity;
-    size_map->items = _UNIT_Calloc(context, inital_capacity,
+    size_map->items = _UNIT_Calloc(context,
+                                   inital_capacity,
                                    sizeof(_UNIT_SizeMapPair));
     if (size_map->items == NULL) {
         return _UNIT_FAIL;
@@ -23,8 +25,7 @@ static int8_t
 set_size_map_entry(
     _UNIT_SizeMap *size_map,
     UNIT_Size key,
-    UNIT_Size value
-) {
+    UNIT_Size value) {
     assert(size_map != NULL);
     UNIT_Size index = key & (size_map->capacity - 1);
     UNIT_Size current_index = index;
@@ -55,7 +56,8 @@ expand(_UNIT_SizeMap *size_map) {
     // TODO: Check for overflow
     UNIT_Size new_capacity = size_map->capacity * 2;
     _UNIT_SizeMapPair *new_items = _UNIT_Calloc(size_map->context,
-                                                new_capacity, sizeof(_UNIT_SizeMapPair));
+                                                new_capacity,
+                                                sizeof(_UNIT_SizeMapPair));
     if (new_items == NULL) {
         return _UNIT_FAIL;
     }
@@ -77,7 +79,9 @@ expand(_UNIT_SizeMap *size_map) {
 }
 
 UNIT_Status
-_UNIT_SizeMap_Set(_UNIT_SizeMap *size_map, UNIT_Size key, UNIT_Size value)
+_UNIT_SizeMap_Set(_UNIT_SizeMap *size_map,
+                  UNIT_Size key,
+                  UNIT_Size value)
 {
     assert(size_map != NULL);
 
@@ -98,7 +102,9 @@ _UNIT_SizeMap_Set(_UNIT_SizeMap *size_map, UNIT_Size key, UNIT_Size value)
 }
 
 UNIT_Status
-_UNIT_SizeMap_Get(const _UNIT_SizeMap *size_map, UNIT_Size key, UNIT_Size *value)
+_UNIT_SizeMap_Get(const _UNIT_SizeMap *size_map,
+                  UNIT_Size key,
+                  UNIT_Size *value)
 {
     assert(size_map != NULL);
     UNIT_Size index = (UNIT_Size)(key & (uint64_t)(size_map->capacity - 1));
@@ -130,7 +136,8 @@ _UNIT_SizeMap_Clear(_UNIT_SizeMap *size_map)
 }
 
 void
-_UNIT_SizeMap_Remove(_UNIT_SizeMap *size_map, UNIT_Size key)
+_UNIT_SizeMap_Remove(_UNIT_SizeMap *size_map,
+                     UNIT_Size key)
 {
     assert(size_map != NULL);
     UNIT_Size index = (UNIT_Size)(key & (uint64_t)(size_map->capacity - 1));
@@ -140,12 +147,18 @@ _UNIT_SizeMap_Remove(_UNIT_SizeMap *size_map, UNIT_Size key)
         if (!size_map->items[current].is_populated) {
             return;
         }
-        if (size_map->items[current].key == key) break;
+        if (size_map->items[current].key == key) {
+            break;
+        }
         current++;
-        if (current == size_map->capacity) current = 0;
+        if (current == size_map->capacity) {
+            current = 0;
+        }
     } while (current != index);
 
-    if (!size_map->items[current].is_populated) return;
+    if (!size_map->items[current].is_populated) {
+        return;
+    }
 
     size_map->items[current].is_populated = 0;
     --size_map->len;

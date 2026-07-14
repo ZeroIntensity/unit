@@ -21,7 +21,8 @@ typedef struct {
 } _UNIT_Set;
 
 UNIT_Status
-_UNIT_Set_Init(_UNIT_Set *set, UNIT_Context *context,
+_UNIT_Set_Init(_UNIT_Set *set,
+               UNIT_Context *context,
                UNIT_Size initial_capacity);
 
 void

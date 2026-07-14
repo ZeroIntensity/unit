@@ -2,7 +2,8 @@
 #include <unit/internal/size_vector.h>
 
 UNIT_Status
-_UNIT_SizeVector_Init(_UNIT_SizeVector *size_vector, UNIT_Context *context,
+_UNIT_SizeVector_Init(_UNIT_SizeVector *size_vector,
+                      UNIT_Context *context,
                       UNIT_Size initial_capacity)
 {
     assert(size_vector != NULL);
@@ -12,7 +13,8 @@ _UNIT_SizeVector_Init(_UNIT_SizeVector *size_vector, UNIT_Context *context,
         initial_capacity = 1;
     }
     size_vector->items = _UNIT_Calloc(context,
-                                      sizeof(UNIT_Size), initial_capacity);
+                                      sizeof(UNIT_Size),
+                                      initial_capacity);
     if (size_vector->items == NULL) {
         return _UNIT_FAIL;
     }
@@ -29,13 +31,16 @@ _UNIT_SizeVector_Clear(_UNIT_SizeVector *size_vector)
 }
 
 UNIT_Status
-_UNIT_SizeVector_Append(_UNIT_SizeVector *size_vector, UNIT_Size item)
+_UNIT_SizeVector_Append(_UNIT_SizeVector *size_vector,
+                        UNIT_Size item)
 {
     assert(size_vector != NULL);
     if (size_vector->length == size_vector->capacity) {
         size_vector->capacity *= 3;
-        UNIT_Size *new_items = _UNIT_Realloc(size_vector->context, size_vector->items,
-                                             sizeof(UNIT_Size) * size_vector->capacity);
+        UNIT_Size *new_items = _UNIT_Realloc(size_vector->context,
+                                             size_vector->items,
+                                             sizeof(UNIT_Size) *
+                                             size_vector->capacity);
         if (new_items == NULL) {
             --size_vector->length;
             return _UNIT_FAIL;

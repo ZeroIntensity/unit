@@ -19,7 +19,8 @@ freelist_pop(_UNIT_Freelist **freelist)
 }
 
 static void
-freelist_push(void *ptr, _UNIT_Freelist **freelist)
+freelist_push(void *ptr,
+              _UNIT_Freelist **freelist)
 {
     _UNIT_Freelist *node = ptr;
     node->next = *freelist;
@@ -31,12 +32,15 @@ typedef struct {
 } UNIT_FreelistHeader;
 
 static inline void *
-malloc_with_header(UNIT_Context *context, UNIT_Size size)
+malloc_with_header(UNIT_Context *context,
+                   UNIT_Size size)
 {
     UNIT_Size actual_size = size + sizeof(UNIT_FreelistHeader);
     UNIT_FreelistHeader *header = malloc(actual_size);
     if (header == NULL) {
-        _UNIT_SetErrorFormat(context, UNIT_ERROR_NO_MEMORY, "failed to allocate %ld bytes",
+        _UNIT_SetErrorFormat(context,
+                             UNIT_ERROR_NO_MEMORY,
+                             "failed to allocate %ld bytes",
                              actual_size);
         return NULL;
     }
@@ -46,7 +50,8 @@ malloc_with_header(UNIT_Context *context, UNIT_Size size)
 }
 
 static inline void *
-freelist_pop_or_malloc(UNIT_Context *context, _UNIT_Freelist **freelist,
+freelist_pop_or_malloc(UNIT_Context *context,
+                       _UNIT_Freelist **freelist,
                        UNIT_Size size)
 {
     assert(freelist != NULL);
@@ -63,10 +68,10 @@ freelist_pop_or_malloc(UNIT_Context *context, _UNIT_Freelist **freelist,
 static inline UNIT_Size
 round_size(UNIT_Size size_bytes)
 {
-#define SIZE_CLASS(size)        \
-    if (size_bytes <= size) {   \
-        return size;            \
-    }
+#define SIZE_CLASS(size)          \
+        if (size_bytes <= size) { \
+            return size;          \
+        }
 
     SIZE_CLASS(8);
     SIZE_CLASS(16);
@@ -79,7 +84,8 @@ round_size(UNIT_Size size_bytes)
 }
 
 void *
-_UNIT_Alloc(UNIT_Context *context, UNIT_Size raw_size)
+_UNIT_Alloc(UNIT_Context *context,
+            UNIT_Size raw_size)
 {
     assert(context != NULL);
     assert(raw_size > 0);
@@ -87,11 +93,13 @@ _UNIT_Alloc(UNIT_Context *context, UNIT_Size raw_size)
     assert(size >= sizeof(_UNIT_Freelist));
 
     switch (size) {
-#define SIZE_CLASS(size)                                                                        \
-    case size: {                                                                                \
-        return freelist_pop_or_malloc(context,                                                  \
-                                      &context->_internal.allocator.freelist_ ##size, size);    \
-    }
+#define SIZE_CLASS(size)                                                     \
+        case size: {                                                         \
+                return freelist_pop_or_malloc(context,                       \
+                                              &context->_internal.allocator. \
+                                              freelist_ ## size,             \
+                                              size);                         \
+        }
 
     SIZE_CLASS(8);
     SIZE_CLASS(16);
@@ -101,42 +109,48 @@ _UNIT_Alloc(UNIT_Context *context, UNIT_Size raw_size)
     SIZE_CLASS(256);
 
 #undef SIZE_CLASS
-    default:
+    default: {
         return malloc_with_header(context, size);
     }
-}
-
-void
-_UNIT_Dealloc(UNIT_Context *context, void *ptr)
-{
-    assert(context != NULL);
-    assert(ptr != NULL);
-    UNIT_FreelistHeader *header = ((UNIT_FreelistHeader *)ptr) - 1;
-    assert(header->size_class > 0);
-
-    switch (header->size_class) {
-#define SIZE_CLASS(size)                                                        \
-    case size: {                                                                \
-        freelist_push(header, &context->_internal.allocator.freelist_ ##size);  \
-        return;                                                                 \
     }
 
-    SIZE_CLASS(8);
-    SIZE_CLASS(16);
-    SIZE_CLASS(32);
-    SIZE_CLASS(64);
-    SIZE_CLASS(128);
-    SIZE_CLASS(256);
+    void
+    _UNIT_Dealloc(UNIT_Context *context,
+                  void *ptr)
+    {
+        assert(context != NULL);
+        assert(ptr != NULL);
+        UNIT_FreelistHeader *header = ((UNIT_FreelistHeader *)ptr) - 1;
+        assert(header->size_class > 0);
+
+        switch (header->size_class) {
+#define SIZE_CLASS(size)                                                        \
+        case size: {                                                            \
+                freelist_push(header,                                           \
+                              &context->_internal.allocator.freelist_ ## size); \
+                return;                                                         \
+        }
+
+        SIZE_CLASS(8);
+        SIZE_CLASS(16);
+        SIZE_CLASS(32);
+        SIZE_CLASS(64);
+        SIZE_CLASS(128);
+        SIZE_CLASS(256);
+        }
 
 #undef SIZE_CLASS
-    default:
-        free(header);
-        return;
+        default:
+            free(header);
+            return;
     }
+
 }
 
 void *
-_UNIT_Calloc(UNIT_Context *context, UNIT_Size count, UNIT_Size size)
+_UNIT_Calloc(UNIT_Context *context,
+             UNIT_Size count,
+             UNIT_Size size)
 {
     assert(count > 0);
     assert(size > 0);
@@ -156,7 +170,9 @@ _UNIT_Calloc(UNIT_Context *context, UNIT_Size count, UNIT_Size size)
 }
 
 void *
-_UNIT_Realloc(UNIT_Context *context, void *ptr, UNIT_Size new_size)
+_UNIT_Realloc(UNIT_Context *context,
+              void *ptr,
+              UNIT_Size new_size)
 {
     assert(ptr != NULL);
     assert(new_size > 0);
@@ -183,7 +199,8 @@ _UNIT_Realloc(UNIT_Context *context, void *ptr, UNIT_Size new_size)
 }
 
 char *
-_UNIT_StrDup(UNIT_Context *context, const char *src)
+_UNIT_StrDup(UNIT_Context *context,
+             const char *src)
 {
     assert(context != NULL);
     assert(src != NULL);
@@ -214,7 +231,7 @@ _UNIT_ClearFreelists(UNIT_Context *context)
 {
     assert(context != NULL);
 #define SIZE_CLASS(size) \
-    clear_freelist(&context->_internal.allocator.freelist_ ##size);
+        clear_freelist(&context->_internal.allocator.freelist_ ## size);
 
     SIZE_CLASS(8);
     SIZE_CLASS(16);

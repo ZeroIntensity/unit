@@ -21,7 +21,8 @@ _UNIT_RegisterAllocator_Init(_UNIT_RegisterAllocator *allocator,
     assert(num_registers > 0);
     UNIT_Context *context = translation->context;
     assert(context != NULL);
-    if (UNIT_FAILED(_UNIT_SizeMap_Init(&allocator->assignments, context,
+    if (UNIT_FAILED(_UNIT_SizeMap_Init(&allocator->assignments,
+                                       context,
                                        num_registers))) {
         return _UNIT_FAIL;
     }
@@ -47,8 +48,10 @@ _UNIT_RegisterAllocator_Clear(_UNIT_RegisterAllocator *allocator)
 }
 
 static void
-free_dead_registers(_UNIT_RegisterAllocator *allocator, _UNIT_BasicBlock *block,
-                    UNIT_Size index, _UNIT_SizeSet *registers_in_use)
+free_dead_registers(_UNIT_RegisterAllocator *allocator,
+                    _UNIT_BasicBlock *block,
+                    UNIT_Size index,
+                    _UNIT_SizeSet *registers_in_use)
 {
     _UNIT_SizeMap *assignments = &allocator->assignments;
 
@@ -57,19 +60,20 @@ free_dead_registers(_UNIT_RegisterAllocator *allocator, _UNIT_BasicBlock *block,
     UNIT_Size remove_count = 0;
 
     _UNIT_SizeMap_ITER(assignments, location, register_id);
-        if (_UNIT_SizeSet_Contains(&block->liveness.alive_at_end, location)) {
-            continue;
-        }
+    if (_UNIT_SizeSet_Contains(&block->liveness.alive_at_end, location)) {
+        continue;
+    }
 
-        UNIT_Size last;
-        if (!UNIT_FAILED(_UNIT_SizeMap_Get(&block->liveness.last_uses,
-                                           location, &last))) {
-            if (last < index) {
-                to_remove[remove_count] = location;
-                to_remove_regs[remove_count] = register_id;
-                remove_count++;
-            }
+    UNIT_Size last;
+    if (!UNIT_FAILED(_UNIT_SizeMap_Get(&block->liveness.last_uses,
+                                       location,
+                                       &last))) {
+        if (last < index) {
+            to_remove[remove_count] = location;
+            to_remove_regs[remove_count] = register_id;
+            remove_count++;
         }
+    }
     _UNIT_SizeMap_END_ITER();
 
     for (UNIT_Size i = 0; i < remove_count; ++i) {
@@ -96,18 +100,24 @@ potentially_rewrite_item(_UNIT_RegisterAllocator *allocator,
     if (item->type == _UNIT_TYPE_LOCATION) {
         UNIT_Size register_id;
         UNIT_Size slot_id;
-        if (!UNIT_FAILED(_UNIT_SizeMap_Get(assignments, item->value,
+        if (!UNIT_FAILED(_UNIT_SizeMap_Get(assignments,
+                                           item->value,
                                            &register_id))) {
             item->type = _UNIT_TYPE_REGISTER;
             item->value = register_id;
-        } else if (!UNIT_FAILED(_UNIT_SizeMap_Get(spills, item->value, &slot_id))) {
+        } else if (!UNIT_FAILED(_UNIT_SizeMap_Get(spills,
+                                                  item->value,
+                                                  &slot_id))) {
             item->type = _UNIT_TYPE_MEMORY;
             item->value = slot_id;
         } else {
             // Spill :(
             item->type = _UNIT_TYPE_MEMORY;
-            UNIT_Size new_slot_id = _UNIT_StackFrame_AllocateSlotID(allocator->stack_frame);
-            if (UNIT_FAILED(_UNIT_SizeMap_Set(spills, item->value, new_slot_id))) {
+            UNIT_Size new_slot_id =
+                _UNIT_StackFrame_AllocateSlotID(allocator->stack_frame);
+            if (UNIT_FAILED(_UNIT_SizeMap_Set(spills,
+                                              item->value,
+                                              new_slot_id))) {
                 return _UNIT_FAIL;
             }
 
@@ -137,18 +147,22 @@ assign_destination_register(_UNIT_RegisterAllocator *allocator,
         return;
     }
 
-    _UNIT_MachineItem *item = _UNIT_MachineDestination_GetPointer(op->destination);
+    _UNIT_MachineItem *item =
+        _UNIT_MachineDestination_GetPointer(op->destination);
     if (item->type != _UNIT_TYPE_LOCATION) {
         return;
     }
 
     UNIT_Size location = item->value;
     UNIT_Size existing;
-    if (!UNIT_FAILED(_UNIT_SizeMap_Get(&allocator->assignments, location, &existing))) {
+    if (!UNIT_FAILED(_UNIT_SizeMap_Get(&allocator->assignments,
+                                       location,
+                                       &existing))) {
         return;
     }
 
-    for (UNIT_Size register_id = 0; register_id < allocator->num_registers; ++register_id) {
+    for (UNIT_Size register_id = 0; register_id < allocator->num_registers;
+         ++register_id) {
         if (!_UNIT_SizeSet_Contains(registers_in_use, register_id)) {
             _UNIT_SizeMap_Set(&allocator->assignments, location, register_id);
             _UNIT_SizeSet_Add(registers_in_use, register_id);
@@ -166,31 +180,34 @@ allocate_registers_for_block(_UNIT_RegisterAllocator *allocator,
     _UNIT_SizeMap *assignments = &allocator->assignments;
 
     _UNIT_SizeSet registers_in_use;
-    if (UNIT_FAILED(_UNIT_SizeSet_Init(&registers_in_use, block->context,
-                                        allocator->num_registers))) {
+    if (UNIT_FAILED(_UNIT_SizeSet_Init(&registers_in_use,
+                                       block->context,
+                                       allocator->num_registers))) {
         return _UNIT_FAIL;
     }
 
     _UNIT_SizeSet_ITER(&block->liveness.alive_at_start, location);
-        UNIT_Size register_id;
-        if (!UNIT_FAILED(_UNIT_SizeMap_Get(assignments, location,
-                                        &register_id))) {
-            _UNIT_SizeSet_Add(&registers_in_use, register_id);
-        } else {
-            for (UNIT_Size reg_id = 0; reg_id < allocator->num_registers; ++reg_id) {
-                if (!_UNIT_SizeSet_Contains(&registers_in_use, reg_id)) {
-                    _UNIT_SizeMap_Set(assignments, location, reg_id);
-                    _UNIT_SizeSet_Add(&registers_in_use, reg_id);
-                    break;
-                }
+    UNIT_Size register_id;
+    if (!UNIT_FAILED(_UNIT_SizeMap_Get(assignments,
+                                       location,
+                                       &register_id))) {
+        _UNIT_SizeSet_Add(&registers_in_use, register_id);
+    } else {
+        for (UNIT_Size reg_id = 0; reg_id < allocator->num_registers;
+             ++reg_id) {
+            if (!_UNIT_SizeSet_Contains(&registers_in_use, reg_id)) {
+                _UNIT_SizeMap_Set(assignments, location, reg_id);
+                _UNIT_SizeSet_Add(&registers_in_use, reg_id);
+                break;
             }
         }
+    }
     _UNIT_SizeSet_END_ITER();
 
     UNIT_Size size = _UNIT_Vector_SIZE(&block->instructions);
     for (UNIT_Size index = 0; index < size; ++index) {
         _UNIT_MachineOperation *op = _UNIT_Vector_GET(&block->instructions,
-                                                       index);
+                                                      index);
 
         potentially_rewrite_item(allocator, op->argument_1);
         potentially_rewrite_item(allocator, op->argument_2);
@@ -199,7 +216,8 @@ allocate_registers_for_block(_UNIT_RegisterAllocator *allocator,
 
         assign_destination_register(allocator, op, &registers_in_use);
 
-        _UNIT_MachineItem *dest_item = _UNIT_MachineDestination_GetPointerNullable(op->destination);
+        _UNIT_MachineItem *dest_item =
+            _UNIT_MachineDestination_GetPointerNullable(op->destination);
         if (UNIT_FAILED(potentially_rewrite_item(allocator, dest_item))) {
             return _UNIT_FAIL;
         }
@@ -218,13 +236,17 @@ _UNIT_Translation_AllocateRegisters(_UNIT_Translation *translation,
     assert(compile_context != NULL);
     assert(num_registers > 0);
     _UNIT_RegisterAllocator allocator;
-    if (UNIT_FAILED(_UNIT_RegisterAllocator_Init(&allocator, translation, compile_context, num_registers))) {
+    if (UNIT_FAILED(_UNIT_RegisterAllocator_Init(&allocator,
+                                                 translation,
+                                                 compile_context,
+                                                 num_registers))) {
         return _UNIT_FAIL;
     }
 
     UNIT_Size size = _UNIT_Vector_SIZE(&translation->blocks);
     for (UNIT_Size index = 0; index < size; ++index) {
-        _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks, index);
+        _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks,
+                                                   index);
         if (UNIT_FAILED(allocate_registers_for_block(&allocator, block))) {
             _UNIT_RegisterAllocator_Clear(&allocator);
             return _UNIT_FAIL;

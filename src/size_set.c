@@ -3,13 +3,16 @@
 #include <unit/internal/size_set.h>
 
 UNIT_Status
-_UNIT_SizeSet_Init(_UNIT_SizeSet *size_set, UNIT_Context *context,
+_UNIT_SizeSet_Init(_UNIT_SizeSet *size_set,
+                   UNIT_Context *context,
                    UNIT_Size inital_capacity)
 {
     size_set->context = context;
     size_set->len = 0;
     size_set->capacity = inital_capacity;
-    size_set->items = _UNIT_Calloc(context, inital_capacity, sizeof(_UNIT_SizeSetItem));
+    size_set->items = _UNIT_Calloc(context,
+                                   inital_capacity,
+                                   sizeof(_UNIT_SizeSetItem));
     if (size_set->items == NULL) {
         return _UNIT_FAIL;
     }
@@ -19,8 +22,7 @@ _UNIT_SizeSet_Init(_UNIT_SizeSet *size_set, UNIT_Context *context,
 static int8_t
 set_size_set_entry(
     _UNIT_SizeSet *size_set,
-    UNIT_Size value
-) {
+    UNIT_Size value) {
     assert(size_set != NULL);
     UNIT_Size index = value & (size_set->capacity - 1);
     UNIT_Size current_index = index;
@@ -51,7 +53,8 @@ expand(_UNIT_SizeSet *size_set) {
     // TODO: Check for overflow
     UNIT_Size new_capacity = size_set->capacity * 2;
     _UNIT_SizeSetItem *new_items = _UNIT_Calloc(size_set->context,
-                                                new_capacity, sizeof(_UNIT_SizeSetItem));
+                                                new_capacity,
+                                                sizeof(_UNIT_SizeSetItem));
     if (new_items == NULL) {
         return _UNIT_FAIL;
     }
@@ -73,7 +76,8 @@ expand(_UNIT_SizeSet *size_set) {
 }
 
 UNIT_Status
-_UNIT_SizeSet_Add(_UNIT_SizeSet *size_set, UNIT_Size value)
+_UNIT_SizeSet_Add(_UNIT_SizeSet *size_set,
+                  UNIT_Size value)
 {
     assert(size_set != NULL);
 
@@ -93,7 +97,8 @@ _UNIT_SizeSet_Add(_UNIT_SizeSet *size_set, UNIT_Size value)
 }
 
 int8_t
-_UNIT_SizeSet_Contains(const _UNIT_SizeSet *size_set, UNIT_Size value)
+_UNIT_SizeSet_Contains(const _UNIT_SizeSet *size_set,
+                       UNIT_Size value)
 {
     assert(size_set != NULL);
     UNIT_Size index = (UNIT_Size)(value & (uint64_t)(size_set->capacity - 1));
@@ -124,7 +129,8 @@ _UNIT_SizeSet_Clear(_UNIT_SizeSet *size_set)
 }
 
 void
-_UNIT_SizeSet_Remove(_UNIT_SizeSet *size_set, UNIT_Size value)
+_UNIT_SizeSet_Remove(_UNIT_SizeSet *size_set,
+                     UNIT_Size value)
 {
     assert(size_set != NULL);
     UNIT_Size index = (UNIT_Size)(value & (uint64_t)(size_set->capacity - 1));

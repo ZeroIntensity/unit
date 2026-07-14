@@ -43,7 +43,8 @@ set_py_error_from_context(_unit_state *state, UNIT_Context *context)
     UNIT_ErrorCode error_code = UNIT_GetErrorCode(context);
     const char *message = UNIT_GetErrorMessage(context);
 
-    PyErr_Format(state->ErrorType, "[%s] %s",
+    PyErr_Format(state->ErrorType,
+                 "[%s] %s",
                  UNIT_ErrorCode_ToString(error_code),
                  message);
     PyObject *exception = PyErr_GetRaisedException();
@@ -51,26 +52,33 @@ set_py_error_from_context(_unit_state *state, UNIT_Context *context)
 
     PyObject *message_obj = PyUnicode_FromString(message);
     if (message_obj == NULL) {
-        PyErr_FormatUnraisable("Exception ignored while creating str object for %R", exception);
+        PyErr_FormatUnraisable(
+            "Exception ignored while creating str object for %R",
+            exception);
         goto finally;
     }
 
     if (PyObject_SetAttrString(exception, "message", message_obj) < 0) {
         Py_DECREF(message_obj);
-        PyErr_FormatUnraisable("Exception ignored while setting 'message' for %R", exception);
+        PyErr_FormatUnraisable(
+            "Exception ignored while setting 'message' for %R",
+            exception);
     }
 
     Py_DECREF(message_obj);
 
     PyObject *code_obj = PyLong_FromLong(error_code);
     if (code_obj == NULL) {
-        PyErr_FormatUnraisable("Exception ignored while creating int object for %R", exception);
+        PyErr_FormatUnraisable(
+            "Exception ignored while creating int object for %R",
+            exception);
         goto finally;
     }
 
     if (PyObject_SetAttrString(exception, "code", code_obj) < 0) {
         Py_DECREF(code_obj);
-        PyErr_FormatUnraisable("Exception ignored while setting 'code' for %R", exception);
+        PyErr_FormatUnraisable("Exception ignored while setting 'code' for %R",
+                               exception);
     }
 
     Py_DECREF(code_obj);
@@ -145,7 +153,8 @@ typedef struct {
 #define ExecutableBufferObject_CAST(op) ((ExecutableBufferObject *)op)
 
 static PyObject *
-ExecutableBufferObject_internal_create(PyTypeObject *cls, UNIT_ExecutableBuffer *buffer)
+ExecutableBufferObject_internal_create(PyTypeObject *cls,
+                                       UNIT_ExecutableBuffer *buffer)
 {
     assert(cls != NULL);
     assert(buffer != NULL);
@@ -251,7 +260,8 @@ typedef struct {
 
 static PyObject *
 CompiledProcedureObject_internal_create(PyTypeObject *cls,
-                                        UNIT_CompiledProcedure *compiled_procedure)
+                                        UNIT_CompiledProcedure *
+                                        compiled_procedure)
 {
     assert(cls != NULL);
     assert(compiled_procedure != NULL);
@@ -281,9 +291,12 @@ CompiledProcedureObject_write_object_file(PyObject *op, PyObject *args)
 
     CompiledProcedureObject *self = CompiledProcedureObject_CAST(op);
 
-    if (UNIT_FAILED(UNIT_CompiledProcedure_WriteObjectFile(self->compiled_procedure,
-                                                           path, format))) {
-        set_py_error_from_context(get_state_from_object(op), self->compiled_procedure->context);
+    if (UNIT_FAILED(UNIT_CompiledProcedure_WriteObjectFile(
+                        self->compiled_procedure,
+                        path,
+                        format))) {
+        set_py_error_from_context(get_state_from_object(op),
+                                  self->compiled_procedure->context);
         return NULL;
     }
 
@@ -297,13 +310,15 @@ CompiledProcedureObject_jit(PyObject *op, PyObject *raw_symbols)
     CompiledProcedureObject *self = CompiledProcedureObject_CAST(op);
     _unit_state *state = get_state_from_object(op);
 
-    PyObject *symbols = PySequence_Fast(raw_symbols, "expected an iterable for symbols");
+    PyObject *symbols = PySequence_Fast(raw_symbols,
+                                        "expected an iterable for symbols");
     if (symbols == NULL) {
         return NULL;
     }
 
     UNIT_SymbolMap symbol_map;
-    if (UNIT_FAILED(UNIT_SymbolMap_Init(&symbol_map, self->compiled_procedure->context))) {
+    if (UNIT_FAILED(UNIT_SymbolMap_Init(&symbol_map,
+                                        self->compiled_procedure->context))) {
         Py_DECREF(symbols);
         set_py_error_from_context(state, self->compiled_procedure->context);
         return NULL;
@@ -315,7 +330,8 @@ CompiledProcedureObject_jit(PyObject *op, PyObject *raw_symbols)
         assert(item != NULL);
         if (!PyTuple_Check(item) || PyTuple_GET_SIZE(item) != 2) {
             Py_DECREF(symbols);
-            PyErr_Format(PyExc_TypeError, "expected a tuple with 2 items, got %R",
+            PyErr_Format(PyExc_TypeError,
+                         "expected a tuple with 2 items, got %R",
                          item);
             UNIT_SymbolMap_Clear(&symbol_map);
             return NULL;
@@ -338,24 +354,29 @@ CompiledProcedureObject_jit(PyObject *op, PyObject *raw_symbols)
             return NULL;
         }
 
-        if (UNIT_FAILED(UNIT_SymbolMap_RegisterSymbol(&symbol_map, name, address))) {
+        if (UNIT_FAILED(UNIT_SymbolMap_RegisterSymbol(&symbol_map,
+                                                      name,
+                                                      address))) {
             Py_DECREF(symbols);
             UNIT_SymbolMap_Clear(&symbol_map);
-            set_py_error_from_context(state, self->compiled_procedure->context);
+            set_py_error_from_context(state,
+                                      self->compiled_procedure->context);
             return NULL;
         }
     }
 
-    UNIT_ExecutableBuffer *buffer = UNIT_CompiledProcedure_JIT(self->compiled_procedure,
-                                                               &symbol_map);
+    UNIT_ExecutableBuffer *buffer =
+        UNIT_CompiledProcedure_JIT(self->compiled_procedure,
+                                   &symbol_map);
     UNIT_SymbolMap_Clear(&symbol_map);
     if (buffer == NULL) {
         set_py_error_from_context(state, self->compiled_procedure->context);
         return NULL;
     }
 
-    return ExecutableBufferObject_internal_create((PyTypeObject *)state->ExecutableBufferType,
-                                                  buffer);
+    return ExecutableBufferObject_internal_create(
+        (PyTypeObject *)state->ExecutableBufferType,
+        buffer);
 }
 
 static PyObject *
@@ -370,8 +391,9 @@ CompiledProcedureObject_print_translation(PyObject *op, PyObject *unused)
         return NULL;
     }
 
-    if (UNIT_FAILED(UNIT_CompiledProcedure_PrintTranslatedIR(self->compiled_procedure,
-                                                             stream))) {
+    if (UNIT_FAILED(UNIT_CompiledProcedure_PrintTranslatedIR(
+                        self->compiled_procedure,
+                        stream))) {
         set_py_error_from_context(get_state_from_object(op),
                                   self->compiled_procedure->context);
         return NULL;
@@ -402,9 +424,11 @@ CompiledProcedureObject_dealloc(PyObject *op)
 }
 
 static PyMethodDef CompiledProcedureObject_methods[] = {
-    {"write_object_file", CompiledProcedureObject_write_object_file, METH_VARARGS, NULL},
+    {"write_object_file", CompiledProcedureObject_write_object_file,
+     METH_VARARGS, NULL},
     {"jit", CompiledProcedureObject_jit, METH_O, NULL},
-    {"print_translation", CompiledProcedureObject_print_translation, METH_NOARGS, NULL},
+    {"print_translation", CompiledProcedureObject_print_translation,
+     METH_NOARGS, NULL},
     {NULL},
 };
 
@@ -542,7 +566,11 @@ ProcedureObject_new(PyTypeObject *cls, PyObject *args, PyObject *kwds)
 
     PyObject *context_op;
     const char *name;
-    if (!PyArg_ParseTuple(args, "O!s", state->ContextType, &context_op, &name)) {
+    if (!PyArg_ParseTuple(args,
+                          "O!s",
+                          state->ContextType,
+                          &context_op,
+                          &name)) {
         return NULL;
     }
 
@@ -553,7 +581,9 @@ ProcedureObject_new(PyTypeObject *cls, PyObject *args, PyObject *kwds)
 
     ContextObject *context = ContextObject_CAST(context_op);
     ProcedureObject *procedure = ProcedureObject_CAST(op);
-    if (UNIT_FAILED(UNIT_Procedure_Init(&procedure->procedure, &context->context, name))) {
+    if (UNIT_FAILED(UNIT_Procedure_Init(&procedure->procedure,
+                                        &context->context,
+                                        name))) {
         Py_DECREF(op);
         set_py_error_from_context(state, &context->context);
         return NULL;
@@ -575,8 +605,11 @@ ProcedureObject_add_operation(PyObject *op, PyObject *args)
         return NULL;
     }
 
-    if (UNIT_FAILED(UNIT_Procedure_AddOperation(&self->procedure, instruction, oparg))) {
-        set_py_error_from_context(get_state_from_object(op), self->procedure.context);
+    if (UNIT_FAILED(UNIT_Procedure_AddOperation(&self->procedure,
+                                                instruction,
+                                                oparg))) {
+        set_py_error_from_context(get_state_from_object(op),
+                                  self->procedure.context);
         return NULL;
     }
 
@@ -601,7 +634,8 @@ ProcedureObject_load_string(PyObject *op, PyObject *string_obj)
     }
 
     if (UNIT_FAILED(UNIT_Procedure_AddStringLoad(&self->procedure, string))) {
-        set_py_error_from_context(get_state_from_object(op), self->procedure.context);
+        set_py_error_from_context(get_state_from_object(op),
+                                  self->procedure.context);
         return NULL;
     }
 
@@ -623,13 +657,16 @@ ProcedureObject_create_jump_label(PyObject *op, PyObject *name_obj)
 
     _unit_state *state = get_state_from_object(op);
     ProcedureObject *self = ProcedureObject_CAST(op);
-    UNIT_JumpLabel *label = UNIT_Procedure_CreateJumpLabel(&self->procedure, name);
+    UNIT_JumpLabel *label = UNIT_Procedure_CreateJumpLabel(&self->procedure,
+                                                           name);
     if (label == NULL) {
         set_py_error_from_context(state, self->procedure.context);
         return NULL;
     }
 
-    return JumpLabelObject_internal_create((PyTypeObject *)state->JumpLabelType, label);
+    return JumpLabelObject_internal_create(
+        (PyTypeObject *)state->JumpLabelType,
+        label);
 }
 
 static PyObject *
@@ -639,7 +676,11 @@ ProcedureObject_add_jump(PyObject *op, PyObject *args)
     PyObject *jump_label_obj;
     _unit_state *state = get_state_from_object(op);
 
-    if (!PyArg_ParseTuple(args, "iO!", &instruction, state->JumpLabelType, &jump_label_obj)) {
+    if (!PyArg_ParseTuple(args,
+                          "iO!",
+                          &instruction,
+                          state->JumpLabelType,
+                          &jump_label_obj)) {
         return NULL;
     }
 
@@ -647,7 +688,9 @@ ProcedureObject_add_jump(PyObject *op, PyObject *args)
     UNIT_JumpLabel *label = JumpLabelObject_CAST(jump_label_obj)->label;
     assert(label != NULL);
 
-    if (UNIT_FAILED(UNIT_Procedure_AddJump(&self->procedure, instruction, label))) {
+    if (UNIT_FAILED(UNIT_Procedure_AddJump(&self->procedure,
+                                           instruction,
+                                           label))) {
         set_py_error_from_context(state, self->procedure.context);
         return NULL;
     }
@@ -659,8 +702,11 @@ static PyObject *
 ProcedureObject_use_label(PyObject *op, PyObject *jump_label)
 {
     _unit_state *state = get_state_from_object(op);
-    if (!PyObject_TypeCheck(jump_label, (PyTypeObject *)state->JumpLabelType)) {
-        PyErr_Format(PyExc_TypeError, "expected a jump label, got %R", jump_label);
+    if (!PyObject_TypeCheck(jump_label,
+                            (PyTypeObject *)state->JumpLabelType)) {
+        PyErr_Format(PyExc_TypeError,
+                     "expected a jump label, got %R",
+                     jump_label);
         return NULL;
     }
 
@@ -687,8 +733,11 @@ ProcedureObject_add_call_name(PyObject *op, PyObject *args)
     }
 
     ProcedureObject *self = ProcedureObject_CAST(op);
-    if (UNIT_FAILED(UNIT_Procedure_AddCallName(&self->procedure, name, nargs))) {
-        set_py_error_from_context(get_state_from_object(op), self->procedure.context);
+    if (UNIT_FAILED(UNIT_Procedure_AddCallName(&self->procedure,
+                                               name,
+                                               nargs))) {
+        set_py_error_from_context(get_state_from_object(op),
+                                  self->procedure.context);
         return NULL;
     }
 
@@ -702,7 +751,9 @@ ProcedureObject_compile(PyObject *op, PyObject *platform_obj)
     assert(platform_obj != NULL);
 
     if (!PyLong_Check(platform_obj)) {
-        PyErr_Format(PyExc_TypeError, "expected a number, got %R", platform_obj);
+        PyErr_Format(PyExc_TypeError,
+                     "expected a number, got %R",
+                     platform_obj);
         return NULL;
     }
 
@@ -720,8 +771,9 @@ ProcedureObject_compile(PyObject *op, PyObject *platform_obj)
         return NULL;
     }
 
-    return CompiledProcedureObject_internal_create((PyTypeObject *)state->CompiledProcedureType,
-                                                    compiled_procedure);
+    return CompiledProcedureObject_internal_create(
+        (PyTypeObject *)state->CompiledProcedureType,
+        compiled_procedure);
 }
 
 static PyObject *
@@ -731,7 +783,8 @@ ProcedureObject_optimize(PyObject *op, PyObject *unused)
     ProcedureObject *self = ProcedureObject_CAST(op);
 
     if (UNIT_FAILED(UNIT_Procedure_Optimize(&self->procedure))) {
-        set_py_error_from_context(get_state_from_object(op), self->procedure.context);
+        set_py_error_from_context(get_state_from_object(op),
+                                  self->procedure.context);
         return NULL;
     }
 
@@ -761,7 +814,10 @@ ProcedureObject_print_instructions(PyObject *op, PyObject *args)
     int visualize_stack_effect;
     int ignore_errors;
 
-    if (!PyArg_ParseTuple(args, "ii", &visualize_stack_effect, &ignore_errors)) {
+    if (!PyArg_ParseTuple(args,
+                          "ii",
+                          &visualize_stack_effect,
+                          &ignore_errors)) {
         return NULL;
     }
 
@@ -771,10 +827,13 @@ ProcedureObject_print_instructions(PyObject *op, PyObject *args)
         return NULL;
     }
 
-    if (UNIT_FAILED(UNIT_Procedure_PrintInstructions(&self->procedure, stream, visualize_stack_effect))
+    if (UNIT_FAILED(UNIT_Procedure_PrintInstructions(&self->procedure,
+                                                     stream,
+                                                     visualize_stack_effect))
         && !ignore_errors) {
         fclose(stream);
-        set_py_error_from_context(get_state_from_object(op), self->procedure.context);
+        set_py_error_from_context(get_state_from_object(op),
+                                  self->procedure.context);
         return NULL;
     }
 
@@ -823,7 +882,8 @@ static PyMethodDef ProcedureObject_methods[] = {
     {"compile", ProcedureObject_compile, METH_O, NULL},
     {"optimize", ProcedureObject_optimize, METH_NOARGS, NULL},
     {"set_flags", ProcedureObject_set_flags, METH_O, NULL},
-    {"print_instructions", ProcedureObject_print_instructions, METH_VARARGS, NULL},
+    {"print_instructions", ProcedureObject_print_instructions, METH_VARARGS,
+     NULL},
     {NULL},
 };
 
@@ -856,14 +916,17 @@ _unit_modexec(PyObject *module)
         return -1;
     }
 
-#define ADD_TYPE(name)                                                                  \
-    state->name## Type = PyType_FromModuleAndSpec(module, &name## Type_spec, NULL);     \
-    if (state->name## Type == NULL) {                                                   \
-        return -1;                                                                      \
-    }                                                                                   \
-    if (PyModule_AddType(module, (PyTypeObject *)state->name## Type) < 0) {             \
-        return -1;                                                                      \
-    }
+#define ADD_TYPE(name)                                                     \
+        state->name ## Type = PyType_FromModuleAndSpec(module,             \
+                                                       &name ## Type_spec, \
+                                                       NULL);              \
+        if (state->name ## Type == NULL) {                                 \
+            return -1;                                                     \
+        }                                                                  \
+        if (PyModule_AddType(module,                                       \
+                             (PyTypeObject *)state->name ## Type) < 0) {   \
+            return -1;                                                     \
+        }
 
     ADD_TYPE(Context);
     ADD_TYPE(CompiledProcedure);
@@ -875,9 +938,9 @@ _unit_modexec(PyObject *module)
 #undef ADD_TYPE
 
 #define EXPORT_CONST(name)                                  \
-    if (PyModule_AddIntConstant(module, #name, name)) {     \
-        return -1;                                          \
-    }
+        if (PyModule_AddIntConstant(module, #name, name)) { \
+            return -1;                                      \
+        }
 
     EXPORT_CONST(UNIT_OP_LOAD_STRING);
     EXPORT_CONST(UNIT_OP_LOAD_INTEGER);
@@ -959,7 +1022,9 @@ _unit_modexec(PyObject *module)
 
 #undef EXPORT_CONST
 
-    if (PyModule_AddStringConstant(module, "UNIT_VERSION_STRING", UNIT_VERSION_STRING)) {
+    if (PyModule_AddStringConstant(module,
+                                   "UNIT_VERSION_STRING",
+                                   UNIT_VERSION_STRING)) {
         return -1;
     }
 
