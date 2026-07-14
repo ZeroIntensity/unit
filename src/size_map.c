@@ -18,6 +18,7 @@ _UNIT_SizeMap_Init(_UNIT_SizeMap *size_map,
     if (size_map->items == NULL) {
         return _UNIT_FAIL;
     }
+
     return _UNIT_OK;
 }
 
@@ -38,10 +39,12 @@ set_size_map_entry(
             pair->is_populated = 1;
             return 1;
         }
+
         if (pair->key == key) {
             pair->value = value;
             return 0;
         }
+
         current_index++;
         if (current_index == size_map->capacity) {
             current_index = 0;
@@ -73,6 +76,7 @@ expand(_UNIT_SizeMap *size_map) {
             set_size_map_entry(size_map, item->key, item->value);
         }
     }
+
     _UNIT_Dealloc(size_map->context, old_items);
 
     return _UNIT_OK;
@@ -91,7 +95,6 @@ _UNIT_SizeMap_Set(_UNIT_SizeMap *size_map,
             return _UNIT_FAIL;
         }
     }
-
 
     if (set_size_map_entry(size_map, key, value) == 1) {
         // A new item was added
@@ -115,10 +118,12 @@ _UNIT_SizeMap_Get(const _UNIT_SizeMap *size_map,
         if (!pair->is_populated) {
             return _UNIT_FAIL;
         }
+
         if (pair->key == key) {
             *value = pair->value;
             return _UNIT_OK;
         }
+
         current_index++;
         if (current_index == size_map->capacity) {
             current_index = 0;
@@ -147,9 +152,11 @@ _UNIT_SizeMap_Remove(_UNIT_SizeMap *size_map,
         if (!size_map->items[current].is_populated) {
             return;
         }
+
         if (size_map->items[current].key == key) {
             break;
         }
+
         current++;
         if (current == size_map->capacity) {
             current = 0;
@@ -168,6 +175,7 @@ _UNIT_SizeMap_Remove(_UNIT_SizeMap *size_map,
     if (next == size_map->capacity) {
         next = 0;
     }
+
     while (size_map->items[next].is_populated) {
         _UNIT_SizeMapPair item = size_map->items[next];
         size_map->items[next].is_populated = 0;

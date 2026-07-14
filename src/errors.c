@@ -9,24 +9,24 @@ const char *
 UNIT_ErrorCode_ToString(UNIT_ErrorCode code)
 {
     switch (code) {
-    case UNIT_ERROR_NONE: {
-        return "NONE";
-    }
-    case UNIT_ERROR_INVALID_USAGE: {
-        return "INVALID_USAGE";
-    }
-    case UNIT_ERROR_NO_MEMORY: {
-        return "NO_MEMORY";
-    }
-    case UNIT_ERROR_OS_FAILURE: {
-        return "OS_FAILURE";
-    }
-    case UNIT_ERROR_UNSUPPORTED_PLATFORM: {
-        return "UNSUPPORTED_PLATFORM";
-    }
-    default: {
-        _UNIT_Unreachable();
-    }
+        case UNIT_ERROR_NONE: {
+            return "NONE";
+        }
+        case UNIT_ERROR_INVALID_USAGE: {
+            return "INVALID_USAGE";
+        }
+        case UNIT_ERROR_NO_MEMORY: {
+            return "NO_MEMORY";
+        }
+        case UNIT_ERROR_OS_FAILURE: {
+            return "OS_FAILURE";
+        }
+        case UNIT_ERROR_UNSUPPORTED_PLATFORM: {
+            return "UNSUPPORTED_PLATFORM";
+        }
+        default: {
+            _UNIT_Unreachable();
+        }
     }
 }
 
@@ -84,6 +84,7 @@ _UNIT_SetError(UNIT_Context *context,
     if (len >= 255) {
         len = 254;
     }
+
     memcpy(context->_internal.error.message, message, len);
     context->_internal.error.message[len] = '\n';
     context->_internal.error.message[len + 1] = '\0';

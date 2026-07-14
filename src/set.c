@@ -47,6 +47,7 @@ _UNIT_Set_Contains(_UNIT_Set *set,
         if (!item->is_populated) {
             return 0;
         }
+
         if (item->value == value) {
             return 1;
         }
@@ -72,6 +73,7 @@ _UNIT_Set_Add(_UNIT_Set *set,
         if (new_items == NULL) {
             return _UNIT_FAIL;
         }
+
         for (UNIT_Size i = 0; i < set->capacity; ++i) {
             if (set->items[i].is_populated) {
                 UNIT_Size idx = hash_ptr(set->items[i].value)
@@ -82,10 +84,12 @@ _UNIT_Set_Add(_UNIT_Set *set,
                         idx = 0;
                     }
                 }
+
                 new_items[idx].value = set->items[i].value;
                 new_items[idx].is_populated = 1;
             }
         }
+
         _UNIT_Dealloc(set->context, set->items);
         set->items = new_items;
         set->capacity = new_capacity;
@@ -144,6 +148,7 @@ _UNIT_Set_Remove(_UNIT_Set *set,
     if (next == set->capacity) {
         next = 0;
     }
+
     while (set->items[next].is_populated) {
         _UNIT_SetItem item = set->items[next];
         set->items[next].is_populated = 0;

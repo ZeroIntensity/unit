@@ -92,6 +92,7 @@ _UNIT_MachineDestination_GetPointerNullable(_UNIT_MachineDestination dest)
     if (_UNIT_MachineDestination_IsNull(dest)) {
         return NULL;
     }
+
     return _UNIT_MachineDestination_GetPointer(dest);
 }
 

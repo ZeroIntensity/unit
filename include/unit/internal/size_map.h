@@ -66,11 +66,9 @@ _UNIT_SizeMap_Remove(_UNIT_SizeMap *size_map, UNIT_Size key);
                 continue;                                               \
             }                                                           \
             UNIT_Size key_name = (size_map)->items[_sm_index].key;      \
-            UNIT_Size value_name = (size_map)->items[_sm_index].value;  \
-            {
+            UNIT_Size value_name = (size_map)->items[_sm_index].value;
 
 #define _UNIT_SizeMap_END_ITER() \
-        }                        \
         }
 
 #ifdef __cplusplus

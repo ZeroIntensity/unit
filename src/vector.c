@@ -13,12 +13,14 @@ _UNIT_Vector_Init(_UNIT_Vector *vector,
     if (initial_capacity == 0) {
         initial_capacity = 1;
     }
+
     vector->items = _UNIT_Calloc(context,
                                  sizeof(void *),
                                  initial_capacity);
     if (vector->items == NULL) {
         return _UNIT_FAIL;
     }
+
     vector->length = 0;
     vector->capacity = initial_capacity;
     vector->dealloc = dealloc;
@@ -37,6 +39,7 @@ _UNIT_Vector_Clear(_UNIT_Vector *vector)
             }
         }
     }
+
     _UNIT_Dealloc(vector->context, vector->items);
 }
 
@@ -55,10 +58,13 @@ _UNIT_Vector_Append(_UNIT_Vector *vector,
             if (vector->dealloc != NULL) {
                 vector->dealloc(vector->context, item);
             }
+
             return _UNIT_FAIL;
         }
+
         vector->items = new_items;
     }
+
     vector->items[vector->length++] = item;
     return _UNIT_OK;
 }

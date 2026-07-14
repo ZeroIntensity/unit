@@ -85,6 +85,7 @@ _UNIT_Map_HashString(const void *key)
             } while (LIKELY(i > 48));
             seed ^= see1 ^ see2;
         }
+
         while (UNLIKELY(i > 16)) {
             uint64_t r0 = _wyr8(p), r1 = _wyr8(p + 8);
             seed ^= WY_SECRET0;
@@ -92,6 +93,7 @@ _UNIT_Map_HashString(const void *key)
             seed ^= r0 ^ r1;
             p += 16; i -= 16;
         }
+
         a = _wyr8(p + i - 16);
         b = _wyr8(p + i - 8);
     }
@@ -145,6 +147,7 @@ _UNIT_Map_Init(_UNIT_Map *map,
     if (UNLIKELY(map->items == NULL)) {
         return _UNIT_FAIL;
     }
+
     return _UNIT_OK;
 }
 
@@ -176,9 +179,11 @@ set_entry(_UNIT_Map *map,
             if (map->dealloc_key != NULL) {
                 map->dealloc_key(map->context, key);
             }
+
             if (map->dealloc_value != NULL) {
                 map->dealloc_value(map->context, pair->value);
             }
+
             pair->value = value;
             return 0;
         }
@@ -207,13 +212,12 @@ expand(_UNIT_Map *map)
     for (UNIT_Size index = 0; index < map->capacity; index++) {
         _UNIT_MapPair *item = &map->items[index];
         if (item->key != NULL) {
-            set_entry(
-                map,
-                new_items,
-                new_capacity,
-                item->key,
-                item->value,
-                item->hash
+            set_entry(map,
+                      new_items,
+                      new_capacity,
+                      item->key,
+                      item->value,
+                      item->hash
             );
         }
     }
@@ -238,11 +242,13 @@ _UNIT_Map_Get(const _UNIT_Map *map,
         if (map->items[index].key == NULL) {
             return NULL;
         }
+
         _UNIT_MapPair *pair = &map->items[index];
         if (pair->hash == hash
             && map->compare_key(key, pair->key)) {
             return pair->value;
         }
+
         index++;
         if (index == map->capacity) {
             index = 0;
@@ -292,11 +298,13 @@ _UNIT_Map_Clear(_UNIT_Map *map)
             if (map->dealloc_key != NULL) {
                 map->dealloc_key(map->context, item->key);
             }
+
             if (map->dealloc_value != NULL) {
                 map->dealloc_value(map->context, item->value);
             }
         }
     }
+
     _UNIT_Dealloc(map->context, map->items);
     map->items = NULL;
     map->len = 0;

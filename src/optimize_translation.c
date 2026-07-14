@@ -191,6 +191,7 @@ optimize_block_loads(_UNIT_BasicBlock *block,
             APPEND(op);
             continue;
         }
+
         assert(!_UNIT_MachineDestination_IsNull(op->destination));
         assert(!_UNIT_MachineDestination_IsInput(op->destination));
 
@@ -233,6 +234,7 @@ optimize_block_loads(_UNIT_BasicBlock *block,
         if (source_never_used == -1) {
             goto error;
         }
+
         if (!source_never_used) {
             APPEND(op);
             continue;
@@ -360,25 +362,27 @@ optimize_block_folds(_UNIT_BasicBlock *block,
             _UNIT_MachineDestination_IsInput(op->destination)) {
             FOLD_REGISTER_VALUE(destination);
         }
+
         FOLD_REGISTER_VALUE(op->argument_1);
         FOLD_REGISTER_VALUE(op->argument_2);
 
 #undef FOLD_REGISTER_VALUE
 
         switch (op->instruction) {
-        case _UNIT_I_LOAD: {
-            assert(destination != NULL);
-            if (destination->type == _UNIT_TYPE_REGISTER
-                && op->argument_1->type == _UNIT_TYPE_CONSTANT) {
-                register_values[destination->value].value =
-                    op->argument_1->value;
-                register_values[destination->value].is_known = 1;
-                // TODO: We should delete the move if it's not used by a successor
-                APPEND(op);     //CONTINUE_AND_DISCARD(op);
-                continue;
+            case _UNIT_I_LOAD: {
+                assert(destination != NULL);
+                if (destination->type == _UNIT_TYPE_REGISTER
+                    && op->argument_1->type == _UNIT_TYPE_CONSTANT) {
+                    register_values[destination->value].value =
+                        op->argument_1->value;
+                    register_values[destination->value].is_known = 1;
+                    // TODO: We should delete the move if it's not used by a successor
+                    APPEND(op); //CONTINUE_AND_DISCARD(op);
+                    continue;
+                }
+
+                break;
             }
-            break;
-        }
 
 #define BINARY_OP(inst, operator)                                             \
         case inst: {                                                          \
@@ -394,14 +398,14 @@ optimize_block_folds(_UNIT_BasicBlock *block,
                 break;                                                        \
         }
 
-            BINARY_OP(_UNIT_I_ADD, +);
-            BINARY_OP(_UNIT_I_SUB, -);
-            BINARY_OP(_UNIT_I_MUL, *);
-            BINARY_OP(_UNIT_I_DIV, /);
-            BINARY_OP(_UNIT_I_MOD, %);
+                BINARY_OP(_UNIT_I_ADD, +);
+                BINARY_OP(_UNIT_I_SUB, -);
+                BINARY_OP(_UNIT_I_MUL, *);
+                BINARY_OP(_UNIT_I_DIV, /);
+                BINARY_OP(_UNIT_I_MOD, %);
 
-        default:
-            break;
+            default:
+                break;
 
 #undef BINARY_OP
         }
@@ -411,6 +415,7 @@ optimize_block_folds(_UNIT_BasicBlock *block,
             && destination->type == _UNIT_TYPE_REGISTER) {
             register_values[destination->value].is_known = 0;
         }
+
         APPEND(op);
     }
 

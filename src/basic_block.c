@@ -66,8 +66,10 @@ set_add_and_track(_UNIT_SizeSet *set,
         if (UNIT_FAILED(_UNIT_SizeSet_Add(set, value))) {
             return _UNIT_FAIL;
         }
+
         *changed = 1;
     }
+
     return _UNIT_OK;
 }
 
@@ -81,6 +83,7 @@ _UNIT_BasicBlock_New(UNIT_Context *context,
     if (block == NULL) {
         return NULL;
     }
+
     block->context = context;
 
     if (UNIT_FAILED(_UNIT_Vector_Init(&block->instructions,
@@ -137,34 +140,37 @@ populate_liveness_info(_UNIT_Vector *successors,
     UNIT_Size size = _UNIT_Vector_SIZE(successors);
     for (UNIT_Size index = 0; index < size; ++index) {
         _UNIT_BasicBlock *successor = _UNIT_Vector_GET(successors, index);
-        _UNIT_SizeSet_ITER(&successor->liveness.alive_at_start, location);
-        if (UNIT_FAILED(set_add_and_track(&liveness->alive_at_end,
-                                          location,
-                                          changed))) {
-            return _UNIT_FAIL;
+        _UNIT_SizeSet_ITER(&successor->liveness.alive_at_start, location) {
+            if (UNIT_FAILED(set_add_and_track(&liveness->alive_at_end,
+                                              location,
+                                              changed))) {
+                return _UNIT_FAIL;
+            }
         }
-        _UNIT_SizeSet_END_ITER();
+        _UNIT_SizeSet_END_ITER()
     }
 
     // alive_at_start = used_locations + (alive_at_end - created_locations)
 
     // Everything this block uses must be alive at its start
-    _UNIT_SizeSet_ITER(&liveness->used_locations, location);
-    if (UNIT_FAILED(set_add_and_track(&liveness->alive_at_start,
-                                      location,
-                                      changed))) {
-        return _UNIT_FAIL;
+    _UNIT_SizeSet_ITER(&liveness->used_locations, location) {
+        if (UNIT_FAILED(set_add_and_track(&liveness->alive_at_start,
+                                          location,
+                                          changed))) {
+            return _UNIT_FAIL;
+        }
     }
     _UNIT_SizeSet_END_ITER();
 
     // Everything alive at the end that this block didn't create
     // must also be alive at the start
-    _UNIT_SizeSet_ITER(&liveness->alive_at_end, location);
-    if (!_UNIT_SizeSet_Contains(&liveness->created_locations, location)) {
-        if (UNIT_FAILED(set_add_and_track(&liveness->alive_at_start,
-                                          location,
-                                          changed))) {
-            return _UNIT_FAIL;
+    _UNIT_SizeSet_ITER(&liveness->alive_at_end, location) {
+        if (!_UNIT_SizeSet_Contains(&liveness->created_locations, location)) {
+            if (UNIT_FAILED(set_add_and_track(&liveness->alive_at_start,
+                                              location,
+                                              changed))) {
+                return _UNIT_FAIL;
+            }
         }
     }
     _UNIT_SizeSet_END_ITER();

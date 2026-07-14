@@ -86,11 +86,9 @@ _UNIT_Map_Set(_UNIT_Map *map, void *key, void *value);
             void *value_name = (map)->items[_m_index].value;                   \
             if (key_name == NULL) {                                            \
                 continue;                                                      \
-            }                                                                  \
-            {
+            }
 
 #define _UNIT_Map_END_ITER() \
-        }                    \
         }
 
 #ifdef __cplusplus

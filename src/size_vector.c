@@ -12,12 +12,14 @@ _UNIT_SizeVector_Init(_UNIT_SizeVector *size_vector,
     if (initial_capacity == 0) {
         initial_capacity = 1;
     }
+
     size_vector->items = _UNIT_Calloc(context,
                                       sizeof(UNIT_Size),
                                       initial_capacity);
     if (size_vector->items == NULL) {
         return _UNIT_FAIL;
     }
+
     size_vector->length = 0;
     size_vector->capacity = initial_capacity;
     return _UNIT_OK;
@@ -45,8 +47,10 @@ _UNIT_SizeVector_Append(_UNIT_SizeVector *size_vector,
             --size_vector->length;
             return _UNIT_FAIL;
         }
+
         size_vector->items = new_items;
     }
+
     size_vector->items[size_vector->length++] = item;
     return _UNIT_OK;
 }

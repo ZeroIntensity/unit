@@ -16,6 +16,7 @@ _UNIT_SizeSet_Init(_UNIT_SizeSet *size_set,
     if (size_set->items == NULL) {
         return _UNIT_FAIL;
     }
+
     return _UNIT_OK;
 }
 
@@ -34,10 +35,12 @@ set_size_set_entry(
             item->is_populated = 1;
             return 1;
         }
+
         if (item->value == value) {
             assert(item->is_populated == 1);
             return 0;
         }
+
         current_index++;
         if (current_index == size_set->capacity) {
             current_index = 0;
@@ -70,6 +73,7 @@ expand(_UNIT_SizeSet *size_set) {
             set_size_set_entry(size_set, item->value);
         }
     }
+
     _UNIT_Dealloc(size_set->context, old_items);
 
     return _UNIT_OK;
@@ -109,9 +113,11 @@ _UNIT_SizeSet_Contains(const _UNIT_SizeSet *size_set,
         if (!item->is_populated) {
             return 0;
         }
+
         if (item->value == value) {
             return 1;
         }
+
         current_index++;
         if (current_index == size_set->capacity) {
             current_index = 0;
@@ -141,9 +147,11 @@ _UNIT_SizeSet_Remove(_UNIT_SizeSet *size_set,
         if (!item->is_populated) {
             return;
         }
+
         if (item->value == value) {
             break;
         }
+
         current++;
         if (current == size_set->capacity) {
             current = 0;

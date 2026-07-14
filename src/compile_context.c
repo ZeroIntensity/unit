@@ -109,6 +109,7 @@ _UNIT_SymbolTable_Init(_UNIT_SymbolTable *symbol_table,
             return _UNIT_FAIL;
         }
     }
+
     return _UNIT_OK;
 }
 
@@ -223,6 +224,7 @@ _UNIT_StackFrame_AllocateSlotID(_UNIT_StackFrame *frame)
     if (frame->free_slot_count > 0) {
         return frame->free_slots[--frame->free_slot_count];
     }
+
     return (frame->next_slot++);
 }
 
@@ -262,6 +264,7 @@ _UNIT_StackFrame_ComputeSize(_UNIT_StackFrame *frame)
     if (size == 0) {
         return 0;
     }
+
     // Round up so that size % 16 == 8
     // This ensures RSP is 16-byte aligned after sub
     // because RSP at entry is 8 mod 16 (return address)
@@ -270,6 +273,7 @@ _UNIT_StackFrame_ComputeSize(_UNIT_StackFrame *frame)
     } else if (size % 16 != 8) {
         size = ((size + 15) & ~15) + 8;
     }
+
     assert(size % 16 == 8);
     return size;
 }

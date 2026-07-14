@@ -64,6 +64,7 @@ append_string(ELF_Object *object,
         if (character == NULL) {
             return -1;
         }
+
         *character = string[index];
         if (UNIT_FAILED(_UNIT_Vector_Append(string_table,
                                             character))) {
@@ -82,10 +83,12 @@ create_and_store_symbol(ELF_Object *object)
     if (symbol == NULL) {
         return NULL;
     }
+
     memset(symbol, 0, sizeof(ELF_Symbol));
     if (UNIT_FAILED(_UNIT_Vector_Append(&object->symbols, symbol))) {
         return NULL;
     }
+
     return symbol;
 }
 
@@ -100,6 +103,7 @@ add_null_symbol(ELF_Object *object)
     if (symbol == NULL) {
         return _UNIT_FAIL;
     }
+
     return _UNIT_OK;
 }
 
@@ -115,6 +119,7 @@ add_rodata_section_symbol(ELF_Object *object)
     if (symbol == NULL) {
         return _UNIT_FAIL;
     }
+
     symbol->info = ELF_SYMBOL_INFO(ELF_SYMBOL_BINDING_LOCAL,
                                    ELF_SYMBOL_TYPE_SECTION);
     symbol->section_index = SECTION_RODATA;
@@ -184,6 +189,7 @@ build_relocation_table(ELF_Object *object,
         if (entry == NULL) {
             return _UNIT_FAIL;
         }
+
         memset(entry, 0, sizeof(ELF_RelocationAddend));
 
         entry->offset = relocation->offset;

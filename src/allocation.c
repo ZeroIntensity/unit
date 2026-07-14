@@ -59,6 +59,7 @@ freelist_pop_or_malloc(UNIT_Context *context,
     if (ptr == NULL) {
         return malloc_with_header(context, size);
     }
+
     // Restore the size class since freelist_push overwrote it
     UNIT_FreelistHeader *header = ptr;
     header->size_class = size;
@@ -101,29 +102,30 @@ _UNIT_Alloc(UNIT_Context *context,
                                               size);                         \
         }
 
-    SIZE_CLASS(8);
-    SIZE_CLASS(16);
-    SIZE_CLASS(32);
-    SIZE_CLASS(64);
-    SIZE_CLASS(128);
-    SIZE_CLASS(256);
+        SIZE_CLASS(8);
+        SIZE_CLASS(16);
+        SIZE_CLASS(32);
+        SIZE_CLASS(64);
+        SIZE_CLASS(128);
+        SIZE_CLASS(256);
 
 #undef SIZE_CLASS
-    default: {
-        return malloc_with_header(context, size);
+        default: {
+            return malloc_with_header(context, size);
+        }
     }
-    }
+}
 
-    void
-    _UNIT_Dealloc(UNIT_Context *context,
-                  void *ptr)
-    {
-        assert(context != NULL);
-        assert(ptr != NULL);
-        UNIT_FreelistHeader *header = ((UNIT_FreelistHeader *)ptr) - 1;
-        assert(header->size_class > 0);
+void
+_UNIT_Dealloc(UNIT_Context *context,
+              void *ptr)
+{
+    assert(context != NULL);
+    assert(ptr != NULL);
+    UNIT_FreelistHeader *header = ((UNIT_FreelistHeader *)ptr) - 1;
+    assert(header->size_class > 0);
 
-        switch (header->size_class) {
+    switch (header->size_class) {
 #define SIZE_CLASS(size)                                                        \
         case size: {                                                            \
                 freelist_push(header,                                           \
@@ -137,14 +139,12 @@ _UNIT_Alloc(UNIT_Context *context,
         SIZE_CLASS(64);
         SIZE_CLASS(128);
         SIZE_CLASS(256);
-        }
 
 #undef SIZE_CLASS
         default:
             free(header);
             return;
     }
-
 }
 
 void *
@@ -209,6 +209,7 @@ _UNIT_StrDup(UNIT_Context *context,
     for (UNIT_Size index = 0; index < length; ++index) {
         result[index] = src[index];
     }
+
     result[length] = '\0';
     return result;
 }
@@ -223,6 +224,7 @@ clear_freelist(_UNIT_Freelist **freelist)
         free(current);
         current = next;
     }
+
     *freelist = NULL;
 }
 

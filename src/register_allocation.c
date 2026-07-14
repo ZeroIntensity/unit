@@ -59,22 +59,23 @@ free_dead_registers(_UNIT_RegisterAllocator *allocator,
     UNIT_Size to_remove_regs[64];
     UNIT_Size remove_count = 0;
 
-    _UNIT_SizeMap_ITER(assignments, location, register_id);
-    if (_UNIT_SizeSet_Contains(&block->liveness.alive_at_end, location)) {
-        continue;
-    }
+    _UNIT_SizeMap_ITER(assignments, location, register_id) {
+        if (_UNIT_SizeSet_Contains(&block->liveness.alive_at_end, location)) {
+            continue;
+        }
 
-    UNIT_Size last;
-    if (!UNIT_FAILED(_UNIT_SizeMap_Get(&block->liveness.last_uses,
-                                       location,
-                                       &last))) {
-        if (last < index) {
-            to_remove[remove_count] = location;
-            to_remove_regs[remove_count] = register_id;
-            remove_count++;
+        UNIT_Size last;
+        if (!UNIT_FAILED(_UNIT_SizeMap_Get(&block->liveness.last_uses,
+                                           location,
+                                           &last))) {
+            if (last < index) {
+                to_remove[remove_count] = location;
+                to_remove_regs[remove_count] = register_id;
+                remove_count++;
+            }
         }
     }
-    _UNIT_SizeMap_END_ITER();
+    _UNIT_SizeSet_END_ITER();
 
     for (UNIT_Size i = 0; i < remove_count; ++i) {
         _UNIT_SizeSet_Remove(registers_in_use, to_remove_regs[i]);
@@ -186,19 +187,20 @@ allocate_registers_for_block(_UNIT_RegisterAllocator *allocator,
         return _UNIT_FAIL;
     }
 
-    _UNIT_SizeSet_ITER(&block->liveness.alive_at_start, location);
-    UNIT_Size register_id;
-    if (!UNIT_FAILED(_UNIT_SizeMap_Get(assignments,
-                                       location,
-                                       &register_id))) {
-        _UNIT_SizeSet_Add(&registers_in_use, register_id);
-    } else {
-        for (UNIT_Size reg_id = 0; reg_id < allocator->num_registers;
-             ++reg_id) {
-            if (!_UNIT_SizeSet_Contains(&registers_in_use, reg_id)) {
-                _UNIT_SizeMap_Set(assignments, location, reg_id);
-                _UNIT_SizeSet_Add(&registers_in_use, reg_id);
-                break;
+    _UNIT_SizeSet_ITER(&block->liveness.alive_at_start, location) {
+        UNIT_Size register_id;
+        if (!UNIT_FAILED(_UNIT_SizeMap_Get(assignments,
+                                           location,
+                                           &register_id))) {
+            _UNIT_SizeSet_Add(&registers_in_use, register_id);
+        } else {
+            for (UNIT_Size reg_id = 0; reg_id < allocator->num_registers;
+                 ++reg_id) {
+                if (!_UNIT_SizeSet_Contains(&registers_in_use, reg_id)) {
+                    _UNIT_SizeMap_Set(assignments, location, reg_id);
+                    _UNIT_SizeSet_Add(&registers_in_use, reg_id);
+                    break;
+                }
             }
         }
     }

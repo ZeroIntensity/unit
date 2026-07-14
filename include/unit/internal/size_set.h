@@ -52,11 +52,9 @@ _UNIT_SizeSet_Add(_UNIT_SizeSet *size_set, UNIT_Size value);
             if (!(size_set)->items[_ss_index].is_populated) {           \
                 continue;                                               \
             }                                                           \
-            UNIT_Size value_name = (size_set)->items[_ss_index].value;  \
-            {
+            UNIT_Size value_name = (size_set)->items[_ss_index].value;
 
 #define _UNIT_SizeSet_END_ITER() \
-        }                        \
         }
 
 #ifdef __cplusplus

@@ -61,6 +61,7 @@ compile_procedure(const UNIT_Procedure *procedure,
     if (compiled_procedure == NULL) {
         return NULL;
     }
+
     compiled_procedure->name = procedure->name;
     compiled_procedure->context = context;
 
@@ -118,19 +119,19 @@ compile_procedure(const UNIT_Procedure *procedure,
 
     UNIT_Status result;
     switch (UNIT_Platform_GET_ARCH(platform)) {
-    case UNIT_ARCH_AMD64: {
-        result = _UNIT_AMD64_Compile(&compiled_procedure->_translation,
-                                     &compiled_procedure->_compile_context,
-                                     UNIT_Platform_GET_ABI(platform));
-        break;
-    }
-    default: {
-        assert(UNIT_Platform_GET_ARCH(platform) == UNIT_ARCH_AARCH64);
-        _UNIT_SetError(context,
-                       UNIT_ERROR_UNSUPPORTED_PLATFORM,
-                       "AArch64 is not supported yet");
-        goto error;
-    }
+        case UNIT_ARCH_AMD64: {
+            result = _UNIT_AMD64_Compile(&compiled_procedure->_translation,
+                                         &compiled_procedure->_compile_context,
+                                         UNIT_Platform_GET_ABI(platform));
+            break;
+        }
+        default: {
+            assert(UNIT_Platform_GET_ARCH(platform) == UNIT_ARCH_AARCH64);
+            _UNIT_SetError(context,
+                           UNIT_ERROR_UNSUPPORTED_PLATFORM,
+                           "AArch64 is not supported yet");
+            goto error;
+        }
     }
 
     if (UNIT_FAILED(result)) {
@@ -230,6 +231,7 @@ merge_string_data(_UNIT_CompileContext *parent_ctx,
             return _UNIT_FAIL;
         }
     }
+
     return _UNIT_OK;
 }
 
@@ -310,6 +312,7 @@ merge_relocations(UNIT_Context *context,
             if (symbol_index == -1) {
                 return _UNIT_FAIL;
             }
+
             new_relocation->symbol_index = symbol_index;
         }
 
@@ -319,6 +322,7 @@ merge_relocations(UNIT_Context *context,
             return _UNIT_FAIL;
         }
     }
+
     return _UNIT_OK;
 }
 
@@ -359,6 +363,7 @@ merge_code(_UNIT_CompileContext *parent_ctx,
             return _UNIT_FAIL;
         }
     }
+
     return _UNIT_OK;
 }
 
@@ -460,6 +465,7 @@ UNIT_Compile(const UNIT_Procedure *procedure,
                                                 &visited))) {
         goto error;
     }
+
     assert(_UNIT_Vector_SIZE(&compiled) > 0);
 
     UNIT_CompiledProcedure *parent = _UNIT_Vector_STEAL(&compiled, 0);
@@ -502,15 +508,16 @@ UNIT_CompiledProcedure_WriteObjectFile(const UNIT_CompiledProcedure *compiled,
     assert(path != NULL);
 
     switch (format) {
-    case UNIT_FORMAT_ELF: {
-        return _UNIT_ELF_WriteObjectFile(&compiled->_compile_context, path);
-    }
-    default: {
-        _UNIT_SetError(compiled->context,
-                       UNIT_ERROR_UNSUPPORTED_PLATFORM,
-                       "only ELF is supported at the moment");
-        return _UNIT_FAIL;
-    }
+        case UNIT_FORMAT_ELF: {
+            return _UNIT_ELF_WriteObjectFile(&compiled->_compile_context,
+                                             path);
+        }
+        default: {
+            _UNIT_SetError(compiled->context,
+                           UNIT_ERROR_UNSUPPORTED_PLATFORM,
+                           "only ELF is supported at the moment");
+            return _UNIT_FAIL;
+        }
     }
 
     _UNIT_Unreachable();

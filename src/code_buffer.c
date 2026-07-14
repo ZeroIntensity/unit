@@ -15,6 +15,7 @@ _UNIT_CodeBuffer_Init(_UNIT_CodeBuffer *buffer,
     if (buffer->data == NULL) {
         return _UNIT_FAIL;
     }
+
     buffer->capacity = CODE_BUFFER_INITIAL_SIZE;
     buffer->size = 0;
     buffer->context = context;
@@ -49,6 +50,7 @@ ensure_buffer_capacity(_UNIT_CodeBuffer *buffer,
     if (new_buffer == NULL) {
         return _UNIT_FAIL;
     }
+
     buffer->data = new_buffer;
     buffer->capacity *= 2;
     return _UNIT_OK;
@@ -62,6 +64,7 @@ _UNIT_CodeBuffer_Emit8(_UNIT_CodeBuffer *buffer,
     if (UNIT_FAILED(ensure_buffer_capacity(buffer, 1))) {
         return _UNIT_FAIL;
     }
+
     buffer->data[buffer->size++] = value;
     return _UNIT_OK;
 }
@@ -74,6 +77,7 @@ _UNIT_CodeBuffer_Emit32(_UNIT_CodeBuffer *buffer,
     if (UNIT_FAILED(ensure_buffer_capacity(buffer, 4))) {
         return _UNIT_FAIL;
     }
+
     memcpy(buffer->data + buffer->size, &value, 4);
     buffer->size += 4;
     return _UNIT_OK;
@@ -87,6 +91,7 @@ _UNIT_CodeBuffer_Emit64(_UNIT_CodeBuffer *buffer,
     if (UNIT_FAILED(ensure_buffer_capacity(buffer, 8))) {
         return _UNIT_FAIL;
     }
+
     memcpy(buffer->data + buffer->size, &value, 8);
     buffer->size += 8;
     return _UNIT_OK;
@@ -113,6 +118,7 @@ _UNIT_CodeBuffer_Reserve(_UNIT_CodeBuffer *buffer,
     for (UNIT_Size i = 0; i < count; ++i) {
         _UNIT_CodeBuffer_Emit8(buffer, 0x00);
     }
+
     return offset;
 }
 
