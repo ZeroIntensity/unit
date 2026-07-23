@@ -164,7 +164,7 @@ init_executable_buffer(const UNIT_CompiledProcedure *compiled,
                              index);
         assert(relocation != NULL);
 
-        if (relocation->type == RELOCATION_CALL) {
+        if (relocation->type == _UNIT_RELOCATION_CALL) {
             _UNIT_Symbol *symbol =
                 _UNIT_Vector_GET(&compile_context->symbol_table.symbols,
                                  relocation->symbol_index);
@@ -190,7 +190,7 @@ init_executable_buffer(const UNIT_CompiledProcedure *compiled,
                                              (patch_address + 4));
             memcpy(patch_address, &displacement, 4);
 
-        } else if (relocation->type == RELOCATION_DATA) {
+        } else if (relocation->type == _UNIT_RELOCATION_DATA) {
             char *patch_address = (char *)code + relocation->offset;
             char *data_address = (char *)rodata + relocation->symbol_index;
             int32_t displacement = (int32_t)(data_address -

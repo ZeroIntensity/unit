@@ -94,7 +94,7 @@ that the object file will be stored in. For Linux, this is ELF, so we pass
 
 .. note::
 
-    Windows uses the Portable Executable (PE) format (:c:macro:`UNIT_FORMAT_PE`),
+    Windows uses the Portable Executable (PE) format (:c:macro:`UNIT_FORMAT_COFF`),
     and macOS uses the Mach Object (Mach-O) format (:c:macro:`UNIT_FORMAT_MACHO`).
 
     UNIT does not support either of these at the moment; trying to pass them to

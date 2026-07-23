@@ -139,7 +139,7 @@ Object files
 
       Mach-O format (macOS). Not yet implemented.
 
-   .. c:enumerator:: UNIT_FORMAT_PE
+   .. c:enumerator:: UNIT_FORMAT_COFF
 
       PE/COFF format (Windows). Not yet implemented.
 

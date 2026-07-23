@@ -191,7 +191,7 @@ UNIT_Procedure_AddJump(UNIT_Procedure *procedure,
     return UNIT_Procedure_AddOperation(procedure, instruction, jump_label->id);
 }
 
-UNIT_Size
+static UNIT_Size
 add_symbol(UNIT_Procedure *procedure,
            const char *name)
 {

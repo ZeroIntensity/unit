@@ -97,7 +97,7 @@ raw()
 enum class ExecutableFormat {
     ELF = UNIT_FORMAT_ELF,
     MACHO = UNIT_FORMAT_MACHO,
-    PE = UNIT_FORMAT_PE,
+    PE = UNIT_FORMAT_COFF,
 };
 
 class SymbolMap {
@@ -206,6 +206,7 @@ jit()
     if (buffer == NULL) {
         throw error(compiled->context);
     }
+
     return ExecutableBuffer<Function>(buffer);
 }
 
@@ -218,6 +219,7 @@ jit(SymbolMap &symbol_map)
     if (buffer == NULL) {
         throw error(compiled->context);
     }
+
     return ExecutableBuffer<Function>(buffer);
 }
 

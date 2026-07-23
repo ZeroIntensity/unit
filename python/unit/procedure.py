@@ -67,14 +67,14 @@ class CompiledProcedure:
         self._compiled = compiled_procedure
 
     def write_object_file(
-        self, path: str, format: Literal["elf", "macho", "pe"]
+        self, path: str, format: Literal["elf", "macho", "coff"]
     ) -> None:
         if format == "elf":
             format_enum = _core.UNIT_FORMAT_ELF
         elif format == "macho":
             format_enum = _core.UNIT_FORMAT_MACHO
-        elif format == "pe":
-            format_enum = _core.UNIT_FORMAT_PE
+        elif format == "coff":
+            format_enum = _core.UNIT_FORMAT_COFF
         else:
             raise ValueError(
                 f"unknown format {format!r}, expected one of: elf, macho, pe"

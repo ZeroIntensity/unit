@@ -443,7 +443,7 @@ Compiled procedures
       Write the compiled procedure to an object file.
 
       :param str path: Output file path.
-      :param str format: ``"elf"``, ``"macho"``, or ``"pe"``.
+      :param str format: ``"elf"``, ``"macho"``, or ``"coff"``.
       :raises ValueError: If *format* is not recognized.
       :raises unit.Error: If writing fails.
 

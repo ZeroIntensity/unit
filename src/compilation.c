@@ -295,7 +295,7 @@ merge_relocations(UNIT_Context *context,
         new_relocation->type = sub_relocation->type;
         new_relocation->offset = sub_relocation->offset + code_offset;
 
-        if (sub_relocation->type == RELOCATION_DATA) {
+        if (sub_relocation->type == _UNIT_RELOCATION_DATA) {
             new_relocation->symbol_index = sub_relocation->symbol_index +
                                            rodata_offset;
         } else {
@@ -512,10 +512,15 @@ UNIT_CompiledProcedure_WriteObjectFile(const UNIT_CompiledProcedure *compiled,
             return _UNIT_ELF_WriteObjectFile(&compiled->_compile_context,
                                              path);
         }
+        case UNIT_FORMAT_COFF: {
+            return _UNIT_COFF_WriteObjectFile(&compiled->_compile_context,
+                                              path);
+        }
         default: {
+            assert(format == UNIT_FORMAT_MACHO);
             _UNIT_SetError(compiled->context,
                            UNIT_ERROR_UNSUPPORTED_PLATFORM,
-                           "only ELF is supported at the moment");
+                           "mach-o is not implemented yet");
             return _UNIT_FAIL;
         }
     }

@@ -16,7 +16,7 @@ extern "C" {
 typedef enum {
     UNIT_FORMAT_ELF,
     UNIT_FORMAT_MACHO,
-    UNIT_FORMAT_PE,
+    UNIT_FORMAT_COFF,
 } UNIT_ExecutableFormat;
 
 typedef struct {

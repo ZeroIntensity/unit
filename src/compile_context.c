@@ -23,7 +23,7 @@ _UNIT_Relocation_NewCall(UNIT_Context *context,
                          UNIT_Size offset,
                          UNIT_Size symbol_index)
 {
-    return new_relocation(context, offset, symbol_index, RELOCATION_CALL);
+    return new_relocation(context, offset, symbol_index, _UNIT_RELOCATION_CALL);
 }
 
 _UNIT_Relocation *
@@ -31,7 +31,7 @@ _UNIT_Relocation_NewData(UNIT_Context *context,
                          UNIT_Size offset,
                          UNIT_Size symbol_index)
 {
-    return new_relocation(context, offset, symbol_index, RELOCATION_DATA);
+    return new_relocation(context, offset, symbol_index, _UNIT_RELOCATION_DATA);
 }
 
 void

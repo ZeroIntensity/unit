@@ -14,8 +14,8 @@ extern "C" {
 #endif
 
 typedef enum {
-    RELOCATION_CALL,
-    RELOCATION_DATA,
+    _UNIT_RELOCATION_CALL,
+    _UNIT_RELOCATION_DATA,
 } _UNIT_RelocationType;
 
 typedef struct {
