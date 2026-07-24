@@ -376,7 +376,7 @@ write_coff_header(COFF_Object *coff_object, UNIT_Context *context, FILE *file)
     WRITE_U32(symbol_table_offset);
     WRITE_U32(_UNIT_Vector_SIZE(&coff_object->symbols));
 
-    WRITE_U32(0); // Size of optional header
+    WRITE_U16(0); // Size of optional header
     WRITE_U16(0); // Characteristics
 
     return _UNIT_OK;
@@ -398,9 +398,9 @@ write_section_header(UNIT_Context *context,
 
     WRITE_U32(section->data->size);
     WRITE_U32(data_offset);
+    WRITE_U32(data_offset + section->data->size); // Offset to relocations
 
     WRITE_U32(0); // Offset to line numbers
-    WRITE_U32(data_offset + section->data->size); // Offset to relocations
 
     WRITE_U16(_UNIT_Vector_SIZE(&section->relocations));
     WRITE_U16(0); // Numbers of linenos
