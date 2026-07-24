@@ -266,6 +266,7 @@ add_symbol(COFF_Object *coff_object,
         symbol->_padding = 0;
         symbol->offset_in_string_table = get_string_table_offset(coff_object, index);
     } else {
+        memset(symbol->name, 0, 8);
         strcpy(symbol->name, name);
     }
 
@@ -362,7 +363,7 @@ build_text_section(COFF_Object *coff_object, const _UNIT_CompileContext *compile
     }
 
     _UNIT_Vector_APPEND(&coff_object->sections, text_section);
-    if (UNIT_FAILED(build_text_section(coff_object, compile_context))) {
+    if (UNIT_FAILED(build_defined_symbols(coff_object, compile_context))) {
         return _UNIT_FAIL;
     }
 

@@ -11,6 +11,8 @@ output
 *.o
 CMakeFiles/
 __pycache__/
+*.obj
+*.exe
 
 # Documentation
 .venv/

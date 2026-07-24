@@ -9,7 +9,7 @@ extern "C" {
 #endif
 
 // Enable this for debugging with valgrind
-#if 0
+#if 1
 #include <stdlib.h>
 #include <string.h>
 
