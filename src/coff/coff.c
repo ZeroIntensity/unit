@@ -106,10 +106,11 @@ typedef struct {
     char name[8];
     _UNIT_Vector relocations;
     const _UNIT_CodeBuffer *data;
+    uint32_t characteristics;
 } COFF_Section;
 
 static COFF_Section *
-COFF_Section_New(const _UNIT_CodeBuffer *buffer, const char *name)
+COFF_Section_New(const _UNIT_CodeBuffer *buffer, const char *name, uint32_t characteristics)
 {
     assert(name != NULL);
 
@@ -119,6 +120,7 @@ COFF_Section_New(const _UNIT_CodeBuffer *buffer, const char *name)
     }
 
     section->data = buffer;
+    section->characteristics = characteristics;
 
     assert(strlen(name) < 8);
     strcpy(section->name, name);
@@ -238,6 +240,39 @@ get_string_table_offset(COFF_Object *coff_object,
 }
 
 static UNIT_Size
+find_symbol(COFF_Object *coff_object, const char *name)
+{
+    assert(coff_object != NULL);
+    assert(name != NULL);
+
+    UNIT_Size length = strlen(name);
+    UNIT_Size size = _UNIT_Vector_SIZE(&coff_object->symbols);
+    for (UNIT_Size index = 0; index < size; ++index) {
+        COFF_Symbol *symbol = _UNIT_Vector_GET(&coff_object->symbols, index);
+        assert(symbol != NULL);
+        if (length < 8) {
+            if (!strncmp(symbol->name, name, length)) {
+                return index;
+            }
+        } else {
+            if (symbol->_padding != 0) {
+                // Not a pointer to the string table
+                continue;
+            }
+
+            const char *string = _UNIT_Vector_GET(&coff_object->strings,
+                                                  symbol->offset_in_string_table);
+            assert(string != NULL);
+            if (strncmp(string, name, length)) {
+                return index;
+            }
+        }
+    }
+
+    return -1;
+}
+
+static UNIT_Size
 add_symbol(COFF_Object *coff_object,
            const char *name,
            uint32_t section_offset,
@@ -246,6 +281,9 @@ add_symbol(COFF_Object *coff_object,
 {
     assert(coff_object != NULL);
     assert(name != NULL);
+    assert(section_offset >= 0);
+    assert(section_number > 0);
+    assert(is_defined == 0 || is_defined == 1);
 
     COFF_Symbol *symbol = _UNIT_Alloc(coff_object->symbols.context, sizeof(COFF_Symbol));
     if (symbol == NULL) {
@@ -276,6 +314,27 @@ add_symbol(COFF_Object *coff_object,
     symbol->storage_class = COFF_SYM_CLASS_EXTERNAL;
 
     return symbol_index;
+}
+
+static UNIT_Size
+find_or_add_symbol(COFF_Object *coff_object,
+                   const char *name,
+                   uint32_t section_offset,
+                   int16_t section_number,
+                   int8_t is_defined)
+{
+    assert(coff_object != NULL);
+    assert(name != NULL);
+    assert(section_offset >= 0);
+    assert(section_number > 0);
+    assert(is_defined == 0 || is_defined == 1);
+
+    UNIT_Size found_index = find_symbol(coff_object, name);
+    if (found_index != -1) {
+        return found_index;
+    }
+
+    return add_symbol(coff_object, name, section_offset, section_number, is_defined);
 }
 
 static UNIT_Status
@@ -329,21 +388,30 @@ build_relocations(COFF_Object *coff_object,
             return _UNIT_FAIL;
         }
 
-        assert(relocation->type == _UNIT_RELOCATION_CALL); // TODO
-        _UNIT_Symbol *symbol = _UNIT_Vector_GET(&compile_context->symbol_table.symbols,
-                                                relocation->symbol_index);
-        int16_t section_number =
-            symbol->is_defined ? (_UNIT_Vector_SIZE(&coff_object->sections)) : COFF_SYM_UNDEFINED;
-        UNIT_Size symbol_table_index = add_symbol(coff_object,
-                                                  symbol->name,
-                                                  symbol->text_offset,
-                                                  section_number,
-                                                  symbol->is_defined);
-        if (symbol_table_index == -1) {
-            return _UNIT_FAIL;
+        if (relocation->type == _UNIT_RELOCATION_CALL) {
+            _UNIT_Symbol *symbol = _UNIT_Vector_GET(&compile_context->symbol_table.symbols,
+                                                    relocation->symbol_index);
+            int16_t section_number =
+                symbol->is_defined ? (_UNIT_Vector_SIZE(&coff_object->sections)) :
+                COFF_SYM_UNDEFINED;
+            UNIT_Size symbol_table_index = find_or_add_symbol(coff_object,
+                                                              symbol->name,
+                                                              symbol->text_offset,
+                                                              section_number,
+                                                              symbol->is_defined);
+            if (symbol_table_index == -1) {
+                return _UNIT_FAIL;
+            }
+
+            coff_relocation->symbol_table_index = symbol_table_index;
+            coff_relocation->offset = relocation->offset;
+        } else {
+            assert(relocation->type == _UNIT_RELOCATION_DATA);
+            UNIT_Size rdata_symbol_index = find_symbol(coff_object, ".rdata");
+            assert(rdata_symbol_index != -1);
+            coff_relocation->symbol_table_index = rdata_symbol_index;
         }
 
-        coff_relocation->symbol_table_index = symbol_table_index;
         coff_relocation->offset = relocation->offset;
         coff_relocation->type = COFF_REL_AMD64_REL32;
     }
@@ -357,7 +425,10 @@ build_text_section(COFF_Object *coff_object, const _UNIT_CompileContext *compile
     assert(coff_object != NULL);
     assert(compile_context != NULL);
 
-    COFF_Section *text_section = COFF_Section_New(&compile_context->buffer, ".text");
+    COFF_Section *text_section = COFF_Section_New(&compile_context->buffer,
+                                                  ".text",
+                                                  COFF_SCN_CNT_CODE | COFF_SCN_MEM_EXECUTE |
+                                                  COFF_SCN_MEM_READ);
     if (text_section == NULL) {
         return _UNIT_FAIL;
     }
@@ -375,6 +446,36 @@ build_text_section(COFF_Object *coff_object, const _UNIT_CompileContext *compile
 }
 
 static UNIT_Status
+build_rdata_section(COFF_Object *coff_object,
+                    const _UNIT_CompileContext *compile_context)
+{
+    if (compile_context->string_data.constant_buffer.size == 0) {
+        return _UNIT_OK;
+    }
+
+    COFF_Section *data_section = COFF_Section_New(&compile_context->string_data.constant_buffer,
+                                                  ".rdata",
+                                                  COFF_SCN_CNT_INITIALIZED_DATA |
+                                                  COFF_SCN_MEM_READ);
+    if (data_section == NULL) {
+        return _UNIT_FAIL;
+    }
+
+    _UNIT_Vector_APPEND(&coff_object->sections, data_section);
+
+    UNIT_Size rdata_symbol = add_symbol(coff_object,
+                                        ".rdata",
+                                        0,
+                                        _UNIT_Vector_SIZE(&coff_object->sections), /*is_defined=*/
+                                        0);
+    if (rdata_symbol == -1) {
+        return _UNIT_FAIL;
+    }
+
+    return _UNIT_OK;
+}
+
+static UNIT_Status
 build_coff_object(COFF_Object *coff_object, const _UNIT_CompileContext *compile_context)
 {
     assert(coff_object != NULL);
@@ -382,6 +483,10 @@ build_coff_object(COFF_Object *coff_object, const _UNIT_CompileContext *compile_
 
     if (UNIT_FAILED(COFF_Object_Init(coff_object, compile_context->context))) {
         return _UNIT_FAIL;
+    }
+
+    if (UNIT_FAILED(build_rdata_section(coff_object, compile_context))) {
+        goto error;
     }
 
     if (UNIT_FAILED(build_text_section(coff_object, compile_context))) {
