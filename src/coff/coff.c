@@ -355,7 +355,7 @@ build_defined_symbols(COFF_Object *coff_object, const _UNIT_CompileContext *comp
                        symbol->name,
                        symbol->text_offset,
                        _UNIT_Vector_SIZE(&coff_object->sections),
-                       1) == -1) {
+                       COFF_SYM_CLASS_EXTERNAL) == -1) {
             return _UNIT_FAIL;
         }
     }
@@ -394,6 +394,8 @@ build_relocations(COFF_Object *coff_object,
             int16_t section_number =
                 symbol->is_defined ? (_UNIT_Vector_SIZE(&coff_object->sections)) :
                 COFF_SYM_UNDEFINED;
+            assert(!symbol->is_defined || (symbol->text_offset != 0));
+            assert(symbol->is_defined || (symbol->text_offset == 0));
             UNIT_Size symbol_table_index = find_or_add_symbol(coff_object,
                                                               symbol->name,
                                                               symbol->text_offset,
