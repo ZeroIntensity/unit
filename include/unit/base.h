@@ -14,7 +14,7 @@ typedef struct {
 
 static const UNIT_Status _UNIT_OK = {0};
 static const UNIT_Status _UNIT_FAIL = {-1};
-#define UNIT_FAILED(status) (((UNIT_Status)(status))._status == -1)
+#define UNIT_FAILED(status) ((status)._status == -1)
 
 #if defined(__GNUC__) || defined(__clang__)
     #define _UNIT_Unreachable()             \
