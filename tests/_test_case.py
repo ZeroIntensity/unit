@@ -52,16 +52,30 @@ class ExampleTestRunner(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         path = Path(self.temporary.name)
         self.obj = path / "test.o"
-        self.exe = path / "test"
+        self.exe = path / ("test.exe" if os.name == "nt" else "test")
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
+
+    def _find_executable(self, name: str) -> Path:
+        direct = self.build_dir / name
+        if direct.exists():
+            return direct
+
+        for config in ("Debug", "Release", "RelWithDebInfo", "MinSizeRel"):
+            candidate = self.build_dir / config / name
+            if candidate.exists():
+                return candidate
+
+        raise FileNotFoundError(
+            f"{name} not found in {self.build_dir} or config subdirectories"
+        )
 
     def compile(
         self, args: Iterable[str] | None = None, *, input: str | None = None
     ) -> None:
         subprocess.run(
-            [self.build_dir / self.executable_name, *(args or ())],
+            [self._find_executable(self.executable_name), *(args or ())],
             input=input,
             check=True,
             cwd=self.temporary.name,
