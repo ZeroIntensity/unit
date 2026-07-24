@@ -76,6 +76,7 @@ test_grow(UNIT_Context *context)
     for (int i = 0; i < 100000; ++i) {
         ASSERT_OK(context, _UNIT_CodeBuffer_Emit8(&buf, (uint8_t)(i & 0xFF)));
     }
+
     ASSERT_EQ(_UNIT_CodeBuffer_CurrentIndex(&buf), 100000);
     ASSERT_EQ(buf.data[0], 0);
     ASSERT_EQ(buf.data[99], 99);

@@ -95,10 +95,12 @@ test_grow(UNIT_Context *context)
     for (uintptr_t i = 1; i <= 100; ++i) {
         ASSERT_OK(context, _UNIT_Set_Add(&set, PTR(i)));
     }
+
     ASSERT_EQ(set.len, 100);
     for (uintptr_t i = 1; i <= 100; ++i) {
         ASSERT(_UNIT_Set_Contains(&set, PTR(i)));
     }
+
     ASSERT(!_UNIT_Set_Contains(&set, PTR(101)));
     _UNIT_Set_Clear(&set);
 }
@@ -115,6 +117,7 @@ test_grow_preserves_all(UNIT_Context *context)
             ASSERT(_UNIT_Set_Contains(&set, PTR(j)));
         }
     }
+
     _UNIT_Set_Clear(&set);
 }
 

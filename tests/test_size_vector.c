@@ -72,10 +72,12 @@ test_grow(UNIT_Context *context)
     for (UNIT_Size i = 0; i < 100; ++i) {
         ASSERT_OK(context, _UNIT_SizeVector_Append(&size_vector, i * 7));
     }
+
     ASSERT_EQ(_UNIT_SizeVector_SIZE(&size_vector), 100);
     for (UNIT_Size i = 0; i < 100; ++i) {
         ASSERT_EQ(_UNIT_SizeVector_GET(&size_vector, i), i * 7);
     }
+
     _UNIT_SizeVector_Clear(&size_vector);
 }
 
