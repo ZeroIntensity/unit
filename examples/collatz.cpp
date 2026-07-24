@@ -83,7 +83,7 @@ main(int argc, char **argv)
     procedure.print_instructions();
     auto compiled = procedure.compile(unit::Platform::host());
     compiled.print_translated();
-    compiled.write_object_file("test.o", unit::ExecutableFormat::ELF);
+    compiled.write_object_file("test.o", unit::host_format);
 
     return 0;
 }

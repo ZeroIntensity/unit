@@ -39,8 +39,9 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
+                os: [ubuntu-latest, windows-latest]
                 build-type: [Debug, Release]
-        runs-on: ubuntu-latest
+        runs-on: ${{ matrix.os }}
         steps:
             - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
               with:
@@ -53,16 +54,15 @@ jobs:
             - name: Configure
               run: >
                   cmake -B build
-                  -DCMAKE_BUILD_TYPE=${{ matrix.build-type }}
                   -DUNIT_BUILD_EXAMPLES=on
                   -DUNIT_BUILD_TESTS=on
-                  ${{ runner.os == 'Windows' && '-T ClangCL' || '' }}
+                  ${{ runner.os == 'Windows' && '-T ClangCL' || format('-DCMAKE_BUILD_TYPE={0}', matrix.build-type) }}
 
             - name: Build
-              run: cmake --build build
+              run: cmake --build build --config ${{ matrix.build-type }}
 
             - name: Run tests
-              run: cmake --build build --target tests --target python_tests
+              run: cmake --build build --config ${{ matrix.build-type }} --target tests --target python_tests
 
     build-sdist:
         needs: [test]

@@ -19,6 +19,14 @@ typedef enum {
     UNIT_FORMAT_COFF,
 } UNIT_ExecutableFormat;
 
+#if defined(__APPLE__)
+    #define UNIT_HOST_FORMAT UNIT_FORMAT_MACHO
+#elif defined(_WIN32)
+    #define UNIT_HOST_FORMAT UNIT_FORMAT_COFF
+#else
+    #define UNIT_HOST_FORMAT UNIT_FORMAT_ELF
+#endif
+
 typedef struct {
     UNIT_Context *context;
     UNIT_Platform platform;

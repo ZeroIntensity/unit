@@ -465,6 +465,40 @@ Compiled procedures
       Return the underlying C compiled procedure pointer.
 
 
+.. _cpp-exectuable-formats:
+
+Executable formats
+------------------
+
+.. cpp:enum-class:: unit::ExecutableFormat
+
+   Object file format for :cpp:func:`CompiledProcedure::write_object_file`.
+   See :c:enum:`UNIT_ExecutableFormat`.
+
+   .. cpp:enumerator:: ELF = UNIT_FORMAT_ELF
+
+      ELF format (Linux, FreeBSD, etc).
+
+   .. cpp:enumerator:: MACHO = UNIT_FORMAT_MACHO
+
+      Mach-O format (macOS). Not yet implemented.
+
+   .. cpp:enumerator:: PE = UNIT_FORMAT_COFF
+
+      PE/COFF format (Windows).
+
+
+.. cpp:var:: inline constexpr ExecutableFormat unit::host_format
+
+   The executable format of the current platform, detected at compile time.
+   See :c:macro:`UNIT_HOST_FORMAT`.
+
+   .. code-block:: cpp
+      :caption: :iconify:`devicon-plain:cplusplus` Example
+
+      compiled.write_object_file("output.o", unit::host_format);
+
+
 .. _cpp-executable-buffers:
 
 Executable buffers

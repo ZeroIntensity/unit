@@ -49,6 +49,7 @@ Platform
    This is the most common value to pass to :c:func:`UNIT_Compile`.
 
    .. code-block:: c
+      :caption: :iconify:`streamline-logos:c-language-logo-solid` Example
 
       UNIT_CompiledProcedure *compiled = UNIT_Compile(&proc, UNIT_HOST_PLATFORM);
 
@@ -132,16 +133,27 @@ Object files
 
    .. c:enumerator:: UNIT_FORMAT_ELF
 
-      ELF format (Linux, FreeBSD, etc). This is the only format currently
-      implemented.
+      Executable and Linkable Format (ELF). Linux, FreeBSD, etc.
 
    .. c:enumerator:: UNIT_FORMAT_MACHO
 
-      Mach-O format (macOS). Not yet implemented.
+      Mach Object (Mach-O) format. macOS. Not yet implemented.
 
    .. c:enumerator:: UNIT_FORMAT_COFF
 
-      PE/COFF format (Windows). Not yet implemented.
+      Common Object File Format. Windows.
+
+
+.. c:macro:: UNIT_HOST_FORMAT
+
+   The executable format used by the current operating system, auto-detected at
+   compile time.
+   This is the most common value to pass to :c:func:`UNIT_CompiledProcedure_WriteObjectFile`.
+
+   .. code-block:: c
+      :caption: :iconify:`streamline-logos:c-language-logo-solid` Example
+
+      UNIT_CompiledProcedure_WriteObjectFile(compiled_procedure, UNIT_HOST_FORMAT);
 
 
 .. c:function:: UNIT_Status UNIT_CompiledProcedure_WriteObjectFile(const UNIT_CompiledProcedure *compiled, const char *path, UNIT_ExecutableFormat format)
@@ -154,7 +166,6 @@ Object files
    :param format: The object file format.
 
    .. code-block:: c
-      :linenos:
       :caption: :iconify:`streamline-logos:c-language-logo-solid` Example
 
       UNIT_CompiledProcedure_WriteObjectFile(compiled, "output.o", UNIT_FORMAT_ELF);
