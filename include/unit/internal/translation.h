@@ -47,16 +47,22 @@ typedef struct {
     uintptr_t _tagged;
 } _UNIT_MachineDestination;
 
-#define _UNIT_MachineDestination_NULL           \
-        ((_UNIT_MachineDestination) {._tagged = \
-                                         0})
+#define _UNIT_MachineDestination_NULL _UNIT_MachineDestination_Make(0)
+
+static inline _UNIT_MachineDestination
+_UNIT_MachineDestination_Make(uintptr_t tagged)
+{
+    _UNIT_MachineDestination dest;
+    dest._tagged = tagged;
+    return dest;
+}
 
 static inline _UNIT_MachineDestination
 _UNIT_MachineDestination_FromDestination(_UNIT_MachineItem *item)
 {
     assert(item != NULL);
-    assert(((uintptr_t)item & 1) == 0); // Must be aligned
-    return (_UNIT_MachineDestination){ (uintptr_t)item };
+    assert(((uintptr_t)item & 1) == 0);
+    return _UNIT_MachineDestination_Make((uintptr_t)item);
 }
 
 static inline _UNIT_MachineDestination
@@ -64,7 +70,7 @@ _UNIT_MachineDestination_FromInput(_UNIT_MachineItem *item)
 {
     assert(item != NULL);
     assert(((uintptr_t)item & 1) == 0);
-    return (_UNIT_MachineDestination){ (uintptr_t)item | 1 };
+    return _UNIT_MachineDestination_Make((uintptr_t)item | 1);
 }
 
 static inline int8_t
