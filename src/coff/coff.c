@@ -278,20 +278,41 @@ add_symbol(COFF_Object *coff_object,
 }
 
 static UNIT_Status
-build_text_section(COFF_Object *coff_object, const _UNIT_CompileContext *compile_context)
+build_defined_symbols(COFF_Object *coff_object, const _UNIT_CompileContext *compile_context)
+{
+    assert(coff_object != NULL);
+    assert(compile_context != NULL);
+
+    UNIT_Size size = _UNIT_Vector_SIZE(&compile_context->symbol_table.symbols);
+    for (UNIT_Size index = 0; index < size; ++index) {
+        _UNIT_Symbol *symbol = _UNIT_Vector_GET(&compile_context->symbol_table.symbols, index);
+        assert(symbol != NULL);
+        if (!symbol->is_defined) {
+            continue;
+        }
+
+        if (add_symbol(coff_object,
+                       symbol->name,
+                       symbol->text_offset,
+                       _UNIT_Vector_SIZE(&coff_object->sections),
+                       1) == -1) {
+            return _UNIT_FAIL;
+        }
+    }
+
+    return _UNIT_OK;
+}
+
+static UNIT_Status
+build_relocations(COFF_Object *coff_object,
+                  COFF_Section *text_section,
+                  const _UNIT_CompileContext *compile_context)
 {
     assert(coff_object != NULL);
     assert(compile_context != NULL);
 
     UNIT_Context *context = compile_context->context;
     assert(context != NULL);
-
-    COFF_Section *text_section = COFF_Section_New(&compile_context->buffer, ".text");
-    if (text_section == NULL) {
-        return _UNIT_FAIL;
-    }
-
-    _UNIT_Vector_APPEND(&coff_object->sections, text_section);
 
     UNIT_Size size = _UNIT_Vector_SIZE(&compile_context->symbol_table.relocations);
     for (UNIT_Size index = 0; index < size; ++index) {
@@ -324,6 +345,29 @@ build_text_section(COFF_Object *coff_object, const _UNIT_CompileContext *compile
         coff_relocation->symbol_table_index = symbol_table_index;
         coff_relocation->offset = relocation->offset;
         coff_relocation->type = COFF_REL_AMD64_REL32;
+    }
+
+    return _UNIT_OK;
+}
+
+static UNIT_Status
+build_text_section(COFF_Object *coff_object, const _UNIT_CompileContext *compile_context)
+{
+    assert(coff_object != NULL);
+    assert(compile_context != NULL);
+
+    COFF_Section *text_section = COFF_Section_New(&compile_context->buffer, ".text");
+    if (text_section == NULL) {
+        return _UNIT_FAIL;
+    }
+
+    _UNIT_Vector_APPEND(&coff_object->sections, text_section);
+    if (UNIT_FAILED(build_text_section(coff_object, compile_context))) {
+        return _UNIT_FAIL;
+    }
+
+    if (UNIT_FAILED(build_relocations(coff_object, text_section, compile_context))) {
+        return _UNIT_FAIL;
     }
 
     return _UNIT_OK;
