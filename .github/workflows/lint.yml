@@ -21,6 +21,13 @@ jobs:
                   python-version: "3.14"
 
             - name: Install uncrustify
-              run: sudo apt-get update && sudo apt-get install -y uncrustify
+              run: |
+                  wget https://github.com/uncrustify/uncrustify/archive/refs/tags/uncrustify-0.83.0.tar.gz
+                  tar xzf uncrustify-0.83.0.tar.gz
+                  cd uncrustify-uncrustify-0.83.0
+                  cmake -B build -DCMAKE_BUILD_TYPE=Release
+                  cmake --build build
+                  sudo cmake --install build
+                  uncrustify --version
 
             - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
