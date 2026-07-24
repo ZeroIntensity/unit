@@ -468,7 +468,7 @@ print_debug_item(UNIT_Context *context,
 
     switch (item->type) {
         case DEBUG_TYPE_INT: {
-            PRINT("%ld", item->value);
+            PRINT("%lld", (long long)item->value);
             break;
         }
 

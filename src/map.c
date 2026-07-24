@@ -20,14 +20,29 @@ _wyrot(uint64_t x)
     return (x >> 32) | (x << 32);
 }
 
+#ifdef _MSC_VER
+#include <intrin.h>
+
 static inline void
-_wymix(uint64_t *a,
-       uint64_t *b) {
-    *a ^= *b;
+_wymix(uint64_t *a, uint64_t *b)
+{
+    uint64_t hi;
+    uint64_t lo = _umul128(*a, *b, &hi);
+    *a = lo;
+    *b = hi;
+}
+
+#else
+
+static inline void
+_wymix(uint64_t *a, uint64_t *b)
+{
     __uint128_t r = (__uint128_t)(*a) * (*b);
     *a = (uint64_t)r;
     *b = (uint64_t)(r >> 64);
 }
+
+#endif
 
 static inline uint64_t
 _wyr8(const uint8_t *p) {
