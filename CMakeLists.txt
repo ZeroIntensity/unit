@@ -69,7 +69,7 @@ if(UNIT_BUILD_TESTS)
     endif()
 
     add_custom_target(tests
-        COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
+        COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -C $<CONFIG>
         DEPENDS ${TEST_TARGETS}
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     )
