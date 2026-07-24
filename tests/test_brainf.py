@@ -1,5 +1,5 @@
-import unittest
 import string
+import unittest
 
 from _test_case import ExampleTestRunner
 

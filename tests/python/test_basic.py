@@ -1,6 +1,7 @@
-from typing import Any
-import unit
 import unittest
+from typing import Any
+
+import unit
 
 
 class BasicTests(unittest.TestCase):

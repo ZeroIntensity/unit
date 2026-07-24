@@ -1,9 +1,39 @@
-from collections.abc import Iterable
 import os
-import unittest
-import tempfile
-from pathlib import Path
+import shutil
 import subprocess
+import tempfile
+import unittest
+from collections.abc import Iterable
+from pathlib import Path
+
+
+def get_link_command(obj_path: str, out_path: str) -> list[str]:
+    if os.name == "nt":
+        if shutil.which("gcc"):
+            return ["gcc", "-o", out_path, obj_path]
+        if shutil.which("clang"):
+            return ["clang", "-o", out_path, obj_path]
+        if shutil.which("link"):
+            return [
+                "link",
+                obj_path,
+                f"/out:{out_path}",
+                "/subsystem:console",
+                "/entry:main",
+                "msvcrt.lib",
+                "ucrt.lib",
+                "legacy_stdio_definitions.lib",
+            ]
+        raise RuntimeError("no C linker found")
+    else:
+        if shutil.which("gcc"):
+            return ["gcc", "-o", out_path, obj_path]
+        if shutil.which("cc"):
+            return ["cc", "-o", out_path, obj_path]
+        if shutil.which("clang"):
+            return ["clang", "-o", out_path, obj_path]
+        raise RuntimeError("no C linker found")
+
 
 BUILD_DIR = os.environ.get("BUILD_DIR", "./build")
 
@@ -38,9 +68,9 @@ class ExampleTestRunner(unittest.TestCase):
             encoding="utf-8",
             timeout=5,
         )
-        # TODO: Detect MSVC and Clang
+        cmd = get_link_command("test.o", "out")
         subprocess.run(
-            ["gcc", "-o", "out", "test.o", "-lc"],
+            cmd,
             check=True,
             cwd=self.temporary.name,
             timeout=5,

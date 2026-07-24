@@ -1,10 +1,11 @@
-from typing import IO, Generator
-import unittest
-from examples.language_with_jit import Interpreter, Parser
 import io
 import os
 import tempfile
+import unittest
 from contextlib import contextmanager
+from typing import IO, Generator
+
+from examples.language_with_jit import Interpreter, Parser
 
 
 @contextmanager
