@@ -277,13 +277,13 @@ add_symbol(COFF_Object *coff_object,
            const char *name,
            uint32_t section_offset,
            int16_t section_number,
-           int8_t is_defined)
+           uint8_t storage_class)
 {
     assert(coff_object != NULL);
     assert(name != NULL);
     assert(section_offset >= 0);
     assert(section_number > 0);
-    assert(is_defined == 0 || is_defined == 1);
+    assert(storage_class >= 0);
 
     COFF_Symbol *symbol = _UNIT_Alloc(coff_object->symbols.context, sizeof(COFF_Symbol));
     if (symbol == NULL) {
@@ -308,10 +308,10 @@ add_symbol(COFF_Object *coff_object,
         strcpy(symbol->name, name);
     }
 
-    symbol->section_offset = is_defined ? section_offset : 0;
+    symbol->section_offset = section_offset;
     symbol->section_number = section_number;
-    symbol->type = 0; // is_defined ? COFF_SYM_TYPE_FUNCTION : COFF_SYM_TYPE_NULL;
-    symbol->storage_class = COFF_SYM_CLASS_EXTERNAL;
+    symbol->type = 0; // TODO(?)
+    symbol->storage_class = storage_class;
 
     return symbol_index;
 }
@@ -321,20 +321,20 @@ find_or_add_symbol(COFF_Object *coff_object,
                    const char *name,
                    uint32_t section_offset,
                    int16_t section_number,
-                   int8_t is_defined)
+                   uint8_t storage_class)
 {
     assert(coff_object != NULL);
     assert(name != NULL);
     assert(section_offset >= 0);
     assert(section_number > 0);
-    assert(is_defined == 0 || is_defined == 1);
+    assert(storage_class >= 0);
 
     UNIT_Size found_index = find_symbol(coff_object, name);
     if (found_index != -1) {
         return found_index;
     }
 
-    return add_symbol(coff_object, name, section_offset, section_number, is_defined);
+    return add_symbol(coff_object, name, section_offset, section_number, storage_class);
 }
 
 static UNIT_Status
@@ -398,7 +398,7 @@ build_relocations(COFF_Object *coff_object,
                                                               symbol->name,
                                                               symbol->text_offset,
                                                               section_number,
-                                                              symbol->is_defined);
+                                                              COFF_SYM_CLASS_EXTERNAL);
             if (symbol_table_index == -1) {
                 return _UNIT_FAIL;
             }
@@ -466,8 +466,8 @@ build_rdata_section(COFF_Object *coff_object,
     UNIT_Size rdata_symbol = add_symbol(coff_object,
                                         ".rdata",
                                         0,
-                                        _UNIT_Vector_SIZE(&coff_object->sections), /*is_defined=*/
-                                        0);
+                                        _UNIT_Vector_SIZE(&coff_object->sections),
+                                        COFF_SYM_CLASS_STATIC);
     if (rdata_symbol == -1) {
         return _UNIT_FAIL;
     }
@@ -555,7 +555,7 @@ write_section_header(UNIT_Context *context,
     WRITE_U16(_UNIT_Vector_SIZE(&section->relocations));
     WRITE_U16(0); // Numbers of linenos
 
-    WRITE_U32(COFF_SCN_MEM_EXECUTE | COFF_SCN_MEM_READ | COFF_SCN_CNT_CODE); // Characteristics
+    WRITE_U32(section->characteristics);
 
     return _UNIT_OK;
 }
