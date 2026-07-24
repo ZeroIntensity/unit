@@ -67,6 +67,9 @@ class ExampleTestRunner(unittest.TestCase):
             if candidate.exists():
                 return candidate
 
+        if not name.endswith(".exe"):
+            return self._find_executable(name + ".exe")
+
         raise FileNotFoundError(
             f"{name} not found in {self.build_dir} or config subdirectories"
         )
