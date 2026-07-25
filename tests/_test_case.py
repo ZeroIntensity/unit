@@ -48,7 +48,7 @@ class ExampleTestRunner(unittest.TestCase):
             raise FileNotFoundError(f"{self.build_dir} not found")
         self.temporary = tempfile.TemporaryDirectory()
         path = Path(self.temporary.name)
-        self.obj = path / "test.o"
+        self.obj = path / ("test.obj" if os.name == "nt" else "test.o")
         self.exe = path / ("test.exe" if os.name == "nt" else "test")
 
     def tearDown(self) -> None:
@@ -82,7 +82,7 @@ class ExampleTestRunner(unittest.TestCase):
             encoding="utf-8",
             timeout=5,
         )
-        cmd = get_link_command("test.o", "out")
+        cmd = get_link_command(str(self.obj.absolute()), str(self.exe.absolute()))
         subprocess.run(
             cmd,
             check=True,
@@ -97,7 +97,7 @@ class ExampleTestRunner(unittest.TestCase):
         input: str | None = None,
     ) -> str:
         result = subprocess.run(
-            [Path(self.temporary.name) / "out", *(args or ())],
+            [self.exe, *(args or ())],
             capture_output=True,
             input=input,
             encoding="utf-8",
