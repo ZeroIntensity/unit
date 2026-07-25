@@ -394,6 +394,7 @@ new_machine_item(_UNIT_Translation *translation,
     } else {
         item->hint = NULL;
     }
+
     attach_item_to_translation(translation, item);
     return item;
 }
@@ -1205,6 +1206,7 @@ _UNIT_Translate(_UNIT_Translation *translation,
                         if (location->hint != NULL) {
                             _UNIT_Dealloc(context, location->hint);
                         }
+
                         goto error;
                     }
 
@@ -1495,10 +1497,13 @@ _UNIT_Translate(_UNIT_Translation *translation,
 
             case UNIT_OP_CALL_NAME: {
                 ARGUMENT_TO_ITEM(symbol, _UNIT_TYPE_CONSTANT);
-                symbol->hint = _UNIT_StrDup(context, _UNIT_Vector_GET(&procedure->_symbols, operation->argument));
+                symbol->hint = _UNIT_StrDup(context,
+                                            _UNIT_Vector_GET(&procedure->_symbols,
+                                                             operation->argument));
                 if (symbol->hint == NULL) {
                     goto error;
                 }
+
                 POP_TO_VAR(args);
                 INST_CHECK(args->type == _UNIT_TYPE_CALL_ARGS,
                            "got non-args item off stack");

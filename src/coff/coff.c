@@ -259,6 +259,7 @@ find_symbol(COFF_Object *coff_object, const char *name)
                 // Not a pointer to the string table
                 continue;
             }
+
             UNIT_Size str_count = _UNIT_Vector_SIZE(&coff_object->strings);
             for (UNIT_Size s = 0; s < str_count; ++s) {
                 const char *string = _UNIT_Vector_GET(&coff_object->strings, s);
