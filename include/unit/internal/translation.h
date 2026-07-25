@@ -34,7 +34,7 @@ typedef struct _UNIT_MachineItem {
             UNIT_OperationCode type; // One of the comparison instructions
         } comparison;
     };
-    const char *hint;
+    char *hint;
     // Next node in the machine item linked list
     struct _UNIT_MachineItem *next;
     struct {

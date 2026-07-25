@@ -251,7 +251,7 @@ find_symbol(COFF_Object *coff_object, const char *name)
         COFF_Symbol *symbol = _UNIT_Vector_GET(&coff_object->symbols, index);
         assert(symbol != NULL);
         if (length < 8) {
-            if (!strncmp(symbol->name, name, length)) {
+            if (symbol->_padding != 0 && !strncmp(symbol->name, name, 8)) {
                 return index;
             }
         } else {
@@ -259,12 +259,12 @@ find_symbol(COFF_Object *coff_object, const char *name)
                 // Not a pointer to the string table
                 continue;
             }
-
-            const char *string = _UNIT_Vector_GET(&coff_object->strings,
-                                                  symbol->offset_in_string_table);
-            assert(string != NULL);
-            if (strncmp(string, name, length)) {
-                return index;
+            UNIT_Size str_count = _UNIT_Vector_SIZE(&coff_object->strings);
+            for (UNIT_Size s = 0; s < str_count; ++s) {
+                const char *string = _UNIT_Vector_GET(&coff_object->strings, s);
+                if (!strcmp(string, name)) {
+                    return index;
+                }
             }
         }
     }
@@ -282,7 +282,7 @@ add_symbol(COFF_Object *coff_object,
     assert(coff_object != NULL);
     assert(name != NULL);
     assert(section_offset >= 0);
-    assert(section_number > 0);
+    assert(section_number == COFF_SYM_UNDEFINED || section_number > 0);
     assert(storage_class >= 0);
 
     COFF_Symbol *symbol = _UNIT_Alloc(coff_object->symbols.context, sizeof(COFF_Symbol));
@@ -326,7 +326,7 @@ find_or_add_symbol(COFF_Object *coff_object,
     assert(coff_object != NULL);
     assert(name != NULL);
     assert(section_offset >= 0);
-    assert(section_number > 0);
+    assert(section_number == COFF_SYM_UNDEFINED || section_number > 0);
     assert(storage_class >= 0);
 
     UNIT_Size found_index = find_symbol(coff_object, name);

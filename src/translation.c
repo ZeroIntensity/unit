@@ -385,7 +385,15 @@ new_machine_item(_UNIT_Translation *translation,
 
     item->type = type;
     item->value = value;
-    item->hint = hint;
+    if (hint != NULL) {
+        item->hint = _UNIT_StrDup(translation->context, hint);
+        if (item->hint == NULL) {
+            _UNIT_Dealloc(translation->context, item);
+            return NULL;
+        }
+    } else {
+        item->hint = NULL;
+    }
     attach_item_to_translation(translation, item);
     return item;
 }
@@ -1175,7 +1183,12 @@ _UNIT_Translate(_UNIT_Translation *translation,
                     goto error;
                 }
 
-                location->hint = hint;
+                if (hint != NULL) {
+                    location->hint = _UNIT_StrDup(context, hint);
+                    if (location->hint == NULL) {
+                        goto error;
+                    }
+                }
 
                 POP_TO_VAR(item);
                 EMIT_DEST_ONE(_UNIT_I_LOAD, location, item);
@@ -1189,6 +1202,9 @@ _UNIT_Translate(_UNIT_Translation *translation,
                                                                stack_slot,
                                                                hint);
                     if (slot == NULL) {
+                        if (location->hint != NULL) {
+                            _UNIT_Dealloc(context, location->hint);
+                        }
                         goto error;
                     }
 
@@ -1479,8 +1495,10 @@ _UNIT_Translate(_UNIT_Translation *translation,
 
             case UNIT_OP_CALL_NAME: {
                 ARGUMENT_TO_ITEM(symbol, _UNIT_TYPE_CONSTANT);
-                symbol->hint = _UNIT_Vector_GET(&procedure->_symbols,
-                                                operation->argument);
+                symbol->hint = _UNIT_StrDup(context, _UNIT_Vector_GET(&procedure->_symbols, operation->argument));
+                if (symbol->hint == NULL) {
+                    goto error;
+                }
                 POP_TO_VAR(args);
                 INST_CHECK(args->type == _UNIT_TYPE_CALL_ARGS,
                            "got non-args item off stack");
@@ -1495,7 +1513,10 @@ _UNIT_Translate(_UNIT_Translation *translation,
                                      operation->argument);
                 assert(subprocedure != NULL);
                 ARGUMENT_TO_ITEM(procedure_id, _UNIT_TYPE_CONSTANT);
-                procedure_id->hint = subprocedure->name;
+                procedure_id->hint = _UNIT_StrDup(context, subprocedure->name);
+                if (procedure_id->hint == NULL) {
+                    goto error;
+                }
 
                 // TODO: Inlining
                 // if (should_inline(...)) _UNIT_Translate(translation, subprocedure)
@@ -1676,6 +1697,10 @@ _UNIT_Translation_Clear(_UNIT_Translation *translation)
         _UNIT_MachineItem *next = head->next;
         if (head->type == _UNIT_TYPE_CALL_ARGS) {
             _UNIT_Vector_Free(head->call_args);
+        }
+
+        if (head->hint != NULL) {
+            _UNIT_Dealloc(translation->context, head->hint);
         }
 
         _UNIT_Dealloc(translation->context, head);
