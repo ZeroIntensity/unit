@@ -16,7 +16,6 @@ def get_link_command(obj_path: str, out_path: str) -> list[str]:
                 obj_path,
                 f"/out:{out_path}",
                 "/subsystem:console",
-                "/entry:main",
                 "msvcrt.lib",
                 "ucrt.lib",
                 "legacy_stdio_definitions.lib",
