@@ -44,21 +44,32 @@ indirect(AMD64_Operand operand) {
     };
 }
 
-static const AMD64_Register register_map[] = {
-    REG_RAX,
-    REG_RCX,
-    REG_RDX,
-    REG_RSI,
-    REG_RDI,
-    REG_R8,
-    REG_R9,
-    REG_R10,
-};
+static const AMD64_Register *
+get_platform_register_map(UNIT_Platform platform)
+{
+    static const AMD64_Register systemv[] = {
+        REG_RAX, REG_RCX, REG_RDX, REG_RSI, REG_RDI,
+        REG_R8, REG_R9, REG_R10,
+    };
+
+    static const AMD64_Register win64[] = {
+        REG_RAX, REG_RCX, REG_RDX,
+        REG_R8, REG_R9, REG_R10,
+    };
+
+    UNIT_ABI abi = UNIT_Platform_GET_ABI(platform);
+    if (abi == UNIT_ABI_SYSTEMV) {
+        return systemv;
+    } else {
+        assert(abi == UNIT_ABI_WIN64);
+        return win64;
+    }
+}
 
 static const AMD64_Register REG_SCRATCH = REG_R11;
 
 static const AMD64_Register *
-get_argument_registers(UNIT_ABI abi)
+get_argument_registers(UNIT_Platform platorm)
 {
     static const AMD64_Register systemv[] = {
         REG_RDI, REG_RSI, REG_RDX, REG_RCX, REG_R8, REG_R9
@@ -66,26 +77,25 @@ get_argument_registers(UNIT_ABI abi)
     static const AMD64_Register win64[] = {
         REG_RCX, REG_RDX, REG_R8, REG_R9
     };
+    UNIT_ABI abi = UNIT_Platform_GET_ABI(platorm);
 
-    switch (abi) {
-        case UNIT_ABI_SYSTEMV: {
-            return systemv;
-        }
-        case UNIT_ABI_WIN64: {
-            return win64;
-        }
-        default: {
-            _UNIT_Unreachable();
-        }
+    if (abi == UNIT_ABI_SYSTEMV) {
+        return systemv;
+    } else {
+        assert(abi == UNIT_ABI_WIN64);
+        return win64;
     }
 }
 
 AMD64_Operand
-machine_item_to_operand(const _UNIT_MachineItem *machine_item)
+machine_item_to_operand(const _UNIT_CompileContext *compile_context,
+                        const _UNIT_MachineItem *machine_item)
 {
+    assert(compile_context != NULL);
     assert(machine_item != NULL);
     if (machine_item->type == _UNIT_TYPE_REGISTER) {
-        return reg(register_map[machine_item->value]);
+        const AMD64_Register *map = get_platform_register_map(compile_context->target);
+        return reg(map[machine_item->value]);
     } else if (machine_item->type == _UNIT_TYPE_CONSTANT) {
         return immediate(machine_item->value);
     } else if (machine_item->type == _UNIT_TYPE_CALL_ARGS) {
@@ -225,7 +235,7 @@ use_scratch_register_if_needed(_UNIT_CompileContext *compile_context,
     assert(compile_context != NULL);
     assert(item != NULL);
     assert(out_operand != NULL);
-    AMD64_Operand in_operand = machine_item_to_operand(item);
+    AMD64_Operand in_operand = machine_item_to_operand(compile_context, item);
     if (in_operand.kind == OPERAND_REGISTER) {
         *out_operand = in_operand;
         return _UNIT_OK;
@@ -241,7 +251,7 @@ undo_scratch_register_if_used(_UNIT_CompileContext *compile_context,
                               _UNIT_MachineItem *item,
                               AMD64_Operand actual)
 {
-    AMD64_Operand original = machine_item_to_operand(item);
+    AMD64_Operand original = machine_item_to_operand(compile_context, item);
     if (original.kind != OPERAND_REGISTER &&
         original.kind != OPERAND_IMMEDIATE) {
         EMIT(mov(compile_context->context, original, actual));
@@ -259,16 +269,17 @@ preserve_register(_UNIT_CompileContext *compile_context,
     assert(compile_context != NULL);
     assert(operation != NULL);
     assert(slot_ptr != NULL);
-#define IGNORE_IF_TARGET(val)                               \
-        if ((val) != NULL                                   \
-            && (val)->type == _UNIT_TYPE_REGISTER           \
-            && register_map[(val)->value] == to_preserve) { \
-            *slot_ptr = -1;                                 \
-            return _UNIT_OK;                                \
+
+    const AMD64_Register *map = get_platform_register_map(compile_context->target);
+#define IGNORE_IF_TARGET(val)                      \
+        if ((val) != NULL                          \
+            && (val)->type == _UNIT_TYPE_REGISTER  \
+            && map[(val)->value] == to_preserve) { \
+            *slot_ptr = -1;                        \
+            return _UNIT_OK;                       \
         }
 
-    IGNORE_IF_TARGET(_UNIT_MachineDestination_GetPointerNullable(
-                         operation->destination));
+    IGNORE_IF_TARGET(_UNIT_MachineDestination_GetPointerNullable(operation->destination));
     IGNORE_IF_TARGET(operation->argument_1);
     IGNORE_IF_TARGET(operation->argument_2);
 
@@ -324,7 +335,6 @@ operands_equal(AMD64_Operand left,
 static UNIT_Status
 translate_operation(_UNIT_CompileContext *compile_context,
                     _UNIT_MachineOperation *operation,
-                    UNIT_ABI abi,
                     _UNIT_SizeVector *epilogue_patches)
 {
     assert(compile_context != NULL);
@@ -332,7 +342,7 @@ translate_operation(_UNIT_CompileContext *compile_context,
     assert(epilogue_patches != NULL);
     UNIT_Context *ctx = compile_context->context;
 
-#define OP(value) machine_item_to_operand(ENSURE_VALID_ITEM(operation->value))
+#define OP(value) machine_item_to_operand(compile_context, ENSURE_VALID_ITEM(operation->value))
 
 #define USE_SCRATCH_REGISTER(name)                                           \
         AMD64_Operand name;                                                  \
@@ -367,6 +377,9 @@ translate_operation(_UNIT_CompileContext *compile_context,
             return _UNIT_FAIL;                              \
         }
 
+    const AMD64_Register *register_map = get_platform_register_map(compile_context->target);
+    UNIT_ABI abi = UNIT_Platform_GET_ABI(compile_context->target);
+
     switch (operation->instruction) {
         /* General instructions */
 
@@ -398,7 +411,7 @@ translate_operation(_UNIT_CompileContext *compile_context,
 
             PRESERVE_REGISTER(REG_RAX);
             const AMD64_Register *argument_registers =
-                get_argument_registers(abi);
+                get_argument_registers(compile_context->target);
 
             // Save argument registers into stack frame slots
             UNIT_Size save_slots[8];
@@ -427,7 +440,7 @@ translate_operation(_UNIT_CompileContext *compile_context,
                     argument_registers[argument];
                 _UNIT_MachineItem *arg_item = _UNIT_Vector_GET(arguments,
                                                                argument);
-                AMD64_Operand value = machine_item_to_operand(arg_item);
+                AMD64_Operand value = machine_item_to_operand(compile_context, arg_item);
 
                 // We load from the save slots in order to avoid some circular
                 // dependency issues.
@@ -447,9 +460,18 @@ translate_operation(_UNIT_CompileContext *compile_context,
                 EMIT(mov(ctx, reg(argument_register), value));
             }
 
+            // Win64 requires "shadow space"
+            if (abi == UNIT_ABI_WIN64) {
+                EMIT(sub(ctx, reg(REG_RSP), immediate(32)));
+            }
+
             EMIT(mov(ctx, reg(REG_RAX), immediate(0)));
             EMIT(call_symbol(ctx, OP(argument_1)));
             EMIT(mov(ctx, OP(destination), reg(REG_RAX)));
+
+            if (abi == UNIT_ABI_WIN64) {
+                EMIT(add(ctx, reg(REG_RSP), immediate(32)));
+            }
 
             for (UNIT_Size index = 0; index < 8; ++index) {
                 if (save_slots[index] == -1) {
@@ -722,8 +744,7 @@ patch_epilogues(_UNIT_CompileContext *compile_context,
 
 UNIT_Status
 _UNIT_AMD64_Compile(_UNIT_Translation *translation,
-                    _UNIT_CompileContext *compile_context,
-                    UNIT_ABI abi)
+                    _UNIT_CompileContext *compile_context)
 {
     // Reserve space for the prologue (sub rsp, imm32 = 7 bytes).
     // We'll patch it once we know the final frame size.
@@ -752,7 +773,6 @@ _UNIT_AMD64_Compile(_UNIT_Translation *translation,
             assert(operation != NULL);
             if (UNIT_FAILED(translate_operation(compile_context,
                                                 operation,
-                                                abi,
                                                 &epilogue_patches))) {
                 _UNIT_SizeVector_Clear(&epilogue_patches);
                 return _UNIT_FAIL;

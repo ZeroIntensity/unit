@@ -95,11 +95,11 @@ compile_procedure(const UNIT_Procedure *procedure,
         }
     }
 
-    if (UNIT_FAILED(_UNIT_CompileContext_Init(
-                        &compiled_procedure->_compile_context,
-                        context,
-                        procedure,
-                        &compiled_procedure->_translation))) {
+    if (UNIT_FAILED(_UNIT_CompileContext_Init(&compiled_procedure->_compile_context,
+                                              context,
+                                              procedure,
+                                              &compiled_procedure->_translation,
+                                              platform))) {
         _UNIT_Translation_Clear(&compiled_procedure->_translation);
         _UNIT_Dealloc(context, compiled_procedure);
         return NULL;
@@ -121,8 +121,7 @@ compile_procedure(const UNIT_Procedure *procedure,
     switch (UNIT_Platform_GET_ARCH(platform)) {
         case UNIT_ARCH_AMD64: {
             result = _UNIT_AMD64_Compile(&compiled_procedure->_translation,
-                                         &compiled_procedure->_compile_context,
-                                         UNIT_Platform_GET_ABI(platform));
+                                         &compiled_procedure->_compile_context);
             break;
         }
         default: {

@@ -281,7 +281,8 @@ UNIT_Status
 _UNIT_CompileContext_Init(_UNIT_CompileContext *compile_context,
                           UNIT_Context *context,
                           const UNIT_Procedure *procedure,
-                          const _UNIT_Translation *translation)
+                          const _UNIT_Translation *translation,
+                          UNIT_Platform platform)
 {
     assert(compile_context != NULL);
     assert(context != NULL);
@@ -315,6 +316,8 @@ _UNIT_CompileContext_Init(_UNIT_CompileContext *compile_context,
         _UNIT_SymbolTable_Clear(&compile_context->symbol_table);
         return _UNIT_FAIL;
     }
+
+    compile_context->target = platform;
 
     init_stack_frame(&compile_context->stack_frame,
                      translation->num_memory_slots);

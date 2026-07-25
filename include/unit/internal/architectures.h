@@ -13,8 +13,7 @@ extern "C" {
 
 UNIT_Status
 _UNIT_AMD64_Compile(_UNIT_Translation *translation,
-                    _UNIT_CompileContext *context,
-                    UNIT_ABI abi);
+                    _UNIT_CompileContext *context);
 
 #ifdef __cplusplus
 }
