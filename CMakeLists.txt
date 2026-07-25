@@ -19,6 +19,11 @@ set_target_properties(${PROJECT_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 option(UNIT_BUILD_EXAMPLES "Build example programs" OFF)
 
+# Necessary for enumerating loaded modules on Windows
+if(WIN32)
+    target_link_libraries(unit PRIVATE psapi)
+endif()
+
 if(UNIT_BUILD_EXAMPLES)
     add_executable(unit_guess "${CMAKE_SOURCE_DIR}/examples/guessing_game.c")
     target_link_libraries(unit_guess PRIVATE unit)

@@ -87,9 +87,35 @@ struct _UNIT_ExecutableBuffer {
             do { DWORD old; VirtualProtect(ptr, size, PAGE_READONLY, &old);} while (0)
     #define JIT_FREE(ptr, size) VirtualFree(ptr, 0, MEM_RELEASE)
     #define JIT_FAILED(ptr) ((ptr) == NULL)
-    #define JIT_RESOLVE_SYMBOL(name)              \
-            GetProcAddress(GetModuleHandle(NULL), \
-                           name)
+
+#include <windows.h>
+#include <psapi.h>
+
+static void *
+resolve_symbol_windows(const char *name)
+{
+    HMODULE modules[128];
+    DWORD bytes_needed;
+
+    if (!EnumProcessModules(GetCurrentProcess(),
+                            modules,
+                            sizeof(modules),
+                            &bytes_needed)) {
+        return NULL;
+    }
+
+    DWORD count = bytes_needed / sizeof(HMODULE);
+    for (DWORD index = 0; index < count; index++) {
+        void *addr = (void *)GetProcAddress(modules[index], name);
+        if (addr != NULL) {
+            return addr;
+        }
+    }
+
+    return NULL;
+}
+
+#define JIT_RESOLVE_SYMBOL(name) resolve_symbol_windows(name)
 #else
     #include <sys/mman.h>
     #include <dlfcn.h>
