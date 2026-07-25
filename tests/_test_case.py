@@ -8,11 +8,8 @@ from pathlib import Path
 
 
 def get_link_command(obj_path: str, out_path: str) -> list[str]:
+    extra_args = []
     if os.name == "nt":
-        if shutil.which("gcc"):
-            return ["gcc", "-o", out_path, obj_path]
-        if shutil.which("clang"):
-            return ["clang", "-o", out_path, obj_path]
         if shutil.which("link"):
             return [
                 "link",
@@ -24,15 +21,15 @@ def get_link_command(obj_path: str, out_path: str) -> list[str]:
                 "ucrt.lib",
                 "legacy_stdio_definitions.lib",
             ]
-        raise RuntimeError("no C linker found")
-    else:
-        if shutil.which("gcc"):
-            return ["gcc", "-o", out_path, obj_path]
-        if shutil.which("cc"):
-            return ["cc", "-o", out_path, obj_path]
-        if shutil.which("clang"):
-            return ["clang", "-o", out_path, obj_path]
-        raise RuntimeError("no C linker found")
+        extra_args.append("-llegacy_stdio_definitions")
+
+    if shutil.which("gcc"):
+        return ["gcc", "-o", out_path, obj_path, *extra_args]
+    if shutil.which("cc"):
+        return ["cc", "-o", out_path, obj_path, *extra_args]
+    if shutil.which("clang"):
+        return ["clang", "-o", out_path, obj_path, *extra_args]
+    raise RuntimeError("no C linker found")
 
 
 BUILD_DIR = os.environ.get("BUILD_DIR", "./build")
