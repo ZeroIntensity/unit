@@ -716,10 +716,9 @@ AMD64_encode_instruction(_UNIT_CompileContext *compile_context,
             EMIT8(OPCODE_LEA);
             EMIT8(modrm(MOD_INDIRECT, reg_bits(dst.reg), 5));
 
-            _UNIT_Relocation *relocation = _UNIT_Relocation_NewData(
-                compile_context->context,
-                INDEX(),
-                byte_offset);
+            _UNIT_Relocation *relocation = _UNIT_Relocation_NewData(compile_context->context,
+                                                                    INDEX(),
+                                                                    byte_offset);
             if (relocation == NULL) {
                 goto error;
             }
@@ -730,7 +729,7 @@ AMD64_encode_instruction(_UNIT_CompileContext *compile_context,
                 goto error;
             }
 
-            EMIT32(0x00);
+            EMIT32(byte_offset);
             break;
         }
 
