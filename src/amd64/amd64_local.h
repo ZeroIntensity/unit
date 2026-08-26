@@ -14,8 +14,8 @@ typedef enum {
     REG_RBP = 5,
     REG_RSI = 6,
     REG_RDI = 7,
-    REG_R8  = 8,
-    REG_R9  = 9,
+    REG_R8 = 8,
+    REG_R9 = 9,
     REG_R10 = 10,
     REG_R11 = 11,
     REG_R12 = 12,
@@ -23,6 +23,11 @@ typedef enum {
     REG_R14 = 14,
     REG_R15 = 15,
 } AMD64_Register;
+
+// Indirect means "there's a pointer in this register"
+typedef struct {
+    AMD64_Register reg;
+} AMD64_Indirect;
 
 typedef enum {
     // Moves
@@ -81,18 +86,9 @@ typedef struct {
         AMD64_Register reg;
         uint64_t immediate;
         uint64_t stack_offset;
+        AMD64_Indirect indirect;
     };
 } AMD64_Operand;
-
-typedef struct {
-    AMD64_Opcode opcode;
-    AMD64_Operand operands[3];
-    UNIT_Size operand_count;
-} AMD64_Instruction;
-
-UNIT_Status
-AMD64_encode_instruction(_UNIT_CompileContext *context,
-                         AMD64_Instruction *instr);
 
 void
 AMD64_PatchPrologue(_UNIT_CompileContext *context,

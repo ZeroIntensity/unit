@@ -121,110 +121,9 @@ generic_item_passthrough(_UNIT_MachineItem *item)
                  _UNIT_MachineDestination_GetPointerNullable     \
         )(item)
 
-
-#define NO_ARGS_HELPER(name, opcode_name)                                         \
-        static inline AMD64_Instruction *                                         \
-        name(UNIT_Context * context) {                                            \
-            AMD64_Instruction *instruction = _UNIT_Alloc(context,                 \
-                                                         sizeof(                  \
-                                                             AMD64_Instruction)); \
-            if (instruction == NULL) {                                            \
-                return NULL;                                                      \
-            }                                                                     \
-            instruction->opcode = opcode_name;                                    \
-            instruction->operand_count = 0;                                       \
-            return instruction;                                                   \
-        }
-
-#define ONE_ARG_HELPER(name, opcode_name)                                         \
-        static inline AMD64_Instruction *                                         \
-        name(UNIT_Context * context, AMD64_Operand operand) {                     \
-            AMD64_Instruction *instruction = _UNIT_Alloc(context,                 \
-                                                         sizeof(                  \
-                                                             AMD64_Instruction)); \
-            if (instruction == NULL) {                                            \
-                return NULL;                                                      \
-            }                                                                     \
-            instruction->opcode = opcode_name;                                    \
-            instruction->operands[0] = operand;                                   \
-            instruction->operand_count = 1;                                       \
-            return instruction;                                                   \
-        }
-
-
-#define TWO_ARG_HELPER(name, opcode_name)                                         \
-        static inline AMD64_Instruction *                                         \
-        name(UNIT_Context * context, AMD64_Operand dst, AMD64_Operand src) {      \
-            AMD64_Instruction *instruction = _UNIT_Alloc(context,                 \
-                                                         sizeof(                  \
-                                                             AMD64_Instruction)); \
-            if (instruction == NULL) {                                            \
-                return NULL;                                                      \
-            }                                                                     \
-            instruction->opcode = opcode_name;                                    \
-            instruction->operands[0] = dst;                                       \
-            instruction->operands[1] = src;                                       \
-            instruction->operand_count = 2;                                       \
-            return instruction;                                                   \
-        }
-
-#define THREE_ARG_HELPER(name, opcode_name)                                       \
-        static inline AMD64_Instruction *                                         \
-        name(UNIT_Context * context,                                              \
-             AMD64_Operand dst,                                                   \
-             AMD64_Operand a,                                                     \
-             AMD64_Operand b) {                                                   \
-            AMD64_Instruction *instruction = _UNIT_Alloc(context,                 \
-                                                         sizeof(                  \
-                                                             AMD64_Instruction)); \
-            if (instruction == NULL) {                                            \
-                return NULL;                                                      \
-            }                                                                     \
-            instruction->opcode = opcode_name;                                    \
-            instruction->operands[0] = dst;                                       \
-            instruction->operands[1] = a;                                         \
-            instruction->operands[2] = b;                                         \
-            instruction->operand_count = 3;                                       \
-            return instruction;                                                   \
-        }
-
-NO_ARGS_HELPER(ret, AMD64_RET)
-NO_ARGS_HELPER(syscall, AMD64_SYSCALL)
-NO_ARGS_HELPER(cqo, AMD64_CQO)
-ONE_ARG_HELPER(call_indirect, AMD64_CALL_INDIRECT)
-ONE_ARG_HELPER(call_symbol, AMD64_CALL_SYMBOL)
-ONE_ARG_HELPER(jmp, AMD64_JUMP)
-ONE_ARG_HELPER(_jmp_label, AMD64_JUMP_LABEL)
-ONE_ARG_HELPER(jump_if_equal, AMD64_JUMP_IF_EQUAL)
-ONE_ARG_HELPER(jump_if_not_equal, AMD64_JUMP_IF_NOT_EQUAL)
-ONE_ARG_HELPER(jump_if_greater, AMD64_JUMP_IF_GREATER)
-ONE_ARG_HELPER(jump_if_less, AMD64_JUMP_IF_LESS)
-ONE_ARG_HELPER(jump_if_greater_equal, AMD64_JUMP_IF_GREATER_EQUAL)
-ONE_ARG_HELPER(jump_if_less_equal, AMD64_JUMP_IF_LESS_EQUAL)
-
-// Moves
-TWO_ARG_HELPER(mov, AMD64_MOV)
-TWO_ARG_HELPER(movzx8, AMD64_MOVZX8)
-TWO_ARG_HELPER(movsx8, AMD64_MOVSX8)
-TWO_ARG_HELPER(movzx16, AMD64_MOVZX16)
-TWO_ARG_HELPER(movsx16, AMD64_MOVSX16)
-TWO_ARG_HELPER(movsxd, AMD64_MOVSXD)
-TWO_ARG_HELPER(mov32, AMD64_MOV32)
-THREE_ARG_HELPER(movzx, AMD64_MOVZX)
-THREE_ARG_HELPER(mov_sized, AMD64_MOV_SIZED)
-
-TWO_ARG_HELPER(load_string, AMD64_LOAD_STRING)
-TWO_ARG_HELPER(cmp, AMD64_COMPARE)
-TWO_ARG_HELPER(lea, AMD64_LOAD_ADDRESS)
-
-TWO_ARG_HELPER(add, AMD64_ADD)
-TWO_ARG_HELPER(sub, AMD64_SUB)
-TWO_ARG_HELPER(imul, AMD64_MUL)
-ONE_ARG_HELPER(idiv, AMD64_DIV)
-
-#define EMIT(op)                                                          \
-        if (UNIT_FAILED(AMD64_encode_instruction(compile_context, op))) { \
-            return _UNIT_FAIL;                                            \
+#define EMIT(expr)               \
+        if (UNIT_FAILED(expr)) { \
+            return _UNIT_FAIL;   \
         }
 
 static UNIT_Status
@@ -283,8 +182,7 @@ preserve_register(_UNIT_CompileContext *compile_context,
     IGNORE_IF_TARGET(operation->argument_1);
     IGNORE_IF_TARGET(operation->argument_2);
 
-    UNIT_Size slot =
-        _UNIT_StackFrame_AllocateSlot(&compile_context->stack_frame);
+    UNIT_Size slot = _UNIT_StackFrame_AllocateSlot(&compile_context->stack_frame);
     EMIT(mov(compile_context->context, stack_slot(slot), reg(to_preserve)));
     *slot_ptr = slot;
 
@@ -333,9 +231,9 @@ operands_equal(AMD64_Operand left,
 }
 
 static UNIT_Status
-translate_operation(_UNIT_CompileContext *compile_context,
-                    _UNIT_MachineOperation *operation,
-                    _UNIT_SizeVector *epilogue_patches)
+lower_operation(_UNIT_CompileContext *compile_context,
+                _UNIT_MachineOperation *operation,
+                _UNIT_SizeVector *epilogue_patches)
 {
     assert(compile_context != NULL);
     assert(operation != NULL);
@@ -390,7 +288,7 @@ translate_operation(_UNIT_CompileContext *compile_context,
 
             if (dst.kind == OPERAND_STACK && src.kind == OPERAND_STACK) {
                 USE_SCRATCH_REGISTER(argument_1);
-                EMIT(mov(ctx, dst, argument_1));
+                DISPATCH(AMD64_Emit_Move(ctx, dst, argument_1));
                 UNDO_SCRATCH_REGISTER(argument_1);
             } else if (dst.kind == OPERAND_STACK &&
                        src.kind == OPERAND_IMMEDIATE) {
@@ -424,9 +322,7 @@ translate_operation(_UNIT_CompileContext *compile_context,
                     continue;
                 }
 
-                save_slots[index] =
-                    _UNIT_StackFrame_AllocateSlot(
-                        &compile_context->stack_frame);
+                save_slots[index] = _UNIT_StackFrame_AllocateSlot(&compile_context->stack_frame);
                 assert(save_slots[index] % 8 == 0);
                 EMIT(mov(ctx,
                          stack_slot(save_slots[index]),
@@ -771,9 +667,9 @@ _UNIT_AMD64_Compile(_UNIT_Translation *translation,
                 _UNIT_Vector_GET(&block->instructions,
                                  index);
             assert(operation != NULL);
-            if (UNIT_FAILED(translate_operation(compile_context,
-                                                operation,
-                                                &epilogue_patches))) {
+            if (UNIT_FAILED(lower_operation(compile_context,
+                                            operation,
+                                            &epilogue_patches))) {
                 _UNIT_SizeVector_Clear(&epilogue_patches);
                 return _UNIT_FAIL;
             }
