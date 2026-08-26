@@ -5,6 +5,7 @@ cmake_install.cmake
 
 # clangd
 compile_flags.txt
+.clang-format
 
 # Build artifacts
 output
