@@ -200,76 +200,68 @@ emit_stack_slot(_UNIT_CodeBuffer *buffer, uint32_t stack_offset, AMD64_Register 
             return _UNIT_FAIL;                                         \
         }
 
+// reg = mov(reg)
 UNIT_Status
-AMD64_Emit_Mov(_UNIT_CodeBuffer *buffer, AMD64_Operand dst, AMD64_Operand src)
+AMD64_Move_RegReg(_UNIT_CodeBuffer *buffer, AMD64_Register dst, AMD64_Register src)
 {
-    assert(dst.kind != OPERAND_IMMEDIATE);
+    EMIT_REX(src, dst);
+    EMIT8(OPCODE_MOV_RM64_R64);
+    EMIT8(modrm(MOD_REGISTER,
+                reg_bits(src),
+                reg_bits(dst)));
+    return _UNIT_OK;
+}
 
-    // reg = mov(imm64) (register encoded in opcode byte, uses REX.B)
-    if (dst.kind == OPERAND_REGISTER &&
-        src.kind == OPERAND_IMMEDIATE) {
-        EMIT_REX(0, dst.reg);
-        EMIT8(OPCODE_MOV_R64_IMM64 + reg_bits(dst.reg));
-        EMIT64(src.immediate);
-    }
-    // reg = mov(reg)
-    else if (dst.kind == OPERAND_REGISTER &&
-             src.kind == OPERAND_REGISTER) {
-        EMIT_REX(src.reg, dst.reg);
-        EMIT8(OPCODE_MOV_RM64_R64);
-        EMIT8(modrm(MOD_REGISTER,
-                    reg_bits(src.reg),
-                    reg_bits(dst.reg)));
-    }
-    // [rsp + offset] = mov(reg)
-    else if (dst.kind == OPERAND_STACK &&
-             src.kind == OPERAND_REGISTER) {
-        EMIT_REX(src.reg, 0);
-        EMIT8(OPCODE_MOV_RM64_R64);
-        EMIT_STACK_SLOT(dst.stack_offset, src.reg);
-    }
-    // reg = mov([rsp + offset]) (dst.reg in reg field, RSP in rm)
-    else if (dst.kind == OPERAND_REGISTER &&
-             src.kind == OPERAND_STACK) {
-        EMIT_REX(dst.reg, 0);
-        EMIT8(OPCODE_MOV_R64_RM64);
-        EMIT_STACK_SLOT(src.stack_offset, dst.reg)
-    }
-    // reg = mov([reg])
-    else if (dst.kind == OPERAND_REGISTER &&
-             src.kind == OPERAND_INDIRECT) {
-        EMIT_REX(dst.reg, src.reg);
-        EMIT8(OPCODE_MOV_R64_RM64);
-        EMIT8(modrm(MOD_INDIRECT,
-                    reg_bits(dst.reg),
-                    reg_bits(src.reg)));
-    }
-    // [reg] = mov(reg)
-    else if (dst.kind == OPERAND_INDIRECT &&
-             src.kind == OPERAND_REGISTER) {
-        EMIT_REX(src.reg, dst.reg);
-        EMIT8(OPCODE_MOV_RM64_R64);
-        EMIT8(modrm(MOD_INDIRECT,
-                    reg_bits(src.reg),
-                    reg_bits(dst.reg)));
-    }
-    // [reg] = mov(imm)
-    else if (dst.kind == OPERAND_INDIRECT &&
-             src.kind == OPERAND_IMMEDIATE) {
-        EMIT_REX(0, REG_R11);
-        EMIT8(OPCODE_MOV_R64_IMM64 + reg_bits(REG_R11));
-        EMIT64(src.immediate);
-        EMIT_REX(REG_R11, dst.reg);
-        EMIT8(OPCODE_MOV_RM64_R64);
-        EMIT8(modrm(MOD_INDIRECT,
-                    reg_bits(REG_R11),
-                    reg_bits(dst.reg)));
-    } else {
-        // It's easier for refactoring to use an unreachable else rather
-        // than asserting.
-        _UNIT_Unreachable();
-    }
+// reg = mov([rsp + offset]) (dst.reg in reg field, RSP in rm)
+UNIT_Status
+AMD64_Move_RegStack(_UNIT_CodeBuffer *buffer, AMD64_Register dst, AMD64_StackSlot src)
+{
+    EMIT_REX(dst, 0);
+    EMIT8(OPCODE_MOV_R64_RM64);
+    EMIT_STACK_SLOT(src.offset, dst);
+    return _UNIT_OK;
+}
 
+// reg = mov(imm64) (register encoded in opcode byte, uses REX.B)
+UNIT_Status
+AMD64_Move_RegIndirect(_UNIT_CodeBuffer *buffer, AMD64_Register dst, AMD64_Indirect src)
+{
+    EMIT_REX(dst, src.reg);
+    EMIT8(OPCODE_MOV_R64_RM64);
+    EMIT8(modrm(MOD_INDIRECT,
+                reg_bits(dst),
+                reg_bits(src.reg)));
+    return _UNIT_OK;
+}
+
+// [rsp + offset] = mov(reg)
+UNIT_Status
+AMD64_Move_StackReg(_UNIT_CodeBuffer *buffer, AMD64_StackSlot dst, AMD64_Register src)
+{
+    EMIT_REX(src, 0);
+    EMIT8(OPCODE_MOV_RM64_R64);
+    EMIT_STACK_SLOT(dst.offset, src);
+    return _UNIT_OK;
+}
+
+// reg = mov(imm64)
+UNIT_Status
+AMD64_Move_RegImmediate(_UNIT_CodeBuffer *buffer, AMD64_Register dst, AMD64_Immediate src)
+{
+    EMIT_REX(0, dst);
+    EMIT8(OPCODE_MOV_R64_IMM64 + reg_bits(dst));
+    EMIT64(src.immediate);
+    return _UNIT_OK;
+}
+
+UNIT_Status
+AMD64_Move_IndirectReg(_UNIT_CodeBuffer *buffer, AMD64_Indirect dst, AMD64_Register src)
+{
+    EMIT_REX(src, dst.reg);
+    EMIT8(OPCODE_MOV_RM64_R64);
+    EMIT8(modrm(MOD_INDIRECT,
+                reg_bits(src),
+                reg_bits(dst.reg)));
     return _UNIT_OK;
 }
 
@@ -402,37 +394,43 @@ AMD64_Emit_Mov64_Deref(_UNIT_CodeBuffer *buffer,
     return _UNIT_OK;
 }
 
+// reg = cmp(reg, imm8)
 UNIT_Status
-AMD64_Emit_Cmp(_UNIT_CodeBuffer *buffer, AMD64_Operand src, AMD64_Register dst)
+AMD64_Compare_RegImmediate(_UNIT_CodeBuffer *buffer, AMD64_Register dst, AMD64_Immediate src)
 {
-    // reg = cmp(imm8)
-    if (src.kind == OPERAND_IMMEDIATE) {
-        EMIT_REX(0, dst);
-        EMIT8(OPCODE_CMP_RM64_IMM8);
-        EMIT8(modrm(MOD_REGISTER, GROUP1_CMP, reg_bits(dst)));
-        EMIT8(src.immediate);
-    }
-    // reg = cmp(reg)
-    else if (src.kind == OPERAND_REGISTER) {
-        EMIT_REX(src.reg, dst);
-        EMIT8(OPCODE_CMP_RM64_R64);
-        EMIT8(modrm(MOD_REGISTER,
-                    reg_bits(src.reg),
-                    reg_bits(dst)));
-    }
-    // reg = cmp([rsp + offset])
-    else {
-        assert(src.kind == OPERAND_STACK);
-        EMIT_REX(dst, 0);
-        EMIT8(OPCODE_CMP_R64_RM64);
-        EMIT_STACK_SLOT(src.immediate, dst);
-    }
-
+    EMIT_REX(0, dst);
+    EMIT8(OPCODE_CMP_RM64_IMM8);
+    EMIT8(modrm(MOD_REGISTER, GROUP1_CMP, reg_bits(dst)));
+    assert(src.immediate < 256);
+    EMIT8(src.immediate);
     return _UNIT_OK;
 }
 
+// dst = cmp(dst, src)
 UNIT_Status
-AMD64_Emit_CallIndirect(_UNIT_CodeBuffer *buffer, AMD64_Register target)
+AMD64_Compare_RegReg(_UNIT_CodeBuffer *buffer, AMD64_Register dst, AMD64_Register src)
+{
+    EMIT_REX(src, dst);
+    EMIT8(OPCODE_CMP_RM64_R64);
+    EMIT8(modrm(MOD_REGISTER,
+                reg_bits(src),
+                reg_bits(dst)));
+    return _UNIT_OK;
+}
+
+// reg = cmp(reg, [rsp + offset])
+UNIT_Status
+AMD64_Compare_RegStack(_UNIT_CodeBuffer *buffer, AMD64_Register dst, AMD64_StackSlot src)
+{
+    EMIT_REX(dst, 0);
+    EMIT8(OPCODE_CMP_R64_RM64);
+    EMIT_STACK_SLOT(src.offset, dst);
+    return _UNIT_OK;
+}
+
+// abi_specific_reg = call reg
+UNIT_Status
+AMD64_CallIndirect(_UNIT_CodeBuffer *buffer, AMD64_Register target)
 {
     EMIT_REX(0, target);
     EMIT8(OPCODE_GROUP5);
@@ -440,8 +438,9 @@ AMD64_Emit_CallIndirect(_UNIT_CodeBuffer *buffer, AMD64_Register target)
     return _UNIT_OK;
 }
 
+// abi_specific_reg = call <relocation>
 UNIT_Status
-AMD64_Emit_CallSymbol(_UNIT_CodeBuffer *buffer, UNIT_Size *relocation_index)
+AMD64_CallSymbol(_UNIT_CodeBuffer *buffer, UNIT_Size *relocation_index)
 {
     EMIT8(OPCODE_CALL_REL32);
     EMIT_RELOCATION();
@@ -449,119 +448,120 @@ AMD64_Emit_CallSymbol(_UNIT_CodeBuffer *buffer, UNIT_Size *relocation_index)
 }
 
 UNIT_Status
-AMD64_Emit_Syscall(_UNIT_CodeBuffer *buffer)
+AMD64_Syscall(_UNIT_CodeBuffer *buffer)
 {
     EMIT8(OPCODE_SYSCALL_0);
     EMIT8(OPCODE_SYSCALL_1);
     return _UNIT_OK;
 }
 
+// dst = add(dst, src)
 UNIT_Status
-AMD64_Emit_Add(_UNIT_CodeBuffer *buffer, AMD64_Operand src, AMD64_Register dst)
+AMD64_Add_RegReg(_UNIT_CodeBuffer *buffer, AMD64_Register dst, AMD64_Register src)
 {
-    // reg1 = add(reg1, reg2)
-    if (src.kind == OPERAND_REGISTER) {
-        EMIT_REX(src.reg, dst);
-        EMIT8(OPCODE_ADD_RM64_R64);
-        EMIT8(modrm(MOD_REGISTER,
-                    reg_bits(src.reg),
-                    reg_bits(dst)));
-    }
-    // reg = add(reg, imm32)
-    else {
-        // Group opcode, dst in rm field
-        assert(src.kind == OPERAND_IMMEDIATE);
-        EMIT_REX(0, dst);
-        EMIT8(OPCODE_GROUP1_IMM32);
-        EMIT8(modrm(MOD_REGISTER, GROUP1_ADD, reg_bits(dst)));
-        EMIT32((uint32_t)src.immediate);
-    }
-
+    EMIT_REX(src, dst);
+    EMIT8(OPCODE_ADD_RM64_R64);
+    EMIT8(modrm(MOD_REGISTER,
+                reg_bits(src),
+                reg_bits(dst)));
     return _UNIT_OK;
 }
 
+// dst = add(dst, imm32)
 UNIT_Status
-AMD64_Emit_Sub(_UNIT_CodeBuffer *buffer, AMD64_Operand src, AMD64_Register dst)
+AMD64_Add_RegImmediate(_UNIT_CodeBuffer *buffer, AMD64_Register dst, AMD64_Immediate src)
 {
-    // reg1 = sub(reg1, reg2)
-    if (src.kind == OPERAND_REGISTER) {
-        EMIT_REX(src.reg, dst);
-        EMIT8(OPCODE_SUB_RM64_R64);
-        EMIT8(modrm(MOD_REGISTER,
-                    reg_bits(src.reg),
-                    reg_bits(dst)));
-    }
-    // reg = sub(reg, imm32)
-    else {
-        assert(src.kind == OPERAND_IMMEDIATE);
-        EMIT_REX(0, dst);
-        EMIT8(OPCODE_GROUP1_IMM32);
-        EMIT8(modrm(MOD_REGISTER, GROUP1_SUB, reg_bits(dst)));
-        EMIT32((uint32_t)src.immediate);
-    }
-
+    EMIT_REX(0, dst);
+    EMIT8(OPCODE_GROUP1_IMM32);
+    EMIT8(modrm(MOD_REGISTER, GROUP1_ADD, reg_bits(dst)));
+    assert(src.immediate < UINT32_MAX);
+    EMIT32(src.immediate);
     return _UNIT_OK;
 }
 
+// dst = sub(dst, src)
 UNIT_Status
-AMD64_Emit_Mul(_UNIT_CodeBuffer *buffer, AMD64_Operand src, AMD64_Register dst)
+AMD64_Sub_RegReg(_UNIT_CodeBuffer *buffer, AMD64_Register dst, AMD64_Register src)
 {
-    // reg = imul(reg, imm32)
-    if (src.kind == OPERAND_IMMEDIATE) {
-        int64_t value = src.immediate;
-        EMIT_REX(dst, dst);
-        EMIT8(value >= -128 && value <= 127
-            ? OPCODE_IMUL_R64_RM64_IMM8
-            : OPCODE_IMUL_R64_RM64_IMM32);
-        EMIT8(modrm(MOD_REGISTER,
-                    reg_bits(dst),
-                    reg_bits(dst)));
-        if (value >= -128 && value <= 127) {
-            EMIT8((uint8_t)(value & 0xFF));
-        } else {
-            EMIT32((uint32_t)value);
-        }
+    EMIT_REX(src, dst);
+    EMIT8(OPCODE_SUB_RM64_R64);
+    EMIT8(modrm(MOD_REGISTER,
+                reg_bits(src),
+                reg_bits(dst)));
+    return _UNIT_OK;
+}
+
+// dst = sub(dst, imm32)
+UNIT_Status
+AMD64_Sub_RegImmediate(_UNIT_CodeBuffer *buffer, AMD64_Register dst, AMD64_Immediate src)
+{
+    EMIT_REX(0, dst);
+    EMIT8(OPCODE_GROUP1_IMM32);
+    EMIT8(modrm(MOD_REGISTER, GROUP1_SUB, reg_bits(dst)));
+    assert(src.immediate < UINT32_MAX);
+    EMIT32((uint32_t)src.immediate);
+    return _UNIT_OK;
+}
+
+// dst = sub(dst, src)
+UNIT_Status
+AMD64_Mul_RegReg(_UNIT_CodeBuffer *buffer, AMD64_Register dst, AMD64_Register src)
+{
+    EMIT_REX(dst, src);
+    EMIT8(OPCODE_IMUL_R64_RM64_0);
+    EMIT8(OPCODE_IMUL_R64_RM64_1);
+    EMIT8(modrm(MOD_REGISTER,
+                reg_bits(dst),
+                reg_bits(src)));
+    return _UNIT_OK;
+}
+
+// dst = mul(dst, imm32)
+UNIT_Status
+AMD64_IntMul_RegImmediate(_UNIT_CodeBuffer *buffer, AMD64_Register dst, AMD64_Immediate src)
+{
+    int64_t value = src.immediate;
+    EMIT_REX(dst, dst);
+    EMIT8(value >= -128 && value <= 127
+        ? OPCODE_IMUL_R64_RM64_IMM8
+        : OPCODE_IMUL_R64_RM64_IMM32);
+    EMIT8(modrm(MOD_REGISTER,
+                reg_bits(dst),
+                reg_bits(dst)));
+    if (value >= -128 && value <= 127) {
+        EMIT8((uint8_t)(value & 0xFF));
     } else {
-        // reg1 = imul(reg1, reg2)
-        assert(src.kind == OPERAND_REGISTER);
-        EMIT_REX(dst, src.reg);
-        EMIT8(OPCODE_IMUL_R64_RM64_0);
-        EMIT8(OPCODE_IMUL_R64_RM64_1);
-        EMIT8(modrm(MOD_REGISTER,
-                    reg_bits(dst),
-                    reg_bits(src.reg)));
+        EMIT32((uint32_t)value);
     }
-
     return _UNIT_OK;
 }
 
+
+// RAX (quotient), RDX (remainder) = RDX / divisor
 UNIT_Status
-AMD64_Emit_Div(_UNIT_CodeBuffer *buffer, AMD64_Register divisor)
+AMD64_IntDiv_Reg(_UNIT_CodeBuffer *buffer, AMD64_Register divisor)
 {
     EMIT_REX(0, divisor);
     EMIT8(OPCODE_IDIV_RM64);
-    EMIT8(modrm(MOD_REGISTER, 7, reg_bits(divisor)));
+    EMIT8(modrm(MOD_REGISTER, REG_RDI, reg_bits(divisor)));
     return _UNIT_OK;
 }
 
-/* "Load effective address".
- * Load the address of a stack slot into a register. */
+// dst = &src
 UNIT_Status
-AMD64_Emit_Lea(_UNIT_CodeBuffer *buffer, AMD64_Register dst, uint32_t stack_offset)
+AMD64_LoadEffectiveAddress_RegStack(_UNIT_CodeBuffer *buffer, AMD64_Register dst, AMD64_StackSlot src)
 {
     EMIT_REX(dst, 0);
     EMIT8(OPCODE_LEA);
-    EMIT_STACK_SLOT(stack_offset, dst);
+    EMIT_STACK_SLOT(src.offset, dst);
     return _UNIT_OK;
 }
 
-/* Load the address of a "displacement".
- * Basically, an offset from where the current instruction is in memory.
- */
+// dst = &<relocation>
 UNIT_Status
-AMD64_Emit_LeaRip(_UNIT_CodeBuffer *buffer,
-                  AMD64_Register dst,
-                  UNIT_Size *relocation_index)
+AMD64_LoadEffectiveAddress_RegRel(_UNIT_CodeBuffer *buffer,
+                                  AMD64_Register dst,
+                                  UNIT_Size *relocation_index)
 {
     EMIT_REX(dst, 0);
     EMIT8(OPCODE_LEA);
@@ -570,27 +570,27 @@ AMD64_Emit_LeaRip(_UNIT_CodeBuffer *buffer,
     return _UNIT_OK;
 }
 
-/* "Convert quadword to octoword".
- * In normal person terms, this just means that it converts a 64-bit integer
- * (stored in RAX) into an 128-bit integer (stored in RDX). */
+// RDX = (int128)RDX
 UNIT_Status
-AMD64_Emit_Cqo(_UNIT_CodeBuffer *buffer)
+AMD64_ConvertQuadwordToOctoword(_UNIT_CodeBuffer *buffer)
 {
     EMIT8(rex(1, 0, 0, 0));
     EMIT8(OPCODE_CQO);
     return _UNIT_OK;
 }
 
+// jmp <relocation>
 UNIT_Status
-AMD64_Emit_Jump(_UNIT_CodeBuffer *buffer, UNIT_Size *relocation_index)
+AMD64_Jump_Rel(_UNIT_CodeBuffer *buffer, UNIT_Size *relocation_index)
 {
     EMIT8(OPCODE_JMP_REL32);
     EMIT_RELOCATION();
     return _UNIT_OK;
 }
 
+// if { je <relocation> }
 UNIT_Status
-AMD64_Emit_JumpEqual(_UNIT_CodeBuffer *buffer, UNIT_Size *relocation_index)
+AMD64_JumpEqual_Rel(_UNIT_CodeBuffer *buffer, UNIT_Size *relocation_index)
 {
     EMIT8(OPCODE_JCC_REL32);
     EMIT8(OPCODE_JE_REL32);
@@ -599,7 +599,7 @@ AMD64_Emit_JumpEqual(_UNIT_CodeBuffer *buffer, UNIT_Size *relocation_index)
 }
 
 UNIT_Status
-AMD64_Emit_JumpNotEqual(_UNIT_CodeBuffer *buffer, UNIT_Size *relocation_index)
+AMD64_JumpNotEqual_Rel(_UNIT_CodeBuffer *buffer, UNIT_Size *relocation_index)
 {
     EMIT8(OPCODE_JCC_REL32);
     EMIT8(OPCODE_JNE_REL32);
@@ -608,7 +608,7 @@ AMD64_Emit_JumpNotEqual(_UNIT_CodeBuffer *buffer, UNIT_Size *relocation_index)
 }
 
 UNIT_Status
-AMD64_Emit_JumpGreater(_UNIT_CodeBuffer *buffer, UNIT_Size *relocation_index)
+AMD64_JumpGreater_Rel(_UNIT_CodeBuffer *buffer, UNIT_Size *relocation_index)
 {
     EMIT8(OPCODE_JCC_REL32);
     EMIT8(OPCODE_JG_REL32);
@@ -617,7 +617,7 @@ AMD64_Emit_JumpGreater(_UNIT_CodeBuffer *buffer, UNIT_Size *relocation_index)
 }
 
 UNIT_Status
-AMD64_Emit_JumpGreaterEqual(_UNIT_CodeBuffer *buffer, UNIT_Size *relocation_index)
+AMD64_JumpGreaterEqual_Rel(_UNIT_CodeBuffer *buffer, UNIT_Size *relocation_index)
 {
     EMIT8(OPCODE_JCC_REL32);
     EMIT8(OPCODE_JGE_REL32);
@@ -625,8 +625,9 @@ AMD64_Emit_JumpGreaterEqual(_UNIT_CodeBuffer *buffer, UNIT_Size *relocation_inde
     return _UNIT_OK;
 }
 
+// if 
 UNIT_Status
-AMD64_Emit_JumpLess(_UNIT_CodeBuffer *buffer, UNIT_Size *relocation_index)
+AMD64_JumpLess_Rel(_UNIT_CodeBuffer *buffer, UNIT_Size *relocation_index)
 {
     EMIT8(OPCODE_JCC_REL32);
     EMIT8(OPCODE_JL_REL32);
@@ -634,8 +635,9 @@ AMD64_Emit_JumpLess(_UNIT_CodeBuffer *buffer, UNIT_Size *relocation_index)
     return _UNIT_OK;
 }
 
+// jle <relocation>
 UNIT_Status
-AMD64_Emit_JumpLessEqual(_UNIT_CodeBuffer *buffer, UNIT_Size *relocation_index)
+AMD64_JumpLessEqual_Rel(_UNIT_CodeBuffer *buffer, UNIT_Size *relocation_index)
 {
     EMIT8(OPCODE_JCC_REL32);
     EMIT8(OPCODE_JLE_REL32);
@@ -644,7 +646,7 @@ AMD64_Emit_JumpLessEqual(_UNIT_CodeBuffer *buffer, UNIT_Size *relocation_index)
 }
 
 UNIT_Status
-AMD64_Emit_Ret(_UNIT_CodeBuffer *buffer)
+AMD64_Return(_UNIT_CodeBuffer *buffer)
 {
     EMIT8(OPCODE_RET);
     return _UNIT_OK;

@@ -26,8 +26,16 @@ typedef enum {
 
 // Indirect means "there's a pointer in this register"
 typedef struct {
-    AMD64_Register reg;
+    AMD64_Register reg; // The register containing the pointer
 } AMD64_Indirect;
+
+typedef struct {
+    uint64_t immediate;
+} AMD64_Immediate;
+
+typedef struct {
+    uint64_t offset;
+} AMD64_StackSlot;
 
 typedef enum {
     // Moves
@@ -72,24 +80,6 @@ typedef enum {
     AMD64_RET,
 } AMD64_Opcode;
 
-typedef enum {
-    OPERAND_REGISTER,
-    OPERAND_IMMEDIATE,
-    OPERAND_STACK,
-    OPERAND_INDIRECT // Fancy word for pointer
-} AMD64_OperandKind;
-
-typedef struct {
-    AMD64_OperandKind kind;
-
-    union {
-        AMD64_Register reg;
-        uint64_t immediate;
-        uint64_t stack_offset;
-        AMD64_Indirect indirect;
-    };
-} AMD64_Operand;
-
 void
 AMD64_PatchPrologue(_UNIT_CompileContext *context,
                     UNIT_Size prologue_offset,
@@ -102,5 +92,12 @@ AMD64_PatchEpilogue(_UNIT_CompileContext *compile_context,
 
 void
 AMD64_PatchJumps(_UNIT_CompileContext *context);
+
+
+UNIT_Status
+AMD64_Move_RegReg(_UNIT_CodeBuffer *buffer, AMD64_Register dst, AMD64_Register src);
+
+UNIT_Status
+AMD64_Move_RegIndirect(_UNIT_CodeBuffer *buffer, AMD64_Register dst, AMD64_Indirect src);
 
 #endif

@@ -39,8 +39,8 @@ AMD64_Operand
 indirect(AMD64_Operand operand) {
     assert(operand.kind == OPERAND_REGISTER);
     return (AMD64_Operand) {
-               .kind = OPERAND_INDIRECT,
-               .reg = operand.reg
+            .kind = OPERAND_INDIRECT,
+            .reg = operand.reg
     };
 }
 
@@ -121,114 +121,14 @@ generic_item_passthrough(_UNIT_MachineItem *item)
                  _UNIT_MachineDestination_GetPointerNullable     \
         )(item)
 
-#define EMIT(expr)               \
-        if (UNIT_FAILED(expr)) { \
-            return _UNIT_FAIL;   \
-        }
+#define EMIT(expr)                      \
+        do {                            \
+            if (UNIT_FAILED((expr))) {  \
+                return _UNIT_FAIL;      \
+            }                           \
+        } while (0);
 
-static UNIT_Status
-use_scratch_register_if_needed(_UNIT_CompileContext *compile_context,
-                               _UNIT_MachineItem *item,
-                               AMD64_Operand *out_operand)
-{
-    assert(compile_context != NULL);
-    assert(item != NULL);
-    assert(out_operand != NULL);
-    AMD64_Operand in_operand = machine_item_to_operand(compile_context, item);
-    if (in_operand.kind == OPERAND_REGISTER) {
-        *out_operand = in_operand;
-        return _UNIT_OK;
-    }
-
-    EMIT(mov(compile_context->context, reg(REG_SCRATCH), in_operand));
-    *out_operand = reg(REG_SCRATCH);
-    return _UNIT_OK;
-}
-
-static UNIT_Status
-undo_scratch_register_if_used(_UNIT_CompileContext *compile_context,
-                              _UNIT_MachineItem *item,
-                              AMD64_Operand actual)
-{
-    AMD64_Operand original = machine_item_to_operand(compile_context, item);
-    if (original.kind != OPERAND_REGISTER &&
-        original.kind != OPERAND_IMMEDIATE) {
-        EMIT(mov(compile_context->context, original, actual));
-    }
-
-    return _UNIT_OK;
-}
-
-static UNIT_Status
-preserve_register(_UNIT_CompileContext *compile_context,
-                  _UNIT_MachineOperation *operation,
-                  AMD64_Register to_preserve,
-                  UNIT_Size *slot_ptr)
-{
-    assert(compile_context != NULL);
-    assert(operation != NULL);
-    assert(slot_ptr != NULL);
-
-    const AMD64_Register *map = get_platform_register_map(compile_context->target);
-#define IGNORE_IF_TARGET(val)                      \
-        if ((val) != NULL                          \
-            && (val)->type == _UNIT_TYPE_REGISTER  \
-            && map[(val)->value] == to_preserve) { \
-            *slot_ptr = -1;                        \
-            return _UNIT_OK;                       \
-        }
-
-    IGNORE_IF_TARGET(_UNIT_MachineDestination_GetPointerNullable(operation->destination));
-    IGNORE_IF_TARGET(operation->argument_1);
-    IGNORE_IF_TARGET(operation->argument_2);
-
-    UNIT_Size slot = _UNIT_StackFrame_AllocateSlot(&compile_context->stack_frame);
-    EMIT(mov(compile_context->context, stack_slot(slot), reg(to_preserve)));
-    *slot_ptr = slot;
-
-    return _UNIT_OK;
-
-#undef IGNORE_IF_TARGET
-}
-
-static UNIT_Status
-restore_register(_UNIT_CompileContext *compile_context,
-                 AMD64_Register preserved,
-                 UNIT_Size slot)
-{
-    assert(compile_context != NULL);
-    if (slot == -1) {
-        return _UNIT_OK;
-    }
-
-    EMIT(mov(compile_context->context, reg(preserved), stack_slot(slot)));
-    _UNIT_StackFrame_FreeSlot(&compile_context->stack_frame, slot);
-    return _UNIT_OK;
-}
-
-static int8_t
-operands_equal(AMD64_Operand left,
-               AMD64_Operand right)
-{
-    if (left.kind != right.kind) {
-        return 0;
-    }
-
-    switch (left.kind) {
-        case OPERAND_REGISTER: {
-            return left.reg == right.reg;
-        }
-        case OPERAND_STACK: {
-            return left.stack_offset == right.stack_offset;
-        }
-        case OPERAND_IMMEDIATE: {
-            return left.immediate == right.immediate;
-        }
-        default: {
-            return 0;
-        }
-    }
-}
+#define EMIT_MOVE(dst, src) EMIT(AMD64_Emit_Move(ctx, dst, src));
 
 static UNIT_Status
 lower_operation(_UNIT_CompileContext *compile_context,
@@ -242,39 +142,6 @@ lower_operation(_UNIT_CompileContext *compile_context,
 
 #define OP(value) machine_item_to_operand(compile_context, ENSURE_VALID_ITEM(operation->value))
 
-#define USE_SCRATCH_REGISTER(name)                                           \
-        AMD64_Operand name;                                                  \
-        if (UNIT_FAILED(use_scratch_register_if_needed(compile_context,      \
-                                                       ENSURE_VALID_ITEM(    \
-                                                           operation->name), \
-                                                       &name))) {            \
-            return _UNIT_FAIL;                                               \
-        }
-
-#define UNDO_SCRATCH_REGISTER(name)                                         \
-        if (UNIT_FAILED(undo_scratch_register_if_used(compile_context,      \
-                                                      ENSURE_VALID_ITEM(    \
-                                                          operation->name), \
-                                                      name))) {             \
-            return _UNIT_FAIL;                                              \
-        }
-
-#define PRESERVE_REGISTER(name)                               \
-        UNIT_Size slot_ ## name;                              \
-        if (UNIT_FAILED(preserve_register(compile_context,    \
-                                          operation,          \
-                                          name,               \
-                                          &slot_ ## name))) { \
-            return _UNIT_FAIL;                                \
-        }
-
-#define RESTORE_REGISTER(name)                              \
-        if (UNIT_FAILED(restore_register(compile_context,   \
-                                         name,              \
-                                         slot_ ## name))) { \
-            return _UNIT_FAIL;                              \
-        }
-
     const AMD64_Register *register_map = get_platform_register_map(compile_context->target);
     UNIT_ABI abi = UNIT_Platform_GET_ABI(compile_context->target);
 
@@ -287,9 +154,9 @@ lower_operation(_UNIT_CompileContext *compile_context,
             assert(dst.kind != OPERAND_IMMEDIATE);
 
             if (dst.kind == OPERAND_STACK && src.kind == OPERAND_STACK) {
-                USE_SCRATCH_REGISTER(argument_1);
-                DISPATCH(AMD64_Emit_Move(ctx, dst, argument_1));
-                UNDO_SCRATCH_REGISTER(argument_1);
+                EMIT_MOVE(REG_SCRATCH, src);
+                EMIT_MOVE(dst, REG_SCRATCH);
+                //DISPATCH(AMD64_Emit_Move(ctx, dst, argument_1));
             } else if (dst.kind == OPERAND_STACK &&
                        src.kind == OPERAND_IMMEDIATE) {
                 EMIT(mov(ctx, reg(REG_SCRATCH), src));
