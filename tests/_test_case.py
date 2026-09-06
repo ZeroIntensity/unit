@@ -105,5 +105,8 @@ class ExampleTestRunner(unittest.TestCase):
             cwd=self.temporary.name,
             timeout=5,
         )
+        self.assertEqual(
+            result.returncode, 0, f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+        )
         assert isinstance(result.stdout, str)
         return result.stdout

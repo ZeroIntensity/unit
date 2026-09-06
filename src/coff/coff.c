@@ -100,6 +100,7 @@ typedef struct {
     uint32_t offset;
     uint32_t symbol_table_index;
     uint16_t type;
+    int32_t addend;
 } COFF_Relocation;
 
 typedef struct {
@@ -407,12 +408,13 @@ build_relocations(COFF_Object *coff_object,
             }
 
             coff_relocation->symbol_table_index = symbol_table_index;
-            coff_relocation->offset = relocation->offset;
+            coff_relocation->addend = 0;
         } else {
             assert(relocation->type == _UNIT_RELOCATION_DATA);
             UNIT_Size rdata_symbol_index = find_symbol(coff_object, ".rdata");
             assert(rdata_symbol_index != -1);
             coff_relocation->symbol_table_index = rdata_symbol_index;
+            coff_relocation->addend = relocation->symbol_index;
         }
 
         coff_relocation->offset = relocation->offset;
@@ -570,14 +572,29 @@ write_section_data(UNIT_Context *context, COFF_Section *section, FILE *file)
     assert(section != NULL);
     assert(file != NULL);
 
-    if (UNIT_FAILED(write_bytes(context,
-                                file,
-                                section->data->data,
-                                section->data->size))) {
+    UNIT_Size count = _UNIT_Vector_SIZE(&section->relocations);
+    if (count == 0) {
+        return write_bytes(context, file, section->data->data, section->data->size);
+    }
+
+    // COFF stores relocation addends in the section bytes. Keep these changes
+    // local to this export so later ELF exports and JIT compilation see the
+    // original code buffer. REL32 already accounts for the four-byte displacement.
+    _UNIT_CodeBuffer data = *section->data;
+    data.data = _UNIT_Alloc(context, data.size);
+    if (data.data == NULL) {
         return _UNIT_FAIL;
     }
 
-    return _UNIT_OK;
+    memcpy(data.data, section->data->data, data.size);
+    for (UNIT_Size index = 0; index < count; ++index) {
+        COFF_Relocation *relocation = _UNIT_Vector_GET(&section->relocations, index);
+        _UNIT_CodeBuffer_Patch32(&data, relocation->offset, relocation->addend);
+    }
+
+    UNIT_Status status = write_bytes(context, file, data.data, data.size);
+    _UNIT_Dealloc(context, data.data);
+    return status;
 }
 
 static UNIT_Status
