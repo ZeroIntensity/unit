@@ -265,12 +265,35 @@ AMD64_Move_IndirectReg(_UNIT_CodeBuffer *buffer, AMD64_Indirect dst, AMD64_Regis
     return _UNIT_OK;
 }
 
-/* reg64 = movzx(reg8)
- * Zero-extend an 8-bit value (stored in src) to a 64-bit value and store it in dst. */
+// mov reg32, *dword
 UNIT_Status
-AMD64_Emit_Movzx8(_UNIT_CodeBuffer *buffer,
-                  AMD64_Register src,
-                  AMD64_Register dst)
+AMD64_Move_RegDerefDword(_UNIT_CodeBuffer *buffer,
+                         AMD64_Register dst,
+                         AMD64_Register ptr)
+{
+    EMIT8(rex(0, needs_rex_r(dst), 0, needs_rex_r(ptr)));
+    EMIT8(OPCODE_MOV_R64_RM64);
+    EMIT8(modrm(MOD_INDIRECT, reg_bits(dst), reg_bits(ptr)));
+    return _UNIT_OK;
+}
+
+// mov reg64, *qword
+UNIT_Status
+AMD64_Move_RegDerefQword(_UNIT_CodeBuffer *buffer,
+                         AMD64_Register dst,
+                         AMD64_Register ptr)
+{
+    EMIT_REX(dst, ptr);
+    EMIT8(OPCODE_MOV_R64_RM64);
+    EMIT8(modrm(MOD_INDIRECT, reg_bits(dst), reg_bits(ptr)));
+    return _UNIT_OK;
+}
+
+// reg64 = movzx(reg8)
+UNIT_Status
+AMD64_MoveZeroExtend8_RegReg(_UNIT_CodeBuffer *buffer,
+                             AMD64_Register dst,
+                             AMD64_Register src)
 {
     EMIT_REX(dst, src);
     EMIT8(OPCODE_MOVZX_R_RM8_0);
@@ -279,11 +302,11 @@ AMD64_Emit_Movzx8(_UNIT_CodeBuffer *buffer,
     return _UNIT_OK;
 }
 
-/* movsx reg64, reg8 — sign-extend byte to 64-bit */
+// reg64 = movsx(reg8)
 UNIT_Status
-AMD64_Emit_Movsx8(_UNIT_CodeBuffer *buffer,
-                  AMD64_Register dst,
-                  AMD64_Register src)
+AMD64_MoveSignExtend8_RegReg(_UNIT_CodeBuffer *buffer,
+                             AMD64_Register dst,
+                             AMD64_Register src)
 {
     EMIT_REX(dst, src);
     EMIT8(OPCODE_MOVSX_R_RM8_0);
@@ -292,11 +315,11 @@ AMD64_Emit_Movsx8(_UNIT_CodeBuffer *buffer,
     return _UNIT_OK;
 }
 
-/* movzx reg64, reg16 — zero-extend word to 64-bit */
+// movzx reg64, reg16
 UNIT_Status
-AMD64_Emit_Movzx16(_UNIT_CodeBuffer *buffer,
-                   AMD64_Register dst,
-                   AMD64_Register src)
+AMD64_MoveZeroExtend16_RegReg(_UNIT_CodeBuffer *buffer,
+                              AMD64_Register dst,
+                              AMD64_Register src)
 {
     EMIT_REX(dst, src);
     EMIT8(OPCODE_MOVZX_R_RM16_0);
@@ -305,11 +328,11 @@ AMD64_Emit_Movzx16(_UNIT_CodeBuffer *buffer,
     return _UNIT_OK;
 }
 
-/* movsx reg64, reg16 — sign-extend word to 64-bit */
+// movsx reg64, reg16
 UNIT_Status
-AMD64_Emit_Movsx16(_UNIT_CodeBuffer *buffer,
-                   AMD64_Register dst,
-                   AMD64_Register src)
+AMD64_MoveSignExtend16_RegReg(_UNIT_CodeBuffer *buffer,
+                              AMD64_Register dst,
+                              AMD64_Register src)
 {
     EMIT_REX(dst, src);
     EMIT8(OPCODE_MOVSX_R_RM16_0);
@@ -318,11 +341,11 @@ AMD64_Emit_Movsx16(_UNIT_CodeBuffer *buffer,
     return _UNIT_OK;
 }
 
-/* mov reg32, reg32 — 32-bit move, implicit zero-extend to 64-bit */
+// mov reg32, reg32 (implicit zero-extend to 64 bit)
 UNIT_Status
-AMD64_Emit_Mov32(_UNIT_CodeBuffer *buffer,
-                 AMD64_Register dst,
-                 AMD64_Register src)
+AMD64_Move32_RegReg(_UNIT_CodeBuffer *buffer,
+                    AMD64_Register dst,
+                    AMD64_Register src)
 {
     EMIT8(rex(0, needs_rex_r(src), 0, needs_rex_r(dst)));
     EMIT8(OPCODE_MOV_RM64_R64);
@@ -330,11 +353,11 @@ AMD64_Emit_Mov32(_UNIT_CodeBuffer *buffer,
     return _UNIT_OK;
 }
 
-/* movsxd reg64, reg32 — sign-extend dword to 64-bit */
+// movsxd reg64, reg32
 UNIT_Status
-AMD64_Emit_Movsxd(_UNIT_CodeBuffer *buffer,
-                  AMD64_Register dst,
-                  AMD64_Register src)
+AMD64_MoveSignExtendDword_RegReg(_UNIT_CodeBuffer *buffer,
+                                 AMD64_Register dst,
+                                 AMD64_Register src)
 {
     EMIT8(rex(1, needs_rex_r(dst), 0, needs_rex_r(src)));
     EMIT8(OPCODE_MOVSXD_R64_RM32);
@@ -342,13 +365,11 @@ AMD64_Emit_Movsxd(_UNIT_CodeBuffer *buffer,
     return _UNIT_OK;
 }
 
-/* ---- Memory to register (READ_BYTES) ---- */
-
-/* movzx reg64, byte [ptr] — zero-extend byte from memory */
+// movzx reg64, *byte
 UNIT_Status
-AMD64_Emit_Movzx8_Deref(_UNIT_CodeBuffer *buffer,
-                        AMD64_Register dst,
-                        AMD64_Register ptr)
+AMD64_MoveZeroExtend_RegDerefByte(_UNIT_CodeBuffer *buffer,
+                                  AMD64_Register dst,
+                                  AMD64_Register ptr)
 {
     EMIT_REX(dst, ptr);
     EMIT8(OPCODE_MOVZX_R_RM8_0);
@@ -357,39 +378,15 @@ AMD64_Emit_Movzx8_Deref(_UNIT_CodeBuffer *buffer,
     return _UNIT_OK;
 }
 
-/* movzx reg64, word [ptr] — zero-extend word from memory */
+// movzx reg64, *word
 UNIT_Status
-AMD64_Emit_Movzx16_Deref(_UNIT_CodeBuffer *buffer,
-                         AMD64_Register dst,
-                         AMD64_Register ptr)
+AMD64_MoveZeroExtend_RegDerefWord(_UNIT_CodeBuffer *buffer,
+                                  AMD64_Register dst,
+                                  AMD64_Register ptr)
 {
     EMIT_REX(dst, ptr);
     EMIT8(OPCODE_MOVZX_R_RM16_0);
     EMIT8(OPCODE_MOVZX_R_RM16_1);
-    EMIT8(modrm(MOD_INDIRECT, reg_bits(dst), reg_bits(ptr)));
-    return _UNIT_OK;
-}
-
-/* mov reg32, dword [ptr] — 32-bit load, implicit zero-extend */
-UNIT_Status
-AMD64_Emit_Mov32_Deref(_UNIT_CodeBuffer *buffer,
-                       AMD64_Register dst,
-                       AMD64_Register ptr)
-{
-    EMIT8(rex(0, needs_rex_r(dst), 0, needs_rex_r(ptr)));
-    EMIT8(OPCODE_MOV_R64_RM64);
-    EMIT8(modrm(MOD_INDIRECT, reg_bits(dst), reg_bits(ptr)));
-    return _UNIT_OK;
-}
-
-/* mov reg64, qword [ptr] — full 64-bit load */
-UNIT_Status
-AMD64_Emit_Mov64_Deref(_UNIT_CodeBuffer *buffer,
-                       AMD64_Register dst,
-                       AMD64_Register ptr)
-{
-    EMIT_REX(dst, ptr);
-    EMIT8(OPCODE_MOV_R64_RM64);
     EMIT8(modrm(MOD_INDIRECT, reg_bits(dst), reg_bits(ptr)));
     return _UNIT_OK;
 }
@@ -505,7 +502,7 @@ AMD64_Sub_RegImmediate(_UNIT_CodeBuffer *buffer, AMD64_Register dst, AMD64_Immed
 
 // dst = sub(dst, src)
 UNIT_Status
-AMD64_Mul_RegReg(_UNIT_CodeBuffer *buffer, AMD64_Register dst, AMD64_Register src)
+AMD64_IntMul_RegReg(_UNIT_CodeBuffer *buffer, AMD64_Register dst, AMD64_Register src)
 {
     EMIT_REX(dst, src);
     EMIT8(OPCODE_IMUL_R64_RM64_0);
@@ -654,6 +651,34 @@ UNIT_Status
 AMD64_Return(_UNIT_CodeBuffer *buffer)
 {
     EMIT8(OPCODE_RET);
+    return _UNIT_OK;
+}
+
+UNIT_Status
+AMD64_Move8_IndirectReg(_UNIT_CodeBuffer *buffer, AMD64_Indirect dst, AMD64_Register src)
+{
+    EMIT8(rex(0, needs_rex_r(src), 0, needs_rex_r(dst.reg)));
+    EMIT8(OPCODE_MOV_RM8_R8);
+    EMIT8(modrm(MOD_INDIRECT, reg_bits(src), reg_bits(dst.reg)));
+    return _UNIT_OK;
+}
+
+UNIT_Status
+AMD64_Move16_IndirectReg(_UNIT_CodeBuffer *buffer, AMD64_Indirect dst, AMD64_Register src)
+{
+    EMIT8(OPCODE_OPERAND_SIZE_PREFIX);
+    EMIT8(rex(0, needs_rex_r(src), 0, needs_rex_r(dst.reg)));
+    EMIT8(OPCODE_MOV_RM64_R64);
+    EMIT8(modrm(MOD_INDIRECT, reg_bits(src), reg_bits(dst.reg)));
+    return _UNIT_OK;
+}
+
+UNIT_Status
+AMD64_Move32_IndirectReg(_UNIT_CodeBuffer *buffer, AMD64_Indirect dst, AMD64_Register src)
+{
+    EMIT8(rex(0, needs_rex_r(src), 0, needs_rex_r(dst.reg)));
+    EMIT8(OPCODE_MOV_RM64_R64);
+    EMIT8(modrm(MOD_INDIRECT, reg_bits(src), reg_bits(dst.reg)));
     return _UNIT_OK;
 }
 

@@ -37,48 +37,192 @@ typedef struct {
     uint64_t offset;
 } AMD64_StackSlot;
 
-typedef enum {
-    // Moves
-    AMD64_MOV,
-    AMD64_MOVZX,
-    AMD64_MOVZX8,
-    AMD64_MOVSX8,
-    AMD64_MOVZX16,
-    AMD64_MOVSX16,
-    AMD64_MOVSXD,
-    AMD64_MOV32,
-    AMD64_MOV_SIZED,
 
-    // Calls
-    AMD64_SYSCALL,
-    AMD64_CALL_INDIRECT,
-    AMD64_CALL_SYMBOL,
+// reg = mov(reg)
+UNIT_Status
+AMD64_Move_RegReg(_UNIT_CodeBuffer *buffer, AMD64_Register dst, AMD64_Register src);
 
-    // Jumps
-    AMD64_JUMP,
-    AMD64_JUMP_LABEL,
-    AMD64_JUMP_IF_EQUAL,
-    AMD64_JUMP_IF_NOT_EQUAL,
-    AMD64_JUMP_IF_LESS,
-    AMD64_JUMP_IF_GREATER,
-    AMD64_JUMP_IF_LESS_EQUAL,
-    AMD64_JUMP_IF_GREATER_EQUAL,
+// reg = mov([rsp + offset]) (dst.reg in reg field, RSP in rm)
+UNIT_Status
+AMD64_Move_RegStack(_UNIT_CodeBuffer *buffer, AMD64_Register dst, AMD64_StackSlot src);
 
-    // Comparisons
-    AMD64_COMPARE,
+// reg = mov(imm64) (register encoded in opcode byte, uses REX.B)
+UNIT_Status
+AMD64_Move_RegIndirect(_UNIT_CodeBuffer *buffer, AMD64_Register dst, AMD64_Indirect src);
 
-    // Arithmetic
-    AMD64_ADD,
-    AMD64_SUB,
-    AMD64_MUL,
-    AMD64_DIV,
+// [rsp + offset] = mov(reg)
+UNIT_Status
+AMD64_Move_StackReg(_UNIT_CodeBuffer *buffer, AMD64_StackSlot dst, AMD64_Register src);
 
-    // Misc
-    AMD64_LOAD_STRING,
-    AMD64_LOAD_ADDRESS,
-    AMD64_CQO,
-    AMD64_RET,
-} AMD64_Opcode;
+// reg = mov(imm64)
+UNIT_Status
+AMD64_Move_RegImmediate(_UNIT_CodeBuffer *buffer, AMD64_Register dst, AMD64_Immediate src);
+
+UNIT_Status
+AMD64_Move_IndirectReg(_UNIT_CodeBuffer *buffer, AMD64_Indirect dst, AMD64_Register src);
+
+UNIT_Status
+AMD64_Move8_IndirectReg(_UNIT_CodeBuffer *buffer, AMD64_Indirect dst, AMD64_Register src);
+
+UNIT_Status
+AMD64_Move16_IndirectReg(_UNIT_CodeBuffer *buffer, AMD64_Indirect dst, AMD64_Register src);
+
+UNIT_Status
+AMD64_Move32_IndirectReg(_UNIT_CodeBuffer *buffer, AMD64_Indirect dst, AMD64_Register src);
+
+// mov reg32, *dword
+UNIT_Status
+AMD64_Move_RegDerefDword(_UNIT_CodeBuffer *buffer,
+                         AMD64_Register dst,
+                         AMD64_Register ptr);
+
+// mov reg64, *qword
+UNIT_Status
+AMD64_Move_RegDerefQword(_UNIT_CodeBuffer *buffer,
+                         AMD64_Register dst,
+                         AMD64_Register ptr);
+
+// reg64 = movzx(reg8)
+UNIT_Status
+AMD64_MoveZeroExtend8_RegReg(_UNIT_CodeBuffer *buffer,
+                             AMD64_Register dst,
+                             AMD64_Register src);
+
+// reg64 = movsx(reg8)
+UNIT_Status
+AMD64_MoveSignExtend8_RegReg(_UNIT_CodeBuffer *buffer,
+                             AMD64_Register dst,
+                             AMD64_Register src);
+
+// movzx reg64, reg16
+UNIT_Status
+AMD64_MoveZeroExtend16_RegReg(_UNIT_CodeBuffer *buffer,
+                              AMD64_Register dst,
+                              AMD64_Register src);
+
+// movsx reg64, reg16
+UNIT_Status
+AMD64_MoveSignExtend16_RegReg(_UNIT_CodeBuffer *buffer,
+                              AMD64_Register dst,
+                              AMD64_Register src);
+
+// mov reg32, reg32 (implicit zero-extend to 64 bit)
+UNIT_Status
+AMD64_Move32_RegReg(_UNIT_CodeBuffer *buffer,
+                    AMD64_Register dst,
+                    AMD64_Register src);
+
+// movsxd reg64, reg32
+UNIT_Status
+AMD64_MoveSignExtendDword_RegReg(_UNIT_CodeBuffer *buffer,
+                                 AMD64_Register dst,
+                                 AMD64_Register src);
+
+// movzx reg64, *byte
+UNIT_Status
+AMD64_MoveZeroExtend_RegDerefByte(_UNIT_CodeBuffer *buffer,
+                                  AMD64_Register dst,
+                                  AMD64_Register ptr);
+
+// movzx reg64, *word
+UNIT_Status
+AMD64_MoveZeroExtend_RegDerefWord(_UNIT_CodeBuffer *buffer,
+                                  AMD64_Register dst,
+                                  AMD64_Register ptr);
+
+// reg = cmp(reg, imm8)
+UNIT_Status
+AMD64_Compare_RegImmediate(_UNIT_CodeBuffer *buffer, AMD64_Register dst, AMD64_Immediate src);
+
+// dst = cmp(dst, src)
+UNIT_Status
+AMD64_Compare_RegReg(_UNIT_CodeBuffer *buffer, AMD64_Register dst, AMD64_Register src);
+
+// reg = cmp(reg, [rsp + offset])
+UNIT_Status
+AMD64_Compare_RegStack(_UNIT_CodeBuffer *buffer, AMD64_Register dst, AMD64_StackSlot src);
+
+// abi_specific_reg = call reg
+UNIT_Status
+AMD64_CallIndirect(_UNIT_CodeBuffer *buffer, AMD64_Register target);
+
+// abi_specific_reg = call <relocation>
+UNIT_Status
+AMD64_CallSymbol(_UNIT_CodeBuffer *buffer, UNIT_Size *relocation_index);
+
+UNIT_Status
+AMD64_Syscall(_UNIT_CodeBuffer *buffer);
+
+// dst = add(dst, src)
+UNIT_Status
+AMD64_Add_RegReg(_UNIT_CodeBuffer *buffer, AMD64_Register dst, AMD64_Register src);
+
+// dst = add(dst, imm32)
+UNIT_Status
+AMD64_Add_RegImmediate(_UNIT_CodeBuffer *buffer, AMD64_Register dst, AMD64_Immediate src);
+
+// dst = sub(dst, src)
+UNIT_Status
+AMD64_Sub_RegReg(_UNIT_CodeBuffer *buffer, AMD64_Register dst, AMD64_Register src);
+
+// dst = sub(dst, imm32)
+UNIT_Status
+AMD64_Sub_RegImmediate(_UNIT_CodeBuffer *buffer, AMD64_Register dst, AMD64_Immediate src);
+
+// dst = sub(dst, src)
+UNIT_Status
+AMD64_IntMul_RegReg(_UNIT_CodeBuffer *buffer, AMD64_Register dst, AMD64_Register src);
+
+// dst = mul(dst, imm32)
+UNIT_Status
+AMD64_IntMul_RegImmediate(_UNIT_CodeBuffer *buffer, AMD64_Register dst, AMD64_Immediate src);
+
+// RAX (quotient), RDX (remainder) = RDX / divisor
+UNIT_Status
+AMD64_IntDiv_Reg(_UNIT_CodeBuffer *buffer, AMD64_Register divisor);
+
+// dst = &src
+UNIT_Status
+AMD64_LoadEffectiveAddress_RegStack(_UNIT_CodeBuffer *buffer,
+                                    AMD64_Register dst,
+                                    AMD64_StackSlot src);
+
+// dst = &<relocation>
+UNIT_Status
+AMD64_LoadEffectiveAddress_RegRel(_UNIT_CodeBuffer *buffer,
+                                  AMD64_Register dst,
+                                  UNIT_Size *relocation_index);
+
+// RDX = (int128)RDX
+UNIT_Status
+AMD64_ConvertQuadwordToOctoword(_UNIT_CodeBuffer *buffer);
+
+// jmp <relocation>
+UNIT_Status
+AMD64_Jump_Rel(_UNIT_CodeBuffer *buffer, UNIT_Size *relocation_index);
+
+// if cmp { je <relocation> }
+UNIT_Status
+AMD64_JumpEqual_Rel(_UNIT_CodeBuffer *buffer, UNIT_Size *relocation_index);
+
+UNIT_Status
+AMD64_JumpNotEqual_Rel(_UNIT_CodeBuffer *buffer, UNIT_Size *relocation_index);
+
+UNIT_Status
+AMD64_JumpGreater_Rel(_UNIT_CodeBuffer *buffer, UNIT_Size *relocation_index);
+
+UNIT_Status
+AMD64_JumpGreaterEqual_Rel(_UNIT_CodeBuffer *buffer, UNIT_Size *relocation_index);
+
+UNIT_Status
+AMD64_JumpLess_Rel(_UNIT_CodeBuffer *buffer, UNIT_Size *relocation_index);
+
+// jle <relocation>
+UNIT_Status
+AMD64_JumpLessEqual_Rel(_UNIT_CodeBuffer *buffer, UNIT_Size *relocation_index);
+
+UNIT_Status
+AMD64_Return(_UNIT_CodeBuffer *buffer);
 
 void
 AMD64_PatchPrologue(_UNIT_CompileContext *context,
@@ -92,12 +236,5 @@ AMD64_PatchEpilogue(_UNIT_CompileContext *compile_context,
 
 void
 AMD64_PatchJumps(_UNIT_CompileContext *context);
-
-
-UNIT_Status
-AMD64_Move_RegReg(_UNIT_CodeBuffer *buffer, AMD64_Register dst, AMD64_Register src);
-
-UNIT_Status
-AMD64_Move_RegIndirect(_UNIT_CodeBuffer *buffer, AMD64_Register dst, AMD64_Indirect src);
 
 #endif
