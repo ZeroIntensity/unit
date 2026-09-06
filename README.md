@@ -140,7 +140,7 @@ print(add(3, 4))  # 7
 
 UNIT is missing support for the following features:
 
-- Compiling to AArch64.
+- Compiling to AArch64 and Mach-O files.
 - Floating point operations.
 - SSA (this is currently partial; locations are assigned once per block, but
   not once per procedure).
