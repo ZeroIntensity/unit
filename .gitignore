@@ -14,6 +14,8 @@ CMakeFiles/
 __pycache__/
 *.obj
 *.exe
+/unit.pc
+/Makefile
 
 # Documentation
 .venv/
