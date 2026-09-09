@@ -50,7 +50,8 @@ class TestLanguageWithJIT(unittest.TestCase):
                 stdout.flush()
                 import ctypes
 
-                ctypes.CDLL(None).fflush(None)
+                library = 'msvcrt.dll' if os.name == 'nt' else None
+                ctypes.CDLL(library).fflush(None)
                 stdout.seek(0)
                 return stdout.read().decode("utf-8").strip("\n")
 
