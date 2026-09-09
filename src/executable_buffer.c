@@ -76,20 +76,33 @@ struct _UNIT_ExecutableBuffer {
 
 #ifdef _WIN32
     #include <windows.h>
+    #include <psapi.h>
     #define JIT_ALLOC(size)                        \
             VirtualAlloc(NULL,                     \
                          size,                     \
                          MEM_COMMIT | MEM_RESERVE, \
                          PAGE_READWRITE)
     #define JIT_PROTECT_EXEC(ptr, size) \
-            do { DWORD old; VirtualProtect(ptr, size, PAGE_EXECUTE_READ, &old);} while (0)
+            jit_protect(ptr, size, PAGE_EXECUTE_READ)
     #define JIT_PROTECT_READ(ptr, size) \
-            do { DWORD old; VirtualProtect(ptr, size, PAGE_READONLY, &old);} while (0)
+            jit_protect(ptr, size, PAGE_READONLY)
     #define JIT_FREE(ptr, size) VirtualFree(ptr, 0, MEM_RELEASE)
     #define JIT_FAILED(ptr) ((ptr) == NULL)
 
-#include <windows.h>
-#include <psapi.h>
+static int
+jit_protect(void *address, UNIT_Size size, DWORD protection)
+{
+    DWORD old;
+    return VirtualProtect(address, size, protection, &old) != 0;
+}
+
+static UNIT_Size
+jit_page_size(void)
+{
+    SYSTEM_INFO info;
+    GetSystemInfo(&info);
+    return info.dwPageSize;
+}
 
 static void *
 resolve_symbol_windows(const char *name)
@@ -119,6 +132,7 @@ resolve_symbol_windows(const char *name)
 #else
     #include <sys/mman.h>
     #include <dlfcn.h>
+    #include <unistd.h>
     #define JIT_ALLOC(size)                   \
             mmap(NULL,                        \
                  size,                        \
@@ -127,13 +141,20 @@ resolve_symbol_windows(const char *name)
                  -1,                          \
                  0)
     #define JIT_PROTECT_EXEC(ptr, size) \
-            mprotect(ptr,               \
-                     size,              \
-                     PROT_READ | PROT_EXEC)
-    #define JIT_PROTECT_READ(ptr, size) mprotect(ptr, size, PROT_READ)
+            (mprotect(ptr,              \
+                      size,             \
+                      PROT_READ | PROT_EXEC) == 0)
+    #define JIT_PROTECT_READ(ptr, size) (mprotect(ptr, size, PROT_READ) == 0)
     #define JIT_FREE(ptr, size) munmap(ptr, size)
     #define JIT_FAILED(ptr) ((ptr) == MAP_FAILED)
     #define JIT_RESOLVE_SYMBOL(name) dlsym(RTLD_DEFAULT, name)
+
+static UNIT_Size
+jit_page_size(void)
+{
+    return sysconf(_SC_PAGESIZE);
+}
+
 #endif
 
 void *
@@ -163,7 +184,51 @@ init_executable_buffer(const UNIT_CompiledProcedure *compiled,
     UNIT_Size code_size =
         _UNIT_CodeBuffer_CurrentIndex(&compile_context->buffer);
     UNIT_Size rodata_size = compile_context->string_data.constant_buffer.size;
-    UNIT_Size total_size = code_size + rodata_size;
+    UNIT_Size size =
+        _UNIT_Vector_SIZE(&compile_context->symbol_table.relocations);
+
+    // Each external AMD64 call gets a nearby jump through a full 64-bit address.
+    // DLLs and registered symbols need not be within the CALL rel32 range.
+    const UNIT_Size trampoline_size = 14;
+    UNIT_Size num_trampolines = 0;
+    for (UNIT_Size index = 0; index < size; ++index) {
+        const _UNIT_Relocation *relocation =
+            _UNIT_Vector_GET(&compile_context->symbol_table.relocations, index);
+        if (relocation->type == _UNIT_RELOCATION_CALL) {
+            const _UNIT_Symbol *symbol =
+                _UNIT_Vector_GET(&compile_context->symbol_table.symbols,
+                                 relocation->symbol_index);
+            if (!symbol->is_defined) {
+                ++num_trampolines;
+            }
+        }
+    }
+
+    if (code_size > INT32_MAX
+        || num_trampolines > (INT32_MAX - code_size) / trampoline_size) {
+        goto too_large;
+    }
+
+    UNIT_Size executable_size = code_size + num_trampolines * trampoline_size;
+    if (rodata_size > 0) {
+        UNIT_Size page_size = jit_page_size();
+        if (page_size <= 0) {
+            _UNIT_SetError(compiled->context,
+                           UNIT_ERROR_OS_FAILURE,
+                           "failed to get JIT page size");
+            return _UNIT_FAIL;
+        }
+
+        // Page protections must not let read-only data remove execute permission
+        // from the last page of code (or from a trampoline).
+        executable_size = ((executable_size + page_size - 1) / page_size) * page_size;
+    }
+
+    if (executable_size > INT32_MAX || rodata_size > INT32_MAX - executable_size) {
+        goto too_large;
+    }
+
+    UNIT_Size total_size = executable_size + rodata_size;
 
     void *code = JIT_ALLOC(total_size);
     if (JIT_FAILED(code)) {
@@ -173,7 +238,8 @@ init_executable_buffer(const UNIT_CompiledProcedure *compiled,
         return _UNIT_FAIL;
     }
 
-    void *rodata = (char *)code + code_size;
+    char *trampoline = (char *)code + code_size;
+    void *rodata = (char *)code + executable_size;
 
     memcpy(code, compile_context->buffer.data, code_size);
     if (rodata_size > 0) {
@@ -182,8 +248,6 @@ init_executable_buffer(const UNIT_CompiledProcedure *compiled,
                rodata_size);
     }
 
-    UNIT_Size size =
-        _UNIT_Vector_SIZE(&compile_context->symbol_table.relocations);
     for (UNIT_Size index = 0; index < size; ++index) {
         _UNIT_Relocation *relocation =
             _UNIT_Vector_GET(&compile_context->symbol_table.relocations,
@@ -209,6 +273,15 @@ init_executable_buffer(const UNIT_CompiledProcedure *compiled,
                                          symbol->name);
                     return _UNIT_FAIL;
                 }
+
+                // jmp qword ptr [rip + 0]; .quad target
+                // Preserve all argument registers and the caller's return address.
+                static const uint8_t jump[] = {0xff, 0x25, 0, 0, 0, 0};
+                uint64_t address = (uintptr_t)target;
+                memcpy(trampoline, jump, sizeof(jump));
+                memcpy(trampoline + sizeof(jump), &address, sizeof(address));
+                target = trampoline;
+                trampoline += trampoline_size;
             }
 
             char *patch_address = (char *)code + relocation->offset;
@@ -225,16 +298,37 @@ init_executable_buffer(const UNIT_CompiledProcedure *compiled,
         }
     }
 
-    JIT_PROTECT_EXEC(code, code_size);
-    if (rodata_size > 0) {
-        JIT_PROTECT_READ(rodata, rodata_size);
+    if (!JIT_PROTECT_EXEC(code, executable_size)
+        || (rodata_size > 0 && !JIT_PROTECT_READ(rodata, rodata_size))) {
+        JIT_FREE(code, total_size);
+        _UNIT_SetError(compiled->context,
+                       UNIT_ERROR_OS_FAILURE,
+                       "failed to protect JIT buffer");
+        return _UNIT_FAIL;
     }
+
+#ifdef _WIN32
+    if (!FlushInstructionCache(GetCurrentProcess(), code, executable_size)) {
+        JIT_FREE(code, total_size);
+        _UNIT_SetError(compiled->context,
+                       UNIT_ERROR_OS_FAILURE,
+                       "failed to flush JIT instruction cache");
+        return _UNIT_FAIL;
+    }
+
+#endif
 
     buffer->code = code;
     buffer->rodata = rodata;
-    buffer->code_size = code_size;
+    buffer->code_size = executable_size;
     buffer->rodata_size = rodata_size;
     return _UNIT_OK;
+
+too_large:
+    _UNIT_SetError(compiled->context,
+                   UNIT_ERROR_INVALID_USAGE,
+                   "JIT buffer exceeds the AMD64 relative addressing range");
+    return _UNIT_FAIL;
 }
 
 UNIT_ExecutableBuffer *
@@ -244,6 +338,10 @@ UNIT_CompiledProcedure_JIT(const UNIT_CompiledProcedure *compiled_procedure,
     assert(compiled_procedure != NULL);
     UNIT_ExecutableBuffer *buffer = _UNIT_Alloc(compiled_procedure->context,
                                                 sizeof(UNIT_ExecutableBuffer));
+    if (buffer == NULL) {
+        return NULL;
+    }
+
     buffer->context = compiled_procedure->context;
     if (UNIT_FAILED(init_executable_buffer(compiled_procedure,
                                            buffer,
