@@ -56,10 +56,12 @@ test_grow(UNIT_Context *context)
         values[i] = i * 10;
         ASSERT_OK(context, _UNIT_Vector_Append(&vector, &values[i]));
     }
+
     ASSERT_EQ(_UNIT_Vector_SIZE(&vector), 500);
     for (int i = 0; i < 500; ++i) {
         ASSERT_EQ(*(int *)_UNIT_Vector_GET(&vector, i), i * 10);
     }
+
     _UNIT_Vector_Clear(&vector);
 }
 

@@ -22,6 +22,7 @@ main(void)
                                                     value))) {  \
             goto error;                                         \
         }
+
 #define ADDOP(name) ADDOP_INT(name, 0)
 
 #define ADDOP_CALL(func, argc)                                                 \
@@ -223,7 +224,7 @@ main(void)
 
     if (UNIT_FAILED(UNIT_CompiledProcedure_WriteObjectFile(compiled,
                                                            "test.o",
-                                                           UNIT_FORMAT_ELF))) {
+                                                           UNIT_HOST_FORMAT))) {
         UNIT_CompiledProcedure_Free(compiled);
         goto error;
     }

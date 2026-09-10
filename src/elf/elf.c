@@ -194,7 +194,7 @@ build_relocation_table(ELF_Object *object,
 
         entry->offset = relocation->offset;
 
-        if (relocation->type == RELOCATION_CALL) {
+        if (relocation->type == _UNIT_RELOCATION_CALL) {
             UNIT_Size resolved_index =
                 _UNIT_SizeMap_GET(&object->symtab_indices,
                                   relocation->
@@ -202,7 +202,7 @@ build_relocation_table(ELF_Object *object,
             entry->info = ELF_RELOCATION_INFO(resolved_index,
                                               ELF_RELOCATION_AMD64_PLT32);
             entry->add = -4;
-        } else if (relocation->type == RELOCATION_DATA) {
+        } else if (relocation->type == _UNIT_RELOCATION_DATA) {
             // Points at the .rodata section symbol (index 1).
             // The addend is the byte offset of the data within
             // .rodata, minus 4 for the RIP-relative adjustment.

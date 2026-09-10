@@ -223,5 +223,5 @@ stack slots, so UNIT has to move the value into a "scratch" register and then
 operate on it. (The scratch register is not allowed to be assigned to a location
 during register allocation, so it's always available for use in IR lowering.)
 
-The result is a sequence of bytes that can be written to an ELF object file
+The result is a sequence of bytes that can be written to an object file
 or executed directly via JIT compilation.

@@ -1,6 +1,3 @@
-#include <stdio.h>
-#include <stdlib.h>
-
 #include <unit/platform.h>
 
 #include <unit/internal/architectures.h>
@@ -11,54 +8,32 @@
 
 #include "amd64_local.h"
 
-AMD64_Operand
-reg(AMD64_Register r) {
-    return (AMD64_Operand) {
-               .kind = OPERAND_REGISTER,
-               .reg = r
+static const AMD64_Register *
+get_platform_register_map(UNIT_Platform platform)
+{
+    static const AMD64_Register systemv[] = {
+        REG_RAX, REG_RCX, REG_RDX, REG_RSI, REG_RDI,
+        REG_R8, REG_R9, REG_R10,
     };
-}
 
-AMD64_Operand
-immediate(uint64_t value) {
-    return (AMD64_Operand) {
-               .kind = OPERAND_IMMEDIATE,
-               .immediate = value
+    static const AMD64_Register win64[] = {
+        REG_RAX, REG_RCX, REG_RDX,
+        REG_R8, REG_R9, REG_R10,
     };
-}
 
-AMD64_Operand
-stack_slot(uint64_t offset) {
-    return (AMD64_Operand) {
-               .kind = OPERAND_STACK,
-               .stack_offset = offset
-    };
+    UNIT_ABI abi = UNIT_Platform_GET_ABI(platform);
+    if (abi == UNIT_ABI_SYSTEMV) {
+        return systemv;
+    } else {
+        assert(abi == UNIT_ABI_WIN64);
+        return win64;
+    }
 }
-
-AMD64_Operand
-indirect(AMD64_Operand operand) {
-    assert(operand.kind == OPERAND_REGISTER);
-    return (AMD64_Operand) {
-               .kind = OPERAND_INDIRECT,
-               .reg = operand.reg
-    };
-}
-
-static const AMD64_Register register_map[] = {
-    REG_RAX,
-    REG_RCX,
-    REG_RDX,
-    REG_RSI,
-    REG_RDI,
-    REG_R8,
-    REG_R9,
-    REG_R10,
-};
 
 static const AMD64_Register REG_SCRATCH = REG_R11;
 
 static const AMD64_Register *
-get_argument_registers(UNIT_ABI abi)
+get_argument_registers(UNIT_Platform platorm)
 {
     static const AMD64_Register systemv[] = {
         REG_RDI, REG_RSI, REG_RDX, REG_RCX, REG_R8, REG_R9
@@ -66,13 +41,54 @@ get_argument_registers(UNIT_ABI abi)
     static const AMD64_Register win64[] = {
         REG_RCX, REG_RDX, REG_R8, REG_R9
     };
+    UNIT_ABI abi = UNIT_Platform_GET_ABI(platorm);
 
-    switch (abi) {
-        case UNIT_ABI_SYSTEMV: {
-            return systemv;
+    if (abi == UNIT_ABI_SYSTEMV) {
+        return systemv;
+    } else {
+        assert(abi == UNIT_ABI_WIN64);
+        return win64;
+    }
+}
+
+#define EMIT(expr)                     \
+        do {                           \
+            if (UNIT_FAILED((expr))) { \
+                return _UNIT_FAIL;     \
+            }                          \
+        } while (0)
+
+static AMD64_Register
+item_register(const _UNIT_CompileContext *context, const _UNIT_MachineItem *item)
+{
+    assert(item != NULL && item->type == _UNIT_TYPE_REGISTER);
+    return get_platform_register_map(context->target)[item->value];
+}
+
+static AMD64_StackSlot
+item_stack_slot(const _UNIT_MachineItem *item)
+{
+    assert(item != NULL && item->type == _UNIT_TYPE_MEMORY);
+    return (AMD64_StackSlot) { .offset = item->value * 8 };
+}
+
+static UNIT_Status
+load_register(_UNIT_CompileContext *context,
+              AMD64_Register dst,
+              const _UNIT_MachineItem *src)
+{
+    assert(src != NULL);
+    switch (src->type) {
+        case _UNIT_TYPE_REGISTER: {
+            return AMD64_Move_RegReg(&context->buffer, dst, item_register(context, src));
         }
-        case UNIT_ABI_WIN64: {
-            return win64;
+        case _UNIT_TYPE_CONSTANT: {
+            return AMD64_Move_RegImmediate(&context->buffer,
+                                           dst,
+                                           (AMD64_Immediate) { .immediate = src->value });
+        }
+        case _UNIT_TYPE_MEMORY: {
+            return AMD64_Move_RegStack(&context->buffer, dst, item_stack_slot(src));
         }
         default: {
             _UNIT_Unreachable();
@@ -80,628 +96,394 @@ get_argument_registers(UNIT_ABI abi)
     }
 }
 
-AMD64_Operand
-machine_item_to_operand(const _UNIT_MachineItem *machine_item)
+static UNIT_Status
+store_register(_UNIT_CompileContext *context,
+               const _UNIT_MachineItem *dst,
+               AMD64_Register src)
 {
-    assert(machine_item != NULL);
-    if (machine_item->type == _UNIT_TYPE_REGISTER) {
-        return reg(register_map[machine_item->value]);
-    } else if (machine_item->type == _UNIT_TYPE_CONSTANT) {
-        return immediate(machine_item->value);
-    } else if (machine_item->type == _UNIT_TYPE_CALL_ARGS) {
-        // TODO: Gracefully fail here
-        printf("cannot use call args as operand");
-        abort();
-    } else {
-        return stack_slot(machine_item->value * 8);
+    assert(dst != NULL);
+    if (dst->type == _UNIT_TYPE_REGISTER) {
+        return AMD64_Move_RegReg(&context->buffer, item_register(context, dst), src);
     }
+
+    return AMD64_Move_StackReg(&context->buffer, item_stack_slot(dst), src);
 }
-
-static _UNIT_MachineItem *
-generic_item_passthrough(_UNIT_MachineItem *item)
-{
-    assert(item != NULL);
-    return item;
-}
-
-#define ENSURE_VALID_ITEM(item)                                  \
-        _Generic((item),                                         \
-                 _UNIT_MachineItem * : generic_item_passthrough, \
-                 _UNIT_MachineDestination:                       \
-                 _UNIT_MachineDestination_GetPointerNullable     \
-        )(item)
-
-
-#define NO_ARGS_HELPER(name, opcode_name)                                         \
-        static inline AMD64_Instruction *                                         \
-        name(UNIT_Context * context) {                                            \
-            AMD64_Instruction *instruction = _UNIT_Alloc(context,                 \
-                                                         sizeof(                  \
-                                                             AMD64_Instruction)); \
-            if (instruction == NULL) {                                            \
-                return NULL;                                                      \
-            }                                                                     \
-            instruction->opcode = opcode_name;                                    \
-            instruction->operand_count = 0;                                       \
-            return instruction;                                                   \
-        }
-
-#define ONE_ARG_HELPER(name, opcode_name)                                         \
-        static inline AMD64_Instruction *                                         \
-        name(UNIT_Context * context, AMD64_Operand operand) {                     \
-            AMD64_Instruction *instruction = _UNIT_Alloc(context,                 \
-                                                         sizeof(                  \
-                                                             AMD64_Instruction)); \
-            if (instruction == NULL) {                                            \
-                return NULL;                                                      \
-            }                                                                     \
-            instruction->opcode = opcode_name;                                    \
-            instruction->operands[0] = operand;                                   \
-            instruction->operand_count = 1;                                       \
-            return instruction;                                                   \
-        }
-
-
-#define TWO_ARG_HELPER(name, opcode_name)                                         \
-        static inline AMD64_Instruction *                                         \
-        name(UNIT_Context * context, AMD64_Operand dst, AMD64_Operand src) {      \
-            AMD64_Instruction *instruction = _UNIT_Alloc(context,                 \
-                                                         sizeof(                  \
-                                                             AMD64_Instruction)); \
-            if (instruction == NULL) {                                            \
-                return NULL;                                                      \
-            }                                                                     \
-            instruction->opcode = opcode_name;                                    \
-            instruction->operands[0] = dst;                                       \
-            instruction->operands[1] = src;                                       \
-            instruction->operand_count = 2;                                       \
-            return instruction;                                                   \
-        }
-
-#define THREE_ARG_HELPER(name, opcode_name)                                       \
-        static inline AMD64_Instruction *                                         \
-        name(UNIT_Context * context,                                              \
-             AMD64_Operand dst,                                                   \
-             AMD64_Operand a,                                                     \
-             AMD64_Operand b) {                                                   \
-            AMD64_Instruction *instruction = _UNIT_Alloc(context,                 \
-                                                         sizeof(                  \
-                                                             AMD64_Instruction)); \
-            if (instruction == NULL) {                                            \
-                return NULL;                                                      \
-            }                                                                     \
-            instruction->opcode = opcode_name;                                    \
-            instruction->operands[0] = dst;                                       \
-            instruction->operands[1] = a;                                         \
-            instruction->operands[2] = b;                                         \
-            instruction->operand_count = 3;                                       \
-            return instruction;                                                   \
-        }
-
-NO_ARGS_HELPER(ret, AMD64_RET)
-NO_ARGS_HELPER(syscall, AMD64_SYSCALL)
-NO_ARGS_HELPER(cqo, AMD64_CQO)
-ONE_ARG_HELPER(call_indirect, AMD64_CALL_INDIRECT)
-ONE_ARG_HELPER(call_symbol, AMD64_CALL_SYMBOL)
-ONE_ARG_HELPER(jmp, AMD64_JUMP)
-ONE_ARG_HELPER(_jmp_label, AMD64_JUMP_LABEL)
-ONE_ARG_HELPER(jump_if_equal, AMD64_JUMP_IF_EQUAL)
-ONE_ARG_HELPER(jump_if_not_equal, AMD64_JUMP_IF_NOT_EQUAL)
-ONE_ARG_HELPER(jump_if_greater, AMD64_JUMP_IF_GREATER)
-ONE_ARG_HELPER(jump_if_less, AMD64_JUMP_IF_LESS)
-ONE_ARG_HELPER(jump_if_greater_equal, AMD64_JUMP_IF_GREATER_EQUAL)
-ONE_ARG_HELPER(jump_if_less_equal, AMD64_JUMP_IF_LESS_EQUAL)
-
-// Moves
-TWO_ARG_HELPER(mov, AMD64_MOV)
-TWO_ARG_HELPER(movzx8, AMD64_MOVZX8)
-TWO_ARG_HELPER(movsx8, AMD64_MOVSX8)
-TWO_ARG_HELPER(movzx16, AMD64_MOVZX16)
-TWO_ARG_HELPER(movsx16, AMD64_MOVSX16)
-TWO_ARG_HELPER(movsxd, AMD64_MOVSXD)
-TWO_ARG_HELPER(mov32, AMD64_MOV32)
-THREE_ARG_HELPER(movzx, AMD64_MOVZX)
-THREE_ARG_HELPER(mov_sized, AMD64_MOV_SIZED)
-
-TWO_ARG_HELPER(load_string, AMD64_LOAD_STRING)
-TWO_ARG_HELPER(cmp, AMD64_COMPARE)
-TWO_ARG_HELPER(lea, AMD64_LOAD_ADDRESS)
-
-TWO_ARG_HELPER(add, AMD64_ADD)
-TWO_ARG_HELPER(sub, AMD64_SUB)
-TWO_ARG_HELPER(imul, AMD64_MUL)
-ONE_ARG_HELPER(idiv, AMD64_DIV)
-
-#define EMIT(op)                                                          \
-        if (UNIT_FAILED(AMD64_encode_instruction(compile_context, op))) { \
-            return _UNIT_FAIL;                                            \
-        }
 
 static UNIT_Status
-use_scratch_register_if_needed(_UNIT_CompileContext *compile_context,
-                               _UNIT_MachineItem *item,
-                               AMD64_Operand *out_operand)
+save_register(_UNIT_CompileContext *context, AMD64_Register reg, AMD64_StackSlot *slot)
 {
-    assert(compile_context != NULL);
-    assert(item != NULL);
-    assert(out_operand != NULL);
-    AMD64_Operand in_operand = machine_item_to_operand(item);
-    if (in_operand.kind == OPERAND_REGISTER) {
-        *out_operand = in_operand;
-        return _UNIT_OK;
-    }
+    slot->offset = _UNIT_StackFrame_AllocateSlot(&context->stack_frame);
+    return AMD64_Move_StackReg(&context->buffer, *slot, reg);
+}
 
-    EMIT(mov(compile_context->context, reg(REG_SCRATCH), in_operand));
-    *out_operand = reg(REG_SCRATCH);
+static UNIT_Status
+restore_register(_UNIT_CompileContext *context, AMD64_Register reg, AMD64_StackSlot slot)
+{
+    EMIT(AMD64_Move_RegStack(&context->buffer, reg, slot));
+    _UNIT_StackFrame_FreeSlot(&context->stack_frame, slot.offset);
     return _UNIT_OK;
 }
 
 static UNIT_Status
-undo_scratch_register_if_used(_UNIT_CompileContext *compile_context,
-                              _UNIT_MachineItem *item,
-                              AMD64_Operand actual)
+append_relocation(_UNIT_CompileContext *context, _UNIT_Relocation *relocation)
 {
-    AMD64_Operand original = machine_item_to_operand(item);
-    if (original.kind != OPERAND_REGISTER &&
-        original.kind != OPERAND_IMMEDIATE) {
-        EMIT(mov(compile_context->context, original, actual));
+    if (relocation == NULL) {
+        return _UNIT_FAIL;
+    }
+
+    if (UNIT_FAILED(_UNIT_Vector_Append(&context->symbol_table.relocations, relocation))) {
+        _UNIT_Relocation_Free(context->context, relocation);
+        return _UNIT_FAIL;
     }
 
     return _UNIT_OK;
 }
 
 static UNIT_Status
-preserve_register(_UNIT_CompileContext *compile_context,
-                  _UNIT_MachineOperation *operation,
-                  AMD64_Register to_preserve,
-                  UNIT_Size *slot_ptr)
+append_jump(_UNIT_CompileContext *context, UNIT_Size offset, UNIT_Size label)
 {
-    assert(compile_context != NULL);
-    assert(operation != NULL);
-    assert(slot_ptr != NULL);
-#define IGNORE_IF_TARGET(val)                               \
-        if ((val) != NULL                                   \
-            && (val)->type == _UNIT_TYPE_REGISTER           \
-            && register_map[(val)->value] == to_preserve) { \
-            *slot_ptr = -1;                                 \
-            return _UNIT_OK;                                \
-        }
-
-    IGNORE_IF_TARGET(_UNIT_MachineDestination_GetPointerNullable(
-                         operation->destination));
-    IGNORE_IF_TARGET(operation->argument_1);
-    IGNORE_IF_TARGET(operation->argument_2);
-
-    UNIT_Size slot =
-        _UNIT_StackFrame_AllocateSlot(&compile_context->stack_frame);
-    EMIT(mov(compile_context->context, stack_slot(slot), reg(to_preserve)));
-    *slot_ptr = slot;
-
-    return _UNIT_OK;
-
-#undef IGNORE_IF_TARGET
-}
-
-static UNIT_Status
-restore_register(_UNIT_CompileContext *compile_context,
-                 AMD64_Register preserved,
-                 UNIT_Size slot)
-{
-    assert(compile_context != NULL);
-    if (slot == -1) {
-        return _UNIT_OK;
+    _UNIT_PendingJump *jump = _UNIT_PendingJump_New(context->context, offset, label);
+    if (jump == NULL) {
+        return _UNIT_FAIL;
     }
 
-    EMIT(mov(compile_context->context, reg(preserved), stack_slot(slot)));
-    _UNIT_StackFrame_FreeSlot(&compile_context->stack_frame, slot);
+    if (UNIT_FAILED(_UNIT_Vector_Append(&context->jump_table.pending_jumps, jump))) {
+        _UNIT_PendingJump_Free(context->context, jump);
+        return _UNIT_FAIL;
+    }
+
     return _UNIT_OK;
 }
 
-static int8_t
-operands_equal(AMD64_Operand left,
-               AMD64_Operand right)
+static UNIT_Status
+compare_items(_UNIT_CompileContext *context,
+              const _UNIT_MachineItem *left,
+              const _UNIT_MachineItem *right)
 {
-    if (left.kind != right.kind) {
-        return 0;
+    _UNIT_CodeBuffer *buffer = &context->buffer;
+    EMIT(load_register(context, REG_SCRATCH, left));
+    if (right->type == _UNIT_TYPE_REGISTER) {
+        return AMD64_Compare_RegReg(buffer, REG_SCRATCH, item_register(context, right));
     }
 
-    switch (left.kind) {
-        case OPERAND_REGISTER: {
-            return left.reg == right.reg;
-        }
-        case OPERAND_STACK: {
-            return left.stack_offset == right.stack_offset;
-        }
-        case OPERAND_IMMEDIATE: {
-            return left.immediate == right.immediate;
-        }
-        default: {
-            return 0;
-        }
+    if (right->type == _UNIT_TYPE_MEMORY) {
+        return AMD64_Compare_RegStack(buffer, REG_SCRATCH, item_stack_slot(right));
     }
+
+    // This API encodes a sign-extended byte, so larger constants need a register.
+    if (right->value >= 0 && right->value <= INT8_MAX) {
+        return AMD64_Compare_RegImmediate(buffer,
+                                          REG_SCRATCH,
+                                          (AMD64_Immediate) { .immediate = right->value });
+    }
+
+    AMD64_StackSlot saved;
+    EMIT(save_register(context, REG_R10, &saved));
+    EMIT(load_register(context, REG_R10, right));
+    EMIT(AMD64_Compare_RegReg(buffer, REG_SCRATCH, REG_R10));
+    // MOV preserves the comparison flags.
+    return restore_register(context, REG_R10, saved);
 }
 
 static UNIT_Status
-translate_operation(_UNIT_CompileContext *compile_context,
-                    _UNIT_MachineOperation *operation,
-                    UNIT_ABI abi,
-                    _UNIT_SizeVector *epilogue_patches)
+lower_operation(_UNIT_CompileContext *compile_context,
+                _UNIT_MachineOperation *operation,
+                _UNIT_SizeVector *epilogue_patches)
 {
     assert(compile_context != NULL);
     assert(operation != NULL);
     assert(epilogue_patches != NULL);
     UNIT_Context *ctx = compile_context->context;
-
-#define OP(value) machine_item_to_operand(ENSURE_VALID_ITEM(operation->value))
-
-#define USE_SCRATCH_REGISTER(name)                                           \
-        AMD64_Operand name;                                                  \
-        if (UNIT_FAILED(use_scratch_register_if_needed(compile_context,      \
-                                                       ENSURE_VALID_ITEM(    \
-                                                           operation->name), \
-                                                       &name))) {            \
-            return _UNIT_FAIL;                                               \
-        }
-
-#define UNDO_SCRATCH_REGISTER(name)                                         \
-        if (UNIT_FAILED(undo_scratch_register_if_used(compile_context,      \
-                                                      ENSURE_VALID_ITEM(    \
-                                                          operation->name), \
-                                                      name))) {             \
-            return _UNIT_FAIL;                                              \
-        }
-
-#define PRESERVE_REGISTER(name)                               \
-        UNIT_Size slot_ ## name;                              \
-        if (UNIT_FAILED(preserve_register(compile_context,    \
-                                          operation,          \
-                                          name,               \
-                                          &slot_ ## name))) { \
-            return _UNIT_FAIL;                                \
-        }
-
-#define RESTORE_REGISTER(name)                              \
-        if (UNIT_FAILED(restore_register(compile_context,   \
-                                         name,              \
-                                         slot_ ## name))) { \
-            return _UNIT_FAIL;                              \
-        }
+    _UNIT_CodeBuffer *buffer = &compile_context->buffer;
+    _UNIT_MachineItem *destination =
+        _UNIT_MachineDestination_GetPointerNullable(operation->destination);
+    _UNIT_MachineItem *left = operation->argument_1;
+    _UNIT_MachineItem *right = operation->argument_2;
+    UNIT_ABI abi = UNIT_Platform_GET_ABI(compile_context->target);
 
     switch (operation->instruction) {
-        /* General instructions */
-
         case _UNIT_I_LOAD: {
-            AMD64_Operand dst = OP(destination);
-            AMD64_Operand src = OP(argument_1);
-            assert(dst.kind != OPERAND_IMMEDIATE);
-
-            if (dst.kind == OPERAND_STACK && src.kind == OPERAND_STACK) {
-                USE_SCRATCH_REGISTER(argument_1);
-                EMIT(mov(ctx, dst, argument_1));
-                UNDO_SCRATCH_REGISTER(argument_1);
-            } else if (dst.kind == OPERAND_STACK &&
-                       src.kind == OPERAND_IMMEDIATE) {
-                EMIT(mov(ctx, reg(REG_SCRATCH), src));
-                EMIT(mov(ctx, dst, reg(REG_SCRATCH)));
+            if (destination->type == _UNIT_TYPE_REGISTER) {
+                EMIT(load_register(compile_context,
+                                   item_register(compile_context, destination),
+                                   left));
             } else {
-                EMIT(mov(ctx, dst, src));
+                EMIT(load_register(compile_context, REG_SCRATCH, left));
+                EMIT(store_register(compile_context, destination, REG_SCRATCH));
             }
 
             break;
         }
 
         case _UNIT_I_CALL_SYMBOL: {
-            assert(operation->argument_2->type == _UNIT_TYPE_CALL_ARGS);
-            _UNIT_Vector *arguments = operation->argument_2->call_args;
+            assert(right->type == _UNIT_TYPE_CALL_ARGS);
+            _UNIT_Vector *arguments = right->call_args;
             UNIT_Size num_arguments = _UNIT_Vector_SIZE(arguments);
-            assert(num_arguments <= 6);
-
-            PRESERVE_REGISTER(REG_RAX);
+            assert(num_arguments <= (abi == UNIT_ABI_WIN64 ? 4 : 6));
+            const AMD64_Register *register_map = get_platform_register_map(compile_context->target);
             const AMD64_Register *argument_registers =
-                get_argument_registers(abi);
-
-            // Save argument registers into stack frame slots
-            UNIT_Size save_slots[8];
-            for (UNIT_Size index = 0; index < 8; ++index) {
-                AMD64_Register saved_register = register_map[index];
-                // We don't want to preserve registers that are our own target
-                if (OP(destination).kind == OPERAND_REGISTER
-                    && saved_register == OP(destination).reg) {
-                    save_slots[index] = -1;
-                    continue;
-                }
-
-                save_slots[index] =
-                    _UNIT_StackFrame_AllocateSlot(
-                        &compile_context->stack_frame);
-                assert(save_slots[index] % 8 == 0);
-                EMIT(mov(ctx,
-                         stack_slot(save_slots[index]),
-                         reg(saved_register)));
+                get_argument_registers(compile_context->target);
+            UNIT_Size num_registers = abi == UNIT_ABI_WIN64 ? 6 : 8;
+            AMD64_StackSlot saved[8];
+            // Save every source before arranging arguments, including the result register.
+            for (UNIT_Size index = 0; index < num_registers; ++index) {
+                EMIT(save_register(compile_context, register_map[index], &saved[index]));
             }
 
-            // TODO: Handle when there are more than six args
-            for (UNIT_Size argument = 0; argument < num_arguments;
-                 ++argument) {
-                AMD64_Register argument_register =
-                    argument_registers[argument];
-                _UNIT_MachineItem *arg_item = _UNIT_Vector_GET(arguments,
-                                                               argument);
-                AMD64_Operand value = machine_item_to_operand(arg_item);
-
-                // We load from the save slots in order to avoid some circular
-                // dependency issues.
-                // For example, RDI wants to go to RSI, and RSI wants to go to
-                // RDI. If you did a sequential mov rdi, rsi and mov rsi, rdi,
-                // then RDI would be clobbered before the second mov.
-                if (value.kind == OPERAND_REGISTER) {
-                    for (UNIT_Size index = 0; index < 8; ++index) {
-                        if (save_slots[index] != (UNIT_Size) - 1
-                            && register_map[index] == value.reg) {
-                            value = stack_slot(save_slots[index]);
-                            break;
-                        }
-                    }
+            for (UNIT_Size index = 0; index < num_arguments; ++index) {
+                _UNIT_MachineItem *argument = _UNIT_Vector_GET(arguments, index);
+                if (argument->type == _UNIT_TYPE_REGISTER) {
+                    EMIT(AMD64_Move_RegStack(buffer,
+                                             argument_registers[index],
+                                             saved[argument->value]));
+                } else {
+                    EMIT(load_register(compile_context, argument_registers[index], argument));
                 }
-
-                EMIT(mov(ctx, reg(argument_register), value));
             }
 
-            EMIT(mov(ctx, reg(REG_RAX), immediate(0)));
-            EMIT(call_symbol(ctx, OP(argument_1)));
-            EMIT(mov(ctx, OP(destination), reg(REG_RAX)));
-
-            for (UNIT_Size index = 0; index < 8; ++index) {
-                if (save_slots[index] == -1) {
-                    continue;
-                }
-
-                AMD64_Register saved_register = register_map[index];
-                EMIT(mov(ctx,
-                         reg(saved_register),
-                         stack_slot(save_slots[index])));
-                _UNIT_StackFrame_FreeSlot(&compile_context->stack_frame,
-                                          save_slots[index]);
+            if (abi == UNIT_ABI_WIN64) {
+                EMIT(AMD64_Sub_RegImmediate(buffer, REG_RSP, (AMD64_Immediate) {32}));
             }
 
-            RESTORE_REGISTER(REG_RAX);
+            EMIT(AMD64_Move_RegImmediate(buffer, REG_RAX, (AMD64_Immediate) {0}));
+            UNIT_Size offset;
+            EMIT(AMD64_CallSymbol(buffer, &offset));
+            EMIT(append_relocation(compile_context,
+                                   _UNIT_Relocation_NewCall(ctx, offset, left->value)));
+            if (abi == UNIT_ABI_WIN64) {
+                EMIT(AMD64_Add_RegImmediate(buffer, REG_RSP, (AMD64_Immediate) {32}));
+            }
+
+            if (destination != NULL) {
+                EMIT(store_register(compile_context, destination, REG_RAX));
+            }
+
+            for (UNIT_Size index = 0; index < num_registers; ++index) {
+                if (destination != NULL && destination->type == _UNIT_TYPE_REGISTER
+                    && item_register(compile_context, destination) == register_map[index]) {
+                    _UNIT_StackFrame_FreeSlot(&compile_context->stack_frame, saved[index].offset);
+                } else {
+                    EMIT(restore_register(compile_context, register_map[index], saved[index]));
+                }
+            }
 
             break;
         }
 
         case _UNIT_I_LOAD_STRING: {
-            USE_SCRATCH_REGISTER(destination);
-            EMIT(load_string(ctx, destination, OP(argument_1)));
-            UNDO_SCRATCH_REGISTER(destination);
+            UNIT_Size byte_offset = _UNIT_SizeMap_GET(&compile_context->string_data.string_offsets,
+                                                      left->value);
+            UNIT_Size offset;
+            EMIT(AMD64_LoadEffectiveAddress_RegRel(buffer, REG_SCRATCH, &offset));
+            EMIT(append_relocation(compile_context,
+                                   _UNIT_Relocation_NewData(ctx, offset, byte_offset)));
+            EMIT(store_register(compile_context, destination, REG_SCRATCH));
             break;
         }
 
-        /* Functions */
-
         case _UNIT_I_EXIT: {
-            EMIT(mov(ctx, reg(REG_RAX), immediate(60))); // syscall number for exit
-            EMIT(mov(ctx, reg(REG_RDI), OP(destination)));
-            EMIT(syscall(ctx));
+            EMIT(load_register(compile_context, REG_RDI, destination));
+            EMIT(AMD64_Move_RegImmediate(buffer, REG_RAX, (AMD64_Immediate) {60}));
+            EMIT(AMD64_Syscall(buffer));
             break;
         }
 
         case _UNIT_I_RETURN_VALUE: {
-            EMIT(mov(ctx, reg(REG_RAX), OP(argument_1)));
-            // Reserve 7 bytes for the epilogue
-            UNIT_Size patch_offset =
-                _UNIT_CodeBuffer_Reserve(&compile_context->buffer, 7);
-            if (UNIT_FAILED(_UNIT_SizeVector_Append(epilogue_patches,
-                                                    patch_offset))) {
-                return _UNIT_FAIL;
-            }
-
-            EMIT(ret(ctx));
+            EMIT(load_register(compile_context, REG_RAX, left));
+            UNIT_Size offset = _UNIT_CodeBuffer_Reserve(buffer, 7);
+            EMIT(_UNIT_SizeVector_Append(epilogue_patches, offset));
+            EMIT(AMD64_Return(buffer));
             break;
         }
 
         case _UNIT_I_LOAD_ARGUMENT: {
             const AMD64_Register *argument_registers =
-                get_argument_registers(abi);
-            UNIT_Size arg_index = operation->argument_1->value;
-            // TODO: Handle more than 6 args
-            assert(arg_index < 6);
-            AMD64_Register argument_register = argument_registers[arg_index];
-            EMIT(mov(ctx, OP(destination), reg(argument_register)));
+                get_argument_registers(compile_context->target);
+            assert(left->value >= 0 && left->value < (abi == UNIT_ABI_WIN64 ? 4 : 6));
+            EMIT(store_register(compile_context, destination, argument_registers[left->value]));
             break;
         }
 
-        /* Comparisons */
         case _UNIT_I_COMPARE_EQUAL: {
-            EMIT(cmp(ctx, OP(argument_2), OP(argument_1)));
+            EMIT(compare_items(compile_context, left, right));
             break;
         }
-
-        /* Jumps */
 
         case _UNIT_I_JUMP: {
-            EMIT(jmp(ctx, OP(argument_1)));
+            UNIT_Size offset;
+            EMIT(AMD64_Jump_Rel(buffer, &offset));
+            EMIT(append_jump(compile_context, offset, left->value));
             break;
         }
 
         case _UNIT_I_JUMP_LABEL: {
-            EMIT(_jmp_label(ctx, OP(destination)));
+            EMIT(_UNIT_SizeMap_Set(&compile_context->jump_table.label_offsets,
+                                   destination->value,
+                                   _UNIT_CodeBuffer_CurrentIndex(buffer)));
             break;
+
+#define JUMP_CONDITION(inst, helper)                                            \
+        case inst: {                                                            \
+                UNIT_Size offset;                                               \
+                EMIT(compare_items(compile_context, left, right));              \
+                EMIT(helper(buffer, &offset));                                  \
+                EMIT(append_jump(compile_context, offset, destination->value)); \
+                break;                                                          \
         }
+            JUMP_CONDITION(_UNIT_I_JUMP_IF_EQUAL, AMD64_JumpEqual_Rel)
+            JUMP_CONDITION(_UNIT_I_JUMP_IF_NOT_EQUAL, AMD64_JumpNotEqual_Rel)
+            JUMP_CONDITION(_UNIT_I_JUMP_IF_LESS, AMD64_JumpLess_Rel)
+            JUMP_CONDITION(_UNIT_I_JUMP_IF_LESS_EQUAL, AMD64_JumpLessEqual_Rel)
+            JUMP_CONDITION(_UNIT_I_JUMP_IF_GREATER, AMD64_JumpGreater_Rel)
+            JUMP_CONDITION(_UNIT_I_JUMP_IF_GREATER_EQUAL, AMD64_JumpGreaterEqual_Rel)
+#undef JUMP_CONDITION
 
-        #define JUMP_CONDITION(inst, op)                              \
-                case inst: {                                          \
-                        AMD64_Operand left = OP(argument_1);          \
-                        AMD64_Operand right = OP(argument_2);         \
-                        /* cmp needs at least one register operand */ \
-                        if (left.kind != OPERAND_REGISTER) {          \
-                            USE_SCRATCH_REGISTER(argument_1);         \
-                            left = argument_1;                        \
-                        }                                             \
-                        EMIT(cmp(ctx, left, right));                  \
-                        EMIT(op(ctx, OP(destination)));               \
-                        break;                                        \
-                }
-
-            JUMP_CONDITION(_UNIT_I_JUMP_IF_EQUAL, jump_if_equal);
-            JUMP_CONDITION(_UNIT_I_JUMP_IF_NOT_EQUAL, jump_if_not_equal);
-            JUMP_CONDITION(_UNIT_I_JUMP_IF_LESS, jump_if_less);
-            JUMP_CONDITION(_UNIT_I_JUMP_IF_LESS_EQUAL, jump_if_less_equal);
-            JUMP_CONDITION(_UNIT_I_JUMP_IF_GREATER, jump_if_greater);
-            JUMP_CONDITION(_UNIT_I_JUMP_IF_GREATER_EQUAL,
-                           jump_if_greater_equal);
-
-        #undef JUMP_CONDITION
-
-            /* Arithmetic */
-
-        #define BINARY_OP(inst, helper) \
-                case inst: {            \
-                        /* When the destination and righthand side are the same register, they
-                         * clobber one another in the normal path. To avoid that, we load the RHS
-                         * into the scratch register to perform the operation. */ \
-                        if (operands_equal(OP(destination), OP(argument_2))       \
-                            && !operands_equal(OP(destination),                   \
-                                               OP(argument_1))) {                 \
-                            EMIT(mov(ctx, reg(REG_R11), OP(argument_2)));         \
-                            EMIT(mov(ctx, OP(destination), OP(argument_1)));      \
-                            EMIT(helper(ctx, OP(destination), reg(REG_R11)));     \
-                        } else {                                                  \
-                            USE_SCRATCH_REGISTER(destination);                    \
-                            EMIT(mov(ctx, destination, OP(argument_1)));          \
-                            EMIT(helper(ctx, destination, OP(argument_2)));       \
-                            UNDO_SCRATCH_REGISTER(destination);                   \
-                        }                                                         \
-                        break;                                                    \
-                }
-
-            BINARY_OP(_UNIT_I_ADD, add);
-            BINARY_OP(_UNIT_I_SUB, sub);
-            BINARY_OP(_UNIT_I_MUL, imul);
+#define BINARY_OP(inst, helper)                                                      \
+        case inst: {                                                                 \
+                EMIT(load_register(compile_context, REG_SCRATCH, left));             \
+                if (right->type == _UNIT_TYPE_REGISTER) {                            \
+                    EMIT(helper ## _RegReg(buffer,                                   \
+                                           REG_SCRATCH,                              \
+                                           item_register(compile_context, right)));  \
+                } else if (right->type == _UNIT_TYPE_CONSTANT                        \
+                           && right->value >= 0 && right->value <= INT32_MAX) {      \
+                    EMIT(helper ## _RegImmediate(buffer,                             \
+                                                 REG_SCRATCH,                        \
+                                                 (AMD64_Immediate) {right->value})); \
+                } else {                                                             \
+                    AMD64_StackSlot saved;                                           \
+                    EMIT(save_register(compile_context, REG_R10, &saved));           \
+                    EMIT(load_register(compile_context, REG_R10, right));            \
+                    EMIT(helper ## _RegReg(buffer, REG_SCRATCH, REG_R10));           \
+                    EMIT(restore_register(compile_context, REG_R10, saved));         \
+                }                                                                    \
+                EMIT(store_register(compile_context, destination, REG_SCRATCH));     \
+                break;                                                               \
+        }
+            BINARY_OP(_UNIT_I_ADD, AMD64_Add)
+            BINARY_OP(_UNIT_I_SUB, AMD64_Sub)
+            BINARY_OP(_UNIT_I_MUL, AMD64_IntMul)}
+#undef BINARY_OP
 
         case _UNIT_I_DIV:
         case _UNIT_I_MOD: {
-            AMD64_Operand dst = OP(destination);
-            AMD64_Operand left = OP(argument_1);
-            AMD64_Operand right = OP(argument_2);
-            _UNIT_StackFrame *stack_frame = &compile_context->stack_frame;
-
-            PRESERVE_REGISTER(REG_RAX);
-            PRESERVE_REGISTER(REG_RDX);
-
-            EMIT(mov(ctx, reg(REG_RAX), left));
-            EMIT(cqo(ctx));
-            USE_SCRATCH_REGISTER(argument_2);
-            EMIT(idiv(ctx, argument_2));
-            UNDO_SCRATCH_REGISTER(argument_2);
-
-            if (operation->instruction == _UNIT_I_MOD) {
-                EMIT(mov(ctx, dst, reg(REG_RDX)));
-            } else {
-                EMIT(mov(ctx, dst, reg(REG_RAX)));
-            }
-
-            RESTORE_REGISTER(REG_RDX);
-            RESTORE_REGISTER(REG_RAX);
+            AMD64_StackSlot saved_rax, saved_rdx;
+            EMIT(save_register(compile_context, REG_RAX, &saved_rax));
+            EMIT(save_register(compile_context, REG_RDX, &saved_rdx));
+            // Capture the divisor before RAX and RDX are overwritten.
+            EMIT(load_register(compile_context, REG_SCRATCH, right));
+            EMIT(load_register(compile_context, REG_RAX, left));
+            EMIT(AMD64_ConvertQuadwordToOctoword(buffer));
+            EMIT(AMD64_IntDiv_Reg(buffer, REG_SCRATCH));
+            EMIT(AMD64_Move_RegReg(buffer,
+                                   REG_SCRATCH,
+                                   operation->instruction == _UNIT_I_MOD ? REG_RDX : REG_RAX));
+            EMIT(restore_register(compile_context, REG_RDX, saved_rdx));
+            EMIT(restore_register(compile_context, REG_RAX, saved_rax));
+            EMIT(store_register(compile_context, destination, REG_SCRATCH));
             break;
         }
 
-        /* Casting */
-
         case _UNIT_I_CONVERT: {
-            USE_SCRATCH_REGISTER(argument_1);
-            UNIT_IntegerType target = operation->argument_2->value;
-
-            switch (target) {
+            EMIT(load_register(compile_context, REG_SCRATCH, left));
+            switch ((UNIT_IntegerType) right->value) {
                 case UNIT_TYPE_UINT8: {
-                    EMIT(movzx8(ctx, reg(REG_SCRATCH), argument_1));
+                    EMIT(AMD64_MoveZeroExtend8_RegReg(buffer, REG_SCRATCH, REG_SCRATCH));
                     break;
                 }
                 case UNIT_TYPE_INT8: {
-                    EMIT(movsx8(ctx, reg(REG_SCRATCH), argument_1));
+                    EMIT(AMD64_MoveSignExtend8_RegReg(buffer, REG_SCRATCH, REG_SCRATCH));
                     break;
                 }
                 case UNIT_TYPE_UINT16: {
-                    EMIT(movzx16(ctx, reg(REG_SCRATCH), argument_1));
+                    EMIT(AMD64_MoveZeroExtend16_RegReg(buffer, REG_SCRATCH, REG_SCRATCH));
                     break;
                 }
                 case UNIT_TYPE_INT16: {
-                    EMIT(movsx16(ctx, reg(REG_SCRATCH), argument_1));
+                    EMIT(AMD64_MoveSignExtend16_RegReg(buffer, REG_SCRATCH, REG_SCRATCH));
                     break;
                 }
                 case UNIT_TYPE_UINT32: {
-                    EMIT(mov32(ctx, reg(REG_SCRATCH), argument_1));
+                    EMIT(AMD64_Move32_RegReg(buffer, REG_SCRATCH, REG_SCRATCH));
                     break;
                 }
                 case UNIT_TYPE_INT32: {
-                    EMIT(movsxd(ctx, reg(REG_SCRATCH), argument_1));
+                    EMIT(AMD64_MoveSignExtendDword_RegReg(buffer, REG_SCRATCH, REG_SCRATCH));
                     break;
                 }
                 case UNIT_TYPE_UINT64:
                 case UNIT_TYPE_INT64: {
-                    EMIT(mov(ctx, reg(REG_SCRATCH), argument_1));
                     break;
                 }
             }
-
-            EMIT(mov(ctx, OP(destination), reg(REG_SCRATCH)));
+            EMIT(store_register(compile_context, destination, REG_SCRATCH));
             break;
         }
 
-        /* Pointers */
-
         case _UNIT_I_READ_BYTES: {
-            USE_SCRATCH_REGISTER(argument_1);
-            UNIT_Size size = operation->argument_2->value;
-
-            if (size == 8) {
-                EMIT(mov(ctx, reg(REG_SCRATCH), indirect(argument_1)));
-            } else {
-                EMIT(movzx(ctx,
-                           reg(REG_SCRATCH),
-                           indirect(argument_1),
-                           immediate(size)));
+            EMIT(load_register(compile_context, REG_SCRATCH, left));
+            switch (right->value) {
+                case 1: {
+                    EMIT(AMD64_MoveZeroExtend_RegDerefByte(buffer, REG_SCRATCH, REG_SCRATCH));
+                    break;
+                }
+                case 2: {
+                    EMIT(AMD64_MoveZeroExtend_RegDerefWord(buffer, REG_SCRATCH, REG_SCRATCH));
+                    break;
+                }
+                case 4: {
+                    EMIT(AMD64_Move_RegDerefDword(buffer, REG_SCRATCH, REG_SCRATCH));
+                    break;
+                }
+                case 8: {
+                    EMIT(AMD64_Move_RegDerefQword(buffer, REG_SCRATCH, REG_SCRATCH));
+                    break;
+                }
+                default: {
+                    _UNIT_Unreachable();
+                }
             }
-
-            EMIT(mov(ctx, OP(destination), reg(REG_SCRATCH)));
+            EMIT(store_register(compile_context, destination, REG_SCRATCH));
             break;
         }
 
         case _UNIT_I_WRITE_BYTES: {
-            USE_SCRATCH_REGISTER(destination);
-            AMD64_Operand addr = destination;
-            UNIT_Size size = operation->argument_2->value;
-
-            if (OP(argument_1).kind == OPERAND_REGISTER
-                || OP(argument_1).kind == OPERAND_IMMEDIATE) {
-                EMIT(mov_sized(ctx,
-                               indirect(addr),
-                               OP(argument_1),
-                               immediate(size)));
-            } else {
-                UNIT_Size slot =
-                    _UNIT_StackFrame_AllocateSlot(
-                        &compile_context->stack_frame);
-                EMIT(mov(ctx, stack_slot(slot), addr));
-                EMIT(mov(ctx, reg(REG_SCRATCH), OP(argument_1)));
-                EMIT(mov(ctx, reg(addr.reg), stack_slot(slot)));
-                EMIT(mov_sized(ctx,
-                               indirect(reg(addr.reg)),
-                               reg(REG_SCRATCH),
-                               immediate(size)));
-                _UNIT_StackFrame_FreeSlot(&compile_context->stack_frame, slot);
+            AMD64_StackSlot saved;
+            EMIT(save_register(compile_context, REG_R10, &saved));
+            EMIT(load_register(compile_context, REG_SCRATCH, destination));
+            EMIT(load_register(compile_context, REG_R10, left));
+            AMD64_Indirect address = { .reg = REG_SCRATCH };
+            switch (right->value) {
+                case 1: {
+                    EMIT(AMD64_Move8_IndirectReg(buffer, address, REG_R10));
+                    break;
+                }
+                case 2: {
+                    EMIT(AMD64_Move16_IndirectReg(buffer, address, REG_R10));
+                    break;
+                }
+                case 4: {
+                    EMIT(AMD64_Move32_IndirectReg(buffer, address, REG_R10));
+                    break;
+                }
+                case 8: {
+                    EMIT(AMD64_Move_IndirectReg(buffer, address, REG_R10));
+                    break;
+                }
+                default: {
+                    _UNIT_Unreachable();
+                }
             }
-
+            EMIT(restore_register(compile_context, REG_R10, saved));
             break;
         }
 
-        case _UNIT_I_ADDRESS_OF: {
-            EMIT(lea(ctx, OP(destination), OP(argument_1)));
+        case _UNIT_I_ADDRESS_OF:
+            EMIT(AMD64_LoadEffectiveAddress_RegStack(buffer, REG_SCRATCH, item_stack_slot(left)));
+            EMIT(store_register(compile_context, destination, REG_SCRATCH));
             break;
-        }
     }
-
     return _UNIT_OK;
-#undef OP
 }
 
 static void
@@ -722,8 +504,7 @@ patch_epilogues(_UNIT_CompileContext *compile_context,
 
 UNIT_Status
 _UNIT_AMD64_Compile(_UNIT_Translation *translation,
-                    _UNIT_CompileContext *compile_context,
-                    UNIT_ABI abi)
+                    _UNIT_CompileContext *compile_context)
 {
     // Reserve space for the prologue (sub rsp, imm32 = 7 bytes).
     // We'll patch it once we know the final frame size.
@@ -750,10 +531,9 @@ _UNIT_AMD64_Compile(_UNIT_Translation *translation,
                 _UNIT_Vector_GET(&block->instructions,
                                  index);
             assert(operation != NULL);
-            if (UNIT_FAILED(translate_operation(compile_context,
-                                                operation,
-                                                abi,
-                                                &epilogue_patches))) {
+            if (UNIT_FAILED(lower_operation(compile_context,
+                                            operation,
+                                            &epilogue_patches))) {
                 _UNIT_SizeVector_Clear(&epilogue_patches);
                 return _UNIT_FAIL;
             }

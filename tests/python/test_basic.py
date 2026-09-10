@@ -1,6 +1,7 @@
-from typing import Any
-import unit
 import unittest
+from typing import Any
+
+import unit
 
 
 class BasicTests(unittest.TestCase):
@@ -759,16 +760,12 @@ class BasicTests(unittest.TestCase):
                         platform=unit.Platform(architecture="aarch64", abi=abi)
                     )
 
-    # TODO: Remove when we support Mach-O and PE
-    def test_non_elf_fails(self):
+    def test_mach_o_fails(self):
         proc = self.make_procedure()
         compiled = proc.compile()
 
         with self.assertRaises(unit.UnsupportedPlatform):
             compiled.write_object_file("test.o", "macho")
-
-        with self.assertRaises(unit.UnsupportedPlatform):
-            compiled.write_object_file("test.o", "pe")
 
     if __name__ == "__main__":
         unittest.main()

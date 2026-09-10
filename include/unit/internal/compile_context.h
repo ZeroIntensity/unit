@@ -2,6 +2,7 @@
 #define UNIT_COMPILE_CONTEXT_H
 
 #include <unit/base.h>
+#include <unit/platform.h>
 #include <unit/procedure.h>
 
 #include <unit/internal/code_buffer.h>
@@ -14,8 +15,8 @@ extern "C" {
 #endif
 
 typedef enum {
-    RELOCATION_CALL,
-    RELOCATION_DATA,
+    _UNIT_RELOCATION_CALL,
+    _UNIT_RELOCATION_DATA,
 } _UNIT_RelocationType;
 
 typedef struct {
@@ -130,13 +131,15 @@ typedef struct {
     _UNIT_JumpTable jump_table;
     _UNIT_StringData string_data;
     _UNIT_StackFrame stack_frame;
+    UNIT_Platform target;
 } _UNIT_CompileContext;
 
 UNIT_Status
 _UNIT_CompileContext_Init(_UNIT_CompileContext *compile_context,
                           UNIT_Context *context,
                           const UNIT_Procedure *procedure,
-                          const _UNIT_Translation *translation);
+                          const _UNIT_Translation *translation,
+                          UNIT_Platform platform);
 
 void
 _UNIT_CompileContext_Clear(_UNIT_CompileContext *compile_context);

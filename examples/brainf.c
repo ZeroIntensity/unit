@@ -210,54 +210,54 @@ codegen_body(UNIT_Procedure *procedure, FILE *file, int8_t in_loop)
                         break;                                  \
                     }
 
-        case '>': {
-            CODEGEN(right);
-        }
-        case '<': {
-            CODEGEN(left);
-        }
-        case '+': {
-            CODEGEN(add);
-        }
-        case '-': {
-            CODEGEN(sub);
-        }
-        case '.': {
-            CODEGEN(print);
-        }
-        case ',': {
-            CODEGEN(input);
-        }
-        case '[': {
-            NEW_JUMP_LABEL(loop);
-            NEW_JUMP_LABEL(end);
-
-            USE_LABEL(loop);
-
-            ADDOP_INT(UNIT_OP_LOAD_LOCAL, 0);
-            ADDOP_INT(UNIT_OP_READ_BYTES, 1);
-            ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
-            // [*ptr, 0]
-            ADDOP(UNIT_OP_COMPARE_EQUAL);
-
-            // [*ptr == 0]
-            ADDOP_JUMP(UNIT_OP_JUMP_IF_TRUE, end);
-            int8_t result = codegen_body(procedure, file, /*in_loop=*/ 1);
-            if ((result != 1) && in_loop) {
-                puts("error: loop was never closed (missing ])");
-                return -1;
+            case '>': {
+                CODEGEN(right);
             }
+            case '<': {
+                CODEGEN(left);
+            }
+            case '+': {
+                CODEGEN(add);
+            }
+            case '-': {
+                CODEGEN(sub);
+            }
+            case '.': {
+                CODEGEN(print);
+            }
+            case ',': {
+                CODEGEN(input);
+            }
+            case '[': {
+                NEW_JUMP_LABEL(loop);
+                NEW_JUMP_LABEL(end);
 
-            ADDOP_JUMP(UNIT_OP_JUMP, loop);
+                USE_LABEL(loop);
 
-            USE_LABEL(end);
-            break;
-        }
-        case ']': {
-            return 1;     // return to caller's '[' handler
-        } default:
-            // Comment character
-            break;
+                ADDOP_INT(UNIT_OP_LOAD_LOCAL, 0);
+                ADDOP_INT(UNIT_OP_READ_BYTES, 1);
+                ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
+                // [*ptr, 0]
+                ADDOP(UNIT_OP_COMPARE_EQUAL);
+
+                // [*ptr == 0]
+                ADDOP_JUMP(UNIT_OP_JUMP_IF_TRUE, end);
+                int8_t result = codegen_body(procedure, file, /*in_loop=*/ 1);
+                if ((result != 1) && in_loop) {
+                    puts("error: loop was never closed (missing ])");
+                    return -1;
+                }
+
+                ADDOP_JUMP(UNIT_OP_JUMP, loop);
+
+                USE_LABEL(end);
+                break;
+            }
+            case ']': {
+                return 1; // return to caller's '[' handler
+            } default:
+                // Comment character
+                break;
         }
     }
     return 0;
@@ -334,7 +334,7 @@ main(int argc, char **argv)
 
     if (UNIT_FAILED(UNIT_CompiledProcedure_WriteObjectFile(compiled,
                                                            "test.o",
-                                                           UNIT_FORMAT_ELF))) {
+                                                           UNIT_HOST_FORMAT))) {
         UNIT_CompiledProcedure_Free(compiled);
         goto error;
     }
@@ -345,6 +345,7 @@ main(int argc, char **argv)
     if (file != stdin) {
         fclose(file);
     }
+
     return 0;
 
 error:
@@ -354,5 +355,6 @@ error:
     if (file != stdin) {
         fclose(file);
     }
+
     return 1;
 }

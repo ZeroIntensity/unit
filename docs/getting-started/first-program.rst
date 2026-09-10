@@ -104,7 +104,7 @@ about an instruction, try printing all the instructions to visualize the error.
 Compiling to an object file
 ---------------------------
 
-Now we compile the procedure and write it to an ELF object file:
+Now we compile the procedure and write it to an object file:
 
 .. code-block:: c
    :caption: :iconify:`streamline-logos:c-language-logo-solid` first.c
@@ -117,12 +117,13 @@ Now we compile the procedure and write it to an ELF object file:
        return 1;
    }
 
-   UNIT_CompiledProcedure_WriteObjectFile(compiled, "add.o", UNIT_FORMAT_ELF);
+   UNIT_CompiledProcedure_WriteObjectFile(compiled, "add.o", UNIT_HOST_FORMAT);
 
 :c:macro:`UNIT_HOST_PLATFORM` auto-detects your machine's architecture and
-ABI. It's worth noting that UNIT will only work on x86-64 on ELF right now;
+ABI, and :c:macro:`UNIT_HOST_FORMAT` auto-detects your system's executable format.
+It's worth noting that UNIT will only work on x86-64 on ELF or COFF right now;
 support for more architectures (notably AArch64) and other executable formats
-(PE/COFF and Mach-O) will be added later.
+(notably Mach-O) will be added later.
 
 In the above code, :c:func:`UNIT_Compile` translates the stack IR to register IR, runs
 register allocation and optimization, and encodes the result as machine code.

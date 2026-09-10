@@ -5,12 +5,17 @@ cmake_install.cmake
 
 # clangd
 compile_flags.txt
+.clang-format
 
 # Build artifacts
 output
 *.o
 CMakeFiles/
 __pycache__/
+*.obj
+*.exe
+/unit.pc
+/Makefile
 
 # Documentation
 .venv/

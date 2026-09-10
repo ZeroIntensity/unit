@@ -89,23 +89,19 @@ Writing an object file
 The most straightforward way to use the compiled procedure is to write it
 to an object file. For this, we can use
 :c:func:`UNIT_CompiledProcedure_WriteObjectFile`. We need to pass the format
-that the object file will be stored in. For Linux, this is ELF, so we pass
-:c:macro:`UNIT_FORMAT_ELF`.
+that the object file will be stored in. For simplicity, we use :c:macro:`UNIT_HOST_FORMAT`
+to auto-detect this based on the current system.
 
 .. note::
 
-    Windows uses the Portable Executable (PE) format (:c:macro:`UNIT_FORMAT_PE`),
-    and macOS uses the Mach Object (Mach-O) format (:c:macro:`UNIT_FORMAT_MACHO`).
-
-    UNIT does not support either of these at the moment; trying to pass them to
-    :c:func:`UNIT_CompiledProcedure_WriteObjectFile` will result in an error
-    being set at runtime.
+   On macOS, ``UNIT_HOST_FORMAT`` resolves to :c:macro:`UNIT_FORMAT_MACHO`. UNIT does
+   not currently support this format.
 
 
 .. code-block:: c
 
     if (UNIT_FAILED(UNIT_CompiledProcedure_WriteObjectFile(compiled, "output.o",
-                                                           UNIT_FORMAT_ELF))) {
+                                                           UNIT_HOST_FORMAT))) {
         UNIT_PrintError(&context, stderr);
         UNIT_CompiledProcedure_Free(compiled);
         UNIT_Procedure_Clear(&procedure);
@@ -316,7 +312,7 @@ the guessing game since it needs to be the real ``main`` function:
         }
 
         if (UNIT_FAILED(UNIT_CompiledProcedure_WriteObjectFile(compiled, "output.o",
-                                                               UNIT_FORMAT_ELF))) {
+                                                               UNIT_HOST_FORMAT))) {
             UNIT_CompiledProcedure_Free(compiled);
             goto error;
         }

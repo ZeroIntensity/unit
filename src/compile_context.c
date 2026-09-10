@@ -23,7 +23,7 @@ _UNIT_Relocation_NewCall(UNIT_Context *context,
                          UNIT_Size offset,
                          UNIT_Size symbol_index)
 {
-    return new_relocation(context, offset, symbol_index, RELOCATION_CALL);
+    return new_relocation(context, offset, symbol_index, _UNIT_RELOCATION_CALL);
 }
 
 _UNIT_Relocation *
@@ -31,7 +31,7 @@ _UNIT_Relocation_NewData(UNIT_Context *context,
                          UNIT_Size offset,
                          UNIT_Size symbol_index)
 {
-    return new_relocation(context, offset, symbol_index, RELOCATION_DATA);
+    return new_relocation(context, offset, symbol_index, _UNIT_RELOCATION_DATA);
 }
 
 void
@@ -281,7 +281,8 @@ UNIT_Status
 _UNIT_CompileContext_Init(_UNIT_CompileContext *compile_context,
                           UNIT_Context *context,
                           const UNIT_Procedure *procedure,
-                          const _UNIT_Translation *translation)
+                          const _UNIT_Translation *translation,
+                          UNIT_Platform platform)
 {
     assert(compile_context != NULL);
     assert(context != NULL);
@@ -315,6 +316,8 @@ _UNIT_CompileContext_Init(_UNIT_CompileContext *compile_context,
         _UNIT_SymbolTable_Clear(&compile_context->symbol_table);
         return _UNIT_FAIL;
     }
+
+    compile_context->target = platform;
 
     init_stack_frame(&compile_context->stack_frame,
                      translation->num_memory_slots);

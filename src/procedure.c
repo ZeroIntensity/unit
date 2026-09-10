@@ -191,7 +191,7 @@ UNIT_Procedure_AddJump(UNIT_Procedure *procedure,
     return UNIT_Procedure_AddOperation(procedure, instruction, jump_label->id);
 }
 
-UNIT_Size
+static UNIT_Size
 add_symbol(UNIT_Procedure *procedure,
            const char *name)
 {
@@ -468,7 +468,7 @@ print_debug_item(UNIT_Context *context,
 
     switch (item->type) {
         case DEBUG_TYPE_INT: {
-            PRINT("%ld", item->value);
+            PRINT("%lld", (long long)item->value);
             break;
         }
 

@@ -11,7 +11,7 @@ code from a stack-based IR.
 Currently, it supports:
 
 - Compiling to x86-64.
-- Writing ELF object files.
+- Writing ELF and COFF object files.
 - Some very simple optimization passes.
 
 UNIT is in the early stages of development; see below for UNIT's limitations.
@@ -75,7 +75,7 @@ int main(void)
 
     // Write to object file
     UNIT_CompiledProcedure_WriteObjectFile(compiled, "add.o",
-                                           UNIT_FORMAT_ELF);
+                                           UNIT_HOST_FORMAT);
 
     // Or JIT and call directly
     UNIT_ExecutableBuffer *buf = UNIT_CompiledProcedure_JIT(compiled, NULL);
@@ -140,8 +140,7 @@ print(add(3, 4))  # 7
 
 UNIT is missing support for the following features:
 
-- Compiling to AArch64.
-- Writing object files in the PE/COFF (Windows) or Mach-O (macOS) format.
+- Compiling to AArch64 and Mach-O files.
 - Floating point operations.
 - SSA (this is currently partial; locations are assigned once per block, but
   not once per procedure).

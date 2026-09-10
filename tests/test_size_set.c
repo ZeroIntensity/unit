@@ -58,9 +58,11 @@ test_many_values(UNIT_Context *context)
     for (UNIT_Size i = 0; i < 10000; ++i) {
         ASSERT_OK(context, _UNIT_SizeSet_Add(&set, i));
     }
+
     for (UNIT_Size i = 0; i < 10000; ++i) {
         ASSERT(_UNIT_SizeSet_Contains(&set, i));
     }
+
     ASSERT(!_UNIT_SizeSet_Contains(&set, 10000));
     _UNIT_SizeSet_Clear(&set);
 }

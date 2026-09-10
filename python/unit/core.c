@@ -101,6 +101,7 @@ ContextObject_new(PyTypeObject *cls, PyObject *args, PyObject *kwds)
     if (op == NULL) {
         return NULL;
     }
+
     ContextObject *self = ContextObject_CAST(op);
 
     if (UNIT_FAILED(UNIT_Context_Init(&self->context))) {
@@ -800,6 +801,7 @@ ProcedureObject_set_flags(PyObject *op, PyObject *value)
     if (PyLong_AsUInt32(value, &flags) < 0) {
         return NULL;
     }
+
     UNIT_Procedure_SetFlags(&self->procedure, flags);
 
     Py_RETURN_NONE;
@@ -912,6 +914,7 @@ _unit_modexec(PyObject *module)
     if (state->ErrorType == NULL) {
         return -1;
     }
+
     if (PyModule_AddType(module, (PyTypeObject *)state->ErrorType) < 0) {
         return -1;
     }
@@ -994,7 +997,8 @@ _unit_modexec(PyObject *module)
 
     EXPORT_CONST(UNIT_FORMAT_ELF);
     EXPORT_CONST(UNIT_FORMAT_MACHO);
-    EXPORT_CONST(UNIT_FORMAT_PE);
+    EXPORT_CONST(UNIT_FORMAT_COFF);
+    EXPORT_CONST(UNIT_HOST_FORMAT);
 
     EXPORT_CONST(UNIT_HOST_PLATFORM);
 

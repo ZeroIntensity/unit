@@ -97,8 +97,10 @@ raw()
 enum class ExecutableFormat {
     ELF = UNIT_FORMAT_ELF,
     MACHO = UNIT_FORMAT_MACHO,
-    PE = UNIT_FORMAT_PE,
+    COFF = UNIT_FORMAT_COFF,
 };
+
+inline constexpr ExecutableFormat host_format = static_cast<ExecutableFormat>(UNIT_HOST_FORMAT);
 
 class SymbolMap {
 UNIT_SymbolMap symbol_map;
@@ -206,6 +208,7 @@ jit()
     if (buffer == NULL) {
         throw error(compiled->context);
     }
+
     return ExecutableBuffer<Function>(buffer);
 }
 
@@ -218,6 +221,7 @@ jit(SymbolMap &symbol_map)
     if (buffer == NULL) {
         throw error(compiled->context);
     }
+
     return ExecutableBuffer<Function>(buffer);
 }
 
@@ -232,9 +236,8 @@ write_object_file(const std::string &path, ExecutableFormat format)
 {
     if (UNIT_FAILED(UNIT_CompiledProcedure_WriteObjectFile(compiled,
                                                            path.c_str(),
-                                                           static_cast<
-                                                               UNIT_ExecutableFormat>
-                                                           (format)))) {
+                                                           static_cast<UNIT_ExecutableFormat>(format))))
+    {
         throw error(compiled->context);
     }
 }

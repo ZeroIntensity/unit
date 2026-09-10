@@ -19,6 +19,11 @@ set_target_properties(${PROJECT_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 option(UNIT_BUILD_EXAMPLES "Build example programs" OFF)
 
+# Necessary for enumerating loaded modules on Windows
+if(WIN32)
+    target_link_libraries(unit PRIVATE psapi)
+endif()
+
 if(UNIT_BUILD_EXAMPLES)
     add_executable(unit_guess "${CMAKE_SOURCE_DIR}/examples/guessing_game.c")
     target_link_libraries(unit_guess PRIVATE unit)
@@ -69,17 +74,25 @@ if(UNIT_BUILD_TESTS)
     endif()
 
     add_custom_target(tests
-        COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
+        COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -C $<CONFIG>
         DEPENDS ${TEST_TARGETS}
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     )
 
     set(VENV_DIR ${CMAKE_BINARY_DIR}/.test_venv)
 
+    if(WIN32)
+        set(VENV_PIP ${VENV_DIR}/Scripts/pip)
+        set(VENV_PYTHON ${VENV_DIR}/Scripts/python)
+    else()
+        set(VENV_PIP ${VENV_DIR}/bin/pip)
+        set(VENV_PYTHON ${VENV_DIR}/bin/python)
+    endif()
+
     add_custom_target(python_tests
         COMMAND ${Python3_EXECUTABLE} -m venv ${VENV_DIR} --clear
-        COMMAND ${VENV_DIR}/bin/pip install ${CMAKE_SOURCE_DIR}
-        COMMAND ${VENV_DIR}/bin/python -m unittest discover -s ${CMAKE_SOURCE_DIR}/tests/python -v
+        COMMAND ${VENV_PIP} install ${CMAKE_SOURCE_DIR}
+        COMMAND ${VENV_PYTHON} -m unittest discover -s ${CMAKE_SOURCE_DIR}/tests/python -v
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         DEPENDS unit
         COMMENT "Installing Python bindings and running tests"

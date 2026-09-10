@@ -1,4 +1,6 @@
 import unittest
+import os
+
 from _test_case import ExampleTestRunner
 
 
@@ -23,7 +25,10 @@ class TestGuessingGame(ExampleTestRunner, executable_name="unit_guess"):
         return results
 
     def test_guess_set_seed(self):
-        results = self._filter_results(self._run(seed=42, guesses=[66, 68, 67]))
+        # The same seed on Linux and Windows produces a different random number, so
+        # we have to adjust the guesses.
+        guesses = [75, 77, 76] if os.name == "nt" else [66, 68, 67]
+        results = self._filter_results(self._run(seed=42, guesses=guesses))
         self.assertEqual(results, ["Higher", "Lower", "You win!"])
 
 

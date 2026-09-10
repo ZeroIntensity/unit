@@ -95,11 +95,11 @@ compile_procedure(const UNIT_Procedure *procedure,
         }
     }
 
-    if (UNIT_FAILED(_UNIT_CompileContext_Init(
-                        &compiled_procedure->_compile_context,
-                        context,
-                        procedure,
-                        &compiled_procedure->_translation))) {
+    if (UNIT_FAILED(_UNIT_CompileContext_Init(&compiled_procedure->_compile_context,
+                                              context,
+                                              procedure,
+                                              &compiled_procedure->_translation,
+                                              platform))) {
         _UNIT_Translation_Clear(&compiled_procedure->_translation);
         _UNIT_Dealloc(context, compiled_procedure);
         return NULL;
@@ -121,8 +121,7 @@ compile_procedure(const UNIT_Procedure *procedure,
     switch (UNIT_Platform_GET_ARCH(platform)) {
         case UNIT_ARCH_AMD64: {
             result = _UNIT_AMD64_Compile(&compiled_procedure->_translation,
-                                         &compiled_procedure->_compile_context,
-                                         UNIT_Platform_GET_ABI(platform));
+                                         &compiled_procedure->_compile_context);
             break;
         }
         default: {
@@ -295,7 +294,7 @@ merge_relocations(UNIT_Context *context,
         new_relocation->type = sub_relocation->type;
         new_relocation->offset = sub_relocation->offset + code_offset;
 
-        if (sub_relocation->type == RELOCATION_DATA) {
+        if (sub_relocation->type == _UNIT_RELOCATION_DATA) {
             new_relocation->symbol_index = sub_relocation->symbol_index +
                                            rodata_offset;
         } else {
@@ -512,10 +511,15 @@ UNIT_CompiledProcedure_WriteObjectFile(const UNIT_CompiledProcedure *compiled,
             return _UNIT_ELF_WriteObjectFile(&compiled->_compile_context,
                                              path);
         }
+        case UNIT_FORMAT_COFF: {
+            return _UNIT_COFF_WriteObjectFile(&compiled->_compile_context,
+                                              path);
+        }
         default: {
+            assert(format == UNIT_FORMAT_MACHO);
             _UNIT_SetError(compiled->context,
                            UNIT_ERROR_UNSUPPORTED_PLATFORM,
-                           "only ELF is supported at the moment");
+                           "mach-o is not implemented yet");
             return _UNIT_FAIL;
         }
     }

@@ -15,7 +15,19 @@ jobs:
             - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
               with:
                   persist-credentials: false
+
             - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
               with:
                   python-version: "3.14"
+
+            - name: Install uncrustify
+              run: |
+                  wget https://github.com/uncrustify/uncrustify/archive/refs/tags/uncrustify-0.83.0.tar.gz
+                  tar xzf uncrustify-0.83.0.tar.gz
+                  cd uncrustify-uncrustify-0.83.0
+                  cmake -B build -DCMAKE_BUILD_TYPE=Release
+                  cmake --build build
+                  sudo cmake --install build
+                  uncrustify --version
+
             - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1

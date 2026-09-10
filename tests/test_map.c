@@ -16,6 +16,7 @@ hash_string(const void *key)
     while ((c = *str++)) {
         hash = ((hash << 5) + hash) + c;
     }
+
     return hash;
 }
 
@@ -210,11 +211,13 @@ test_int_keys(UNIT_Context *context)
     for (int i = 0; i < 5; ++i) {
         ASSERT_OK(context, _UNIT_Map_Set(&map, &keys[i], &values[i]));
     }
+
     for (int i = 0; i < 5; ++i) {
         int *result = _UNIT_Map_Get(&map, &keys[i]);
         ASSERT(result != NULL);
         ASSERT_EQ(*result, (i + 1) * 100);
     }
+
     _UNIT_Map_Clear(&map);
 }
 
@@ -238,12 +241,14 @@ test_grow_from_small(UNIT_Context *context)
         values[i] = i * 7;
         ASSERT_OK(context, _UNIT_Map_Set(&map, &keys[i], &values[i]));
     }
+
     // Verify all still accessible after growth
     for (int i = 0; i < 50; ++i) {
         int *result = _UNIT_Map_Get(&map, &keys[i]);
         ASSERT(result != NULL);
         ASSERT_EQ(*result, i * 7);
     }
+
     _UNIT_Map_Clear(&map);
 }
 
@@ -266,6 +271,7 @@ test_overwrite_after_grow(UNIT_Context *context)
         values[i] = i * 10;
         ASSERT_OK(context, _UNIT_Map_Set(&map, &keys[i], &values[i]));
     }
+
     // Overwrite after growth
     int new_val = 999;
     ASSERT_OK(context, _UNIT_Map_Set(&map, &keys[5], &new_val));
@@ -361,11 +367,13 @@ test_many_collisions_with_grow(UNIT_Context *context)
         values[i] = i * 3;
         ASSERT_OK(context, _UNIT_Map_Set(&map, keys[i], &values[i]));
     }
+
     for (int i = 0; i < 20; ++i) {
         int *result = _UNIT_Map_Get(&map, keys[i]);
         ASSERT(result != NULL);
         ASSERT_EQ(*result, i * 3);
     }
+
     _UNIT_Map_Clear(&map);
 }
 
@@ -444,6 +452,7 @@ test_overwrite_repeatedly(UNIT_Context *context)
         values[i] = i;
         ASSERT_OK(context, _UNIT_Map_Set(&map, "key", &values[i]));
     }
+
     int *result = _UNIT_Map_Get(&map, "key");
     ASSERT(result != NULL);
     ASSERT_EQ(*result, 99);
@@ -502,11 +511,13 @@ test_high_load_factor(UNIT_Context *context)
         values[i] = i * 100;
         ASSERT_OK(context, _UNIT_Map_Set(&map, &keys[i], &values[i]));
     }
+
     for (int i = 0; i < 3; ++i) {
         int *result = _UNIT_Map_Get(&map, &keys[i]);
         ASSERT(result != NULL);
         ASSERT_EQ(*result, i * 100);
     }
+
     _UNIT_Map_Clear(&map);
 }
 
@@ -535,6 +546,7 @@ test_expansion_preserves_all(UNIT_Context *context)
             ASSERT_EQ(*result, j * 3);
         }
     }
+
     _UNIT_Map_Clear(&map);
 }
 
@@ -684,6 +696,7 @@ test_many_overwrites_with_expansion(UNIT_Context *context)
         values[i] = i;
         ASSERT_OK(context, _UNIT_Map_Set(&map, &keys[i], &values[i]));
     }
+
     // Each key 0-9 was overwritten multiple times, last write wins
     // keys[40]=0, keys[41]=1, ..., keys[49]=9
     // values[40]=40, values[41]=41, ..., values[49]=49
@@ -692,6 +705,7 @@ test_many_overwrites_with_expansion(UNIT_Context *context)
         ASSERT(result != NULL);
         ASSERT_EQ(*result, 40 + i);
     }
+
     ASSERT_EQ(map.len, 10);
     _UNIT_Map_Clear(&map);
 }
@@ -717,6 +731,7 @@ test_get_full_table_missing_key(UNIT_Context *context)
         values[i] = i;
         ASSERT_OK(context, _UNIT_Map_Set(&map, &keys[i], &values[i]));
     }
+
     int missing = 999;
     ASSERT(_UNIT_Map_Get(&map, &missing) == NULL);
     _UNIT_Map_Clear(&map);
