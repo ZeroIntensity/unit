@@ -1,25 +1,7 @@
-import io
-import os
-import tempfile
+import subprocess
+import sys
 import unittest
-from contextlib import contextmanager
-from typing import IO, Generator
-
-from examples.language_with_jit import Interpreter, Parser
-
-
-@contextmanager
-def capture_c_stdout() -> Generator[IO[bytes]]:
-    original = os.dup(1)
-
-    with tempfile.TemporaryFile(mode="w+b") as tmp:
-        os.dup2(tmp.fileno(), 1)
-
-        try:
-            yield tmp
-        finally:
-            os.dup2(original, 1)
-            os.close(original)
+from pathlib import Path
 
 
 class TestLanguageWithJIT(unittest.TestCase):
@@ -33,29 +15,29 @@ class TestLanguageWithJIT(unittest.TestCase):
             main()
             """
 
-        parser = Parser(source)
-        module = parser.parse_module()
-
-        buffer = io.StringIO()
-        interpreter = Interpreter(
-            out_file=buffer, force_specialization=force_specialization
+        # A subprocess captures both Python output and JIT printf output, even
+        # when they use different C runtimes on Windows. Exiting flushes the C
+        # streams, and text mode normalizes Windows line endings.
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-X",
+                "utf8",
+                "-c",
+                "import sys\n"
+                "from examples.language_with_jit import Interpreter, Parser\n"
+                "module = Parser(sys.stdin.read()).parse_module()\n"
+                f"interpreter = Interpreter(force_specialization={force_specialization!r})\n"
+                "interpreter.interpret(list(module.codegen()))\n",
+            ],
+            input=source,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            cwd=Path(__file__).resolve().parents[2],
         )
-
-        with capture_c_stdout() as stdout:
-            interpreter.interpret(list(module.codegen()))
-
-            # The specializations use printf, so they write to the C stdout rather
-            # than our buffer.
-            if force_specialization is True:
-                stdout.flush()
-                import ctypes
-
-                library = 'msvcrt.dll' if os.name == 'nt' else None
-                ctypes.CDLL(library).fflush(None)
-                stdout.seek(0)
-                return stdout.read().decode("utf-8").strip("\n")
-
-        return buffer.getvalue().strip("\n")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return result.stdout.strip("\n")
 
     def assert_output(self, source: str, *output: str) -> None:
         result = self.run_string(source)
