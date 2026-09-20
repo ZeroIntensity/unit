@@ -1,7 +1,7 @@
 
 #include "test_util.h"
 
-#include <unit/internal/size_vector.h>
+#include <unit/internal/collections/size_vector.h>
 
 static void
 test_append_and_get(UNIT_Context *context)

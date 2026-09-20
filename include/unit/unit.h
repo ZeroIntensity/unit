@@ -5,14 +5,16 @@
 extern "C" {
 #endif
 
-#include <unit/base.h>
-#include <unit/context.h>
-#include <unit/compilation.h>
-#include <unit/errors.h>
-#include <unit/executable_buffer.h>
-#include <unit/optimization.h>
-#include <unit/procedure.h>
-#include <unit/version.h>
+#include <unit/internal/base.h>
+#include <unit/internal/context.h>
+#include <unit/internal/errors.h>
+#include <unit/internal/version.h>
+
+#include <unit/internal/compilation/compilation.h>
+#include <unit/internal/compilation/executable_buffer.h>
+
+#include <unit/internal/ir/optimization.h>
+#include <unit/internal/ir/procedure.h>
 
 #ifdef __cplusplus
 }

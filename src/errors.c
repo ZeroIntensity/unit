@@ -3,7 +3,7 @@
 #include <string.h>
 #include <errno.h>
 
-#include <unit/context.h>
+#include <unit/internal/context.h>
 
 const char *
 UNIT_ErrorCode_ToString(UNIT_ErrorCode code)

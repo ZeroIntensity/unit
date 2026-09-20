@@ -1,8 +1,8 @@
 #ifndef _UNIT_ALLOCATION_H
 #define _UNIT_ALLOCATION_H
 
-#include <unit/base.h>
-#include <unit/context.h>
+#include <unit/internal/base.h>
+#include <unit/internal/context.h>
 
 #ifdef __cplusplus
 extern "C" {

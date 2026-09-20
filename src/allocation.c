@@ -1,9 +1,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <unit/base.h>
-#include <unit/context.h>
-#include <unit/errors.h>
+#include <unit/internal/base.h>
+#include <unit/internal/context.h>
+#include <unit/internal/errors.h>
 
 static void *
 freelist_pop(_UNIT_Freelist **freelist)

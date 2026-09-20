@@ -1,6 +1,6 @@
 #include "test_util.h"
 
-#include <unit/internal/set.h>
+#include <unit/internal/collections/set.h>
 
 // Use small integers cast to pointers as test values
 #define PTR(n) ((void *)(uintptr_t)(n))

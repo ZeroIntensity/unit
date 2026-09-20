@@ -1,7 +1,7 @@
 #include "test_util.h"
 
-#include <unit/internal/architectures.h>
-#include <unit/internal/basic_block.h>
+#include <unit/internal/compilation/architectures.h>
+#include <unit/internal/ir/basic_block.h>
 
 #if defined(__x86_64__) || defined(_M_X64)
 
