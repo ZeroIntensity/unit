@@ -3,6 +3,7 @@
 
 #include <unit/internal/base.h>
 #include <unit/internal/errors.h>
+#include <unit/internal/utils.h>
 
 #include <unit/internal/compilation/code_buffer.h>
 #include <unit/internal/compilation/compile_context.h>
@@ -13,69 +14,11 @@
 
 #include "coff_local.h"
 
-#define WRITE_INT_IMPL(size_bytes)                        \
-        assert(context != NULL);                          \
-        assert(file != NULL);                             \
-        if (fwrite(&value, size_bytes, 1, file) != 1) {   \
-            _UNIT_SetOSError(context, "writing integer"); \
-            return _UNIT_FAIL;                            \
-        }                                                 \
-        return _UNIT_OK;
-
-#define WRITE_INT(name, value)                                   \
-        if (UNIT_FAILED(write_ ## name(context, file, value))) { \
-            return _UNIT_FAIL;                                   \
-        }
-
-static inline UNIT_Status
-write_u8(UNIT_Context *context, FILE *file, uint8_t value)
-{
-    WRITE_INT_IMPL(1);
-}
-
-#define WRITE_U8(value) WRITE_INT(u8, value)
-
-static inline UNIT_Status
-write_u16(UNIT_Context *context, FILE *file, uint16_t value)
-{
-    WRITE_INT_IMPL(2);
-}
-
-#define WRITE_U16(value) WRITE_INT(u16, value)
-
-static inline UNIT_Status
-write_u32(UNIT_Context *context, FILE *file, uint32_t value)
-{
-    WRITE_INT_IMPL(4);
-}
-
-#define WRITE_U32(value) WRITE_INT(u32, value)
-
-static inline UNIT_Status
-write_i16(UNIT_Context *context, FILE *file, int16_t value)
-{
-    WRITE_INT_IMPL(2);
-}
-
-#define WRITE_I16(value) WRITE_INT(i16, value)
-
-static inline UNIT_Status
-write_bytes(UNIT_Context *context, FILE *file, const void *data, size_t num_bytes)
-{
-    assert(context != NULL);
-    assert(file != NULL);
-    assert(data != NULL);
-    if (num_bytes == 0) {
-        return _UNIT_OK;
-    }
-
-    if (fwrite(data, 1, num_bytes, file) != num_bytes) {
-        _UNIT_SetOSError(context, "writing bytes");
-        return _UNIT_FAIL;
-    }
-
-    return _UNIT_OK;
-}
+#define WRITE_INT(name, value) _UNIT_File_Write ## name (context, file, value)
+#define WRITE_U8(value) WRITE_INT(U8, value)
+#define WRITE_U16(value) WRITE_INT(U16, value)
+#define WRITE_U32(value) WRITE_INT(U32, value)
+#define WRITE_I16(value) WRITE_INT(I16, value)
 
 static inline UNIT_Status
 write_name8(UNIT_Context *context, FILE *file, const char *name)
@@ -89,7 +32,7 @@ write_name8(UNIT_Context *context, FILE *file, const char *name)
     }
 
     memcpy(buf, name, len);
-    return write_bytes(context, file, buf, 8);
+    return _UNIT_File_WriteBytes(context, file, buf, 8);
 }
 
 #define WRITE_NAME(name)                                     \
@@ -575,7 +518,7 @@ write_section_data(UNIT_Context *context, COFF_Section *section, FILE *file)
 
     UNIT_Size count = _UNIT_Vector_SIZE(&section->relocations);
     if (count == 0) {
-        return write_bytes(context, file, section->data->data, section->data->size);
+        return _UNIT_File_WriteBytes(context, file, section->data->data, section->data->size);
     }
 
     // COFF stores relocation addends in the section bytes. Keep these changes
@@ -593,7 +536,7 @@ write_section_data(UNIT_Context *context, COFF_Section *section, FILE *file)
         _UNIT_CodeBuffer_Patch32(&data, relocation->offset, relocation->addend);
     }
 
-    UNIT_Status status = write_bytes(context, file, data.data, data.size);
+    UNIT_Status status = _UNIT_File_WriteBytes(context, file, data.data, data.size);
     _UNIT_Dealloc(context, data.data);
     return status;
 }
@@ -664,7 +607,7 @@ write_symbol_table(COFF_Object *object, UNIT_Context *context, FILE *file)
     for (UNIT_Size index = 0; index < size; ++index) {
         COFF_Symbol *symbol = _UNIT_Vector_GET(&object->symbols, index);
         assert(symbol != NULL);
-        if (UNIT_FAILED(write_bytes(context, file, (char *)symbol, 8))) {
+        if (UNIT_FAILED(_UNIT_File_WriteBytes(context, file, (char *)symbol, 8))) {
             return _UNIT_FAIL;
         }
 
@@ -699,7 +642,7 @@ write_string_table(COFF_Object *object, UNIT_Context *context, FILE *file)
     for (UNIT_Size index = 0; index < size; ++index) {
         char *string = _UNIT_Vector_GET(&object->strings, index);
         assert(string != NULL);
-        if (UNIT_FAILED(write_bytes(context, file, string, strlen(string) + 1))) {
+        if (UNIT_FAILED(_UNIT_File_WriteBytes(context, file, string, strlen(string) + 1))) {
             return _UNIT_FAIL;
         }
     }
