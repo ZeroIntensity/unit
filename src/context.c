@@ -1,9 +1,8 @@
 #include <string.h> // memset
 #include <stdlib.h> // malloc, free
 
-#include <unit/base.h>
-#include <unit/context.h>
-
+#include <unit/internal/base.h>
+#include <unit/internal/context.h>
 #include <unit/internal/structure.h>
 
 UNIT_Status

@@ -1,0 +1,17 @@
+#ifndef UNIT_OPTIMIZATION_H
+#define UNIT_OPTIMIZATION_H
+
+#include <unit/internal/ir/procedure.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+UNIT_Status
+UNIT_Procedure_Optimize(UNIT_Procedure *procedure);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

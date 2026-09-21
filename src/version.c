@@ -1,4 +1,4 @@
-#include <unit/version.h>
+#include <unit/internal/version.h>
 
 const char *
 UNIT_GetVersion(void)
