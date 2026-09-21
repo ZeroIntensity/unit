@@ -63,7 +63,7 @@ class ExampleTestRunner(unittest.TestCase):
             if candidate.exists():
                 return candidate
 
-        if not name.endswith(".exe"):
+        if not name.endswith(".exe") and (os.name == "nt"):
             return self._find_executable(name + ".exe")
 
         raise FileNotFoundError(

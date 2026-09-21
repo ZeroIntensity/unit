@@ -659,7 +659,7 @@ write_coff_object_to_file(COFF_Object *object, UNIT_Context *context, const char
 
     FILE *file = fopen(path, "wb");
     if (!file) {
-        _UNIT_SetOSError(context, "writing COFF object");
+        _UNIT_SetOSError(context, "opening COFF file");
         return _UNIT_FAIL;
     }
 

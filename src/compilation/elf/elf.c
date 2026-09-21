@@ -1,511 +1,820 @@
-#include <stdio.h>
 #include <string.h>
 
 #include <unit/internal/base.h>
 #include <unit/internal/errors.h>
+#include <unit/internal/utils.h>
 
 #include <unit/internal/compilation/code_buffer.h>
 #include <unit/internal/compilation/compile_context.h>
 #include <unit/internal/compilation/executable_formats.h>
 
-#include <unit/internal/collections/size_map.h>
 #include <unit/internal/collections/vector.h>
 
 #include "elf_local.h"
 
+#define WRITE_INT(name, value)                                              \
+        if (UNIT_FAILED(_UNIT_File_Write ## name (context, file, value))) { \
+            return _UNIT_FAIL;                                              \
+        }
+
+#define WRITE_U8(value) WRITE_INT(U8, value)
+#define WRITE_U16(value) WRITE_INT(U16, value)
+#define WRITE_U32(value) WRITE_INT(U32, value)
+#define WRITE_U64(value) WRITE_INT(U64, value)
+#define WRITE_I64(value) WRITE_INT(I64, value)
+
 typedef struct {
-    UNIT_Context *context;
-    ELF_Header header;
-    ELF_SectionHeader sections[7];
+    uint64_t offset;
+    uint32_t symbol_table_index;
+    uint32_t type;
+    int64_t addend;
+} ELF_Relocation;
+
+typedef struct {
+    uint32_t name;
+    uint32_t type;
+    uint64_t flags;
+    uint64_t offset;
+    uint64_t size;
+    uint32_t link;
+    uint32_t info;
+    uint64_t alignment;
+    uint64_t entry_size;
+    const _UNIT_CodeBuffer *data;
+    _UNIT_Vector relocations;
+} ELF_Section;
+
+static void
+ELF_Section_Dealloc(UNIT_Context *context, void *ptr)
+{
+    assert(context != NULL);
+    assert(ptr != NULL);
+    ELF_Section *section = (ELF_Section *)ptr;
+    if (section->type == ELF_SECTION_TYPE_PROGRAM_DATA) {
+        _UNIT_Vector_Clear(&section->relocations);
+    }
+
+    _UNIT_Dealloc(context, section);
+}
+
+typedef struct {
+    const char *name; // Owned by the string table
+    uint32_t offset_in_string_table;
+    uint64_t section_offset;
+    uint16_t section_number;
+    uint8_t binding;
+    uint8_t type;
+} ELF_Symbol;
+
+typedef struct {
+    // The null section and symbol are written separately, so indices start at 1.
+    _UNIT_Vector sections; // ELF_Section*
+    _UNIT_Vector strings;
+    _UNIT_Vector section_strings;
     _UNIT_Vector symbols;
-    _UNIT_Vector string_table;
-    _UNIT_Vector relocations_table;
-    const _UNIT_CodeBuffer *text;
-    const _UNIT_CodeBuffer *constant_data;
-    const char *section_string_table;
-    UNIT_Size section_string_table_size;
-    _UNIT_SizeMap symtab_indices;
+    uint32_t first_global_symbol;
+    uint16_t section_string_table_index;
 } ELF_Object;
 
-enum {
-    SECTION_NULL = 0,
-    SECTION_TEXT = 1,
-    SECTION_RODATA = 2,
-    SECTION_RELA_TEXT = 3,
-    SECTION_SYMTAB = 4,
-    SECTION_STRTAB = 5,
-    SECTION_SHSTRTAB = 6,
-    SECTION_COUNT = 7
-};
-
-static const char section_string_table[] =
-    "\0"
-    ".text\0"         // offset 1
-    ".rodata\0"       // offset 7
-    ".rela.text\0"    // offset 15
-    ".symtab\0"       // offset 26
-    ".strtab\0"       // offset 34
-    ".shstrtab\0";    // offset 42
-
-// Appends a null-terminated string to the string table vector.
-// Returns the byte offset where the string starts, which is
-// what symbol and section header name fields expect.
-static UNIT_Size
-append_string(ELF_Object *object,
-              const char *string)
+static UNIT_Status
+ELF_Object_Init(ELF_Object *elf_object, UNIT_Context *context)
 {
-    assert(object != NULL);
+    assert(elf_object != NULL);
+    assert(context != NULL);
+
+    if (UNIT_FAILED(_UNIT_Vector_Init(&elf_object->sections,
+                                      context,
+                                      6,
+                                      ELF_Section_Dealloc))) {
+        return _UNIT_FAIL;
+    }
+
+    if (UNIT_FAILED(_UNIT_Vector_Init(&elf_object->strings,
+                                      context,
+                                      8,
+                                      _UNIT_Dealloc))) {
+        _UNIT_Vector_Clear(&elf_object->sections);
+        return _UNIT_FAIL;
+    }
+
+    if (UNIT_FAILED(_UNIT_Vector_Init(&elf_object->section_strings,
+                                      context,
+                                      6,
+                                      _UNIT_Dealloc))) {
+        _UNIT_Vector_Clear(&elf_object->strings);
+        _UNIT_Vector_Clear(&elf_object->sections);
+        return _UNIT_FAIL;
+    }
+
+    if (UNIT_FAILED(_UNIT_Vector_Init(&elf_object->symbols,
+                                      context,
+                                      8,
+                                      _UNIT_Dealloc))) {
+        _UNIT_Vector_Clear(&elf_object->section_strings);
+        _UNIT_Vector_Clear(&elf_object->strings);
+        _UNIT_Vector_Clear(&elf_object->sections);
+        return _UNIT_FAIL;
+    }
+
+    elf_object->first_global_symbol = 1;
+    elf_object->section_string_table_index = 0;
+    return _UNIT_OK;
+}
+
+static void
+ELF_Object_Clear(ELF_Object *elf_object)
+{
+    assert(elf_object != NULL);
+    _UNIT_Vector_Clear(&elf_object->sections);
+    _UNIT_Vector_Clear(&elf_object->strings);
+    _UNIT_Vector_Clear(&elf_object->section_strings);
+    _UNIT_Vector_Clear(&elf_object->symbols);
+}
+
+static UNIT_Size
+add_string(_UNIT_Vector *strings, const char *string)
+{
+    assert(strings != NULL);
     assert(string != NULL);
-    _UNIT_Vector *string_table = &object->string_table;
-    UNIT_Size offset = _UNIT_Vector_SIZE(string_table);
-    UNIT_Size length = strlen(string);
 
-    for (UNIT_Size index = 0; index <= length; ++index) {
-        char *character = _UNIT_Alloc(object->context, sizeof(char));
-        if (character == NULL) {
-            return -1;
-        }
+    char *owned = _UNIT_StrDup(strings->context, string);
+    if (owned == NULL) {
+        return -1;
+    }
 
-        *character = string[index];
-        if (UNIT_FAILED(_UNIT_Vector_Append(string_table,
-                                            character))) {
-            return -1;
-        }
+    UNIT_Size index = _UNIT_Vector_SIZE(strings);
+    if (UNIT_FAILED(_UNIT_Vector_Append(strings, owned))) {
+        return -1;
+    }
+
+    return index;
+}
+
+static uint32_t
+get_string_table_offset(const _UNIT_Vector *strings, UNIT_Size target_index)
+{
+    assert(strings != NULL);
+    assert(target_index >= 0);
+    assert(target_index <= _UNIT_Vector_SIZE(strings));
+    uint32_t offset = 1; // String tables start with a null byte.
+
+    for (UNIT_Size index = 0; index < target_index; ++index) {
+        const char *string = _UNIT_Vector_GET(strings, index);
+        assert(string != NULL);
+        offset += strlen(string) + 1;
     }
 
     return offset;
 }
 
-static ELF_Symbol *
-create_and_store_symbol(ELF_Object *object)
+static ELF_Section *
+add_section(ELF_Object *elf_object,
+            const char *name,
+            uint32_t type,
+            uint64_t flags,
+            uint64_t alignment)
 {
-    assert(object != NULL);
-    ELF_Symbol *symbol = _UNIT_Alloc(object->context, sizeof(ELF_Symbol));
-    if (symbol == NULL) {
+    assert(elf_object != NULL);
+    assert(name != NULL);
+    assert(alignment > 0);
+
+    UNIT_Context *context = elf_object->sections.context;
+    ELF_Section *section = _UNIT_Calloc(context, 1, sizeof(ELF_Section));
+    if (section == NULL) {
         return NULL;
     }
 
-    memset(symbol, 0, sizeof(ELF_Symbol));
-    if (UNIT_FAILED(_UNIT_Vector_Append(&object->symbols, symbol))) {
+    section->type = type;
+    section->flags = flags;
+    section->alignment = alignment;
+
+    if (type == ELF_SECTION_TYPE_PROGRAM_DATA &&
+        UNIT_FAILED(_UNIT_Vector_Init(&section->relocations, context, 4, _UNIT_Dealloc))) {
+        _UNIT_Dealloc(context, section);
         return NULL;
     }
 
-    return symbol;
-}
-
-/* Adds a null symbol at index 0 of the symbol table, because
- * the ELF spec mandates that the first entry is always zeroed. */
-static UNIT_Status
-add_null_symbol(ELF_Object *object)
-{
-    assert(object != NULL);
-    assert(_UNIT_Vector_SIZE(&object->symbols) == 0);
-    ELF_Symbol *symbol = create_and_store_symbol(object);
-    if (symbol == NULL) {
-        return _UNIT_FAIL;
+    UNIT_Size name_index = add_string(&elf_object->section_strings, name);
+    if (name_index == -1) {
+        ELF_Section_Dealloc(context, section);
+        return NULL;
     }
 
-    return _UNIT_OK;
-}
-
-/* Adds a local section symbol for .rodata at index 1. Relocations
- * that load string addresses point at this symbol, with an addend
- * equal to the string's byte offset within .rodata. */
-static UNIT_Status
-add_rodata_section_symbol(ELF_Object *object)
-{
-    assert(object != NULL);
-    assert(_UNIT_Vector_SIZE(&object->symbols) == 1);
-    ELF_Symbol *symbol = create_and_store_symbol(object);
-    if (symbol == NULL) {
-        return _UNIT_FAIL;
+    section->name = get_string_table_offset(&elf_object->section_strings, name_index);
+    if (UNIT_FAILED(_UNIT_Vector_Append(&elf_object->sections, section))) {
+        return NULL;
     }
 
-    symbol->info = ELF_SYMBOL_INFO(ELF_SYMBOL_BINDING_LOCAL,
-                                   ELF_SYMBOL_TYPE_SECTION);
-    symbol->section_index = SECTION_RODATA;
-    return _UNIT_OK;
+    return section;
 }
 
-static UNIT_Status
-add_symbols(ELF_Object *object,
-            const _UNIT_CompileContext *compile_context)
+static UNIT_Size
+find_symbol(ELF_Object *elf_object, const char *name, uint8_t binding)
 {
-    UNIT_Size table_index = _UNIT_Vector_SIZE(&object->symbols);
-    const _UNIT_Vector *symbols = &compile_context->symbol_table.symbols;
+    assert(elf_object != NULL);
+    assert(name != NULL);
 
-    UNIT_Size size = _UNIT_Vector_SIZE(symbols);
+    UNIT_Size size = _UNIT_Vector_SIZE(&elf_object->symbols);
     for (UNIT_Size index = 0; index < size; ++index) {
-        _UNIT_Symbol *symbol = _UNIT_Vector_GET(symbols, index);
+        ELF_Symbol *symbol = _UNIT_Vector_GET(&elf_object->symbols, index);
         assert(symbol != NULL);
-
-        ELF_Symbol *elf_symbol = create_and_store_symbol(object);
-        if (elf_symbol == NULL) {
-            return _UNIT_FAIL;
-        }
-
-        elf_symbol->name = append_string(object, symbol->name);
-        if (elf_symbol->name == -1) {
-            return _UNIT_FAIL;
-        }
-
-        if (symbol->is_defined) {
-            elf_symbol->info = ELF_SYMBOL_INFO(ELF_SYMBOL_BINDING_GLOBAL,
-                                               ELF_SYMBOL_TYPE_FUNCTION);
-            elf_symbol->section_index = SECTION_TEXT;
-            elf_symbol->value = symbol->text_offset;
-        } else {
-            elf_symbol->info = ELF_SYMBOL_INFO(ELF_SYMBOL_BINDING_GLOBAL,
-                                               ELF_SYMBOL_TYPE_NONE);
-            elf_symbol->section_index = ELF_SECTION_UNDEFINED;
-        }
-
-        if (UNIT_FAILED(_UNIT_SizeMap_Set(&object->symtab_indices,
-                                          index,
-                                          table_index++))) {
-            return _UNIT_FAIL;
+        if (symbol->binding == binding && !strcmp(symbol->name, name)) {
+            return index + 1;
         }
     }
 
-    return _UNIT_OK;
+    return -1;
 }
 
-/* Converts our internal relocations into ELF relocations.
- * Function call relocations use R_AMD64_PLT32.
- * String/data relocations use R_AMD64_PC32 and point at the
- * .rodata section symbol (index 1). */
-static UNIT_Status
-build_relocation_table(ELF_Object *object,
-                       const _UNIT_CompileContext *compile_context)
+static UNIT_Size
+add_symbol(ELF_Object *elf_object,
+           const char *name,
+           uint64_t section_offset,
+           uint16_t section_number,
+           uint8_t binding,
+           uint8_t type)
 {
-    const _UNIT_Vector *relocations =
-        &compile_context->symbol_table.relocations;
-    UNIT_Size count = _UNIT_Vector_SIZE(relocations);
+    assert(elf_object != NULL);
+    assert(name != NULL);
 
-    for (UNIT_Size index = 0; index < count; ++index) {
-        _UNIT_Relocation *relocation = _UNIT_Vector_GET(relocations, index);
-
-        ELF_RelocationAddend *entry = _UNIT_Alloc(object->context,
-                                                  sizeof(ELF_RelocationAddend));
-        if (entry == NULL) {
-            return _UNIT_FAIL;
-        }
-
-        memset(entry, 0, sizeof(ELF_RelocationAddend));
-
-        entry->offset = relocation->offset;
-
-        if (relocation->type == _UNIT_RELOCATION_CALL) {
-            UNIT_Size resolved_index =
-                _UNIT_SizeMap_GET(&object->symtab_indices,
-                                  relocation->
-                                  symbol_index);
-            entry->info = ELF_RELOCATION_INFO(resolved_index,
-                                              ELF_RELOCATION_AMD64_PLT32);
-            entry->add = -4;
-        } else if (relocation->type == _UNIT_RELOCATION_DATA) {
-            // Points at the .rodata section symbol (index 1).
-            // The addend is the byte offset of the data within
-            // .rodata, minus 4 for the RIP-relative adjustment.
-            entry->info = ELF_RELOCATION_INFO(1,
-                                              ELF_RELOCATION_AMD64_PC32);
-            entry->add = relocation->symbol_index - 4;
-        }
-
-        if (UNIT_FAILED(_UNIT_Vector_Append(&object->relocations_table,
-                                            entry))) {
-            return _UNIT_FAIL;
-        }
+    UNIT_Context *context = elf_object->symbols.context;
+    ELF_Symbol *symbol = _UNIT_Alloc(context, sizeof(ELF_Symbol));
+    if (symbol == NULL) {
+        return -1;
     }
 
-    return _UNIT_OK;
+    UNIT_Size name_index = add_string(&elf_object->strings, name);
+    if (name_index == -1) {
+        _UNIT_Dealloc(context, symbol);
+        return -1;
+    }
+
+    symbol->name = _UNIT_Vector_GET(&elf_object->strings, name_index);
+    symbol->offset_in_string_table = get_string_table_offset(&elf_object->strings, name_index);
+    symbol->section_offset = section_offset;
+    symbol->section_number = section_number;
+    symbol->binding = binding;
+    symbol->type = type;
+
+    UNIT_Size symbol_index = _UNIT_Vector_SIZE(&elf_object->symbols) + 1;
+    if (UNIT_FAILED(_UNIT_Vector_Append(&elf_object->symbols, symbol))) {
+        return -1;
+    }
+
+    return symbol_index;
 }
 
-/* Fills in the section header table. Computes file offsets for
-* each section based on the sizes of all preceding sections. */
-static void
-build_section_headers(ELF_Object *object,
-                      const _UNIT_CompileContext *compile_context)
+static UNIT_Size
+find_or_add_symbol(ELF_Object *elf_object,
+                   const char *name,
+                   uint64_t section_offset,
+                   uint16_t section_number,
+                   uint8_t binding,
+                   uint8_t type)
 {
-    UNIT_Size header_size = sizeof(ELF_Header);
+    assert(elf_object != NULL);
+    assert(name != NULL);
 
-    ELF_SectionHeader *sections = object->sections;
-    memset(sections, 0, sizeof(ELF_SectionHeader) * SECTION_COUNT);
+    UNIT_Size found_index = find_symbol(elf_object, name, binding);
+    if (found_index != -1) {
+        return found_index;
+    }
 
-    UNIT_Size text_size = _UNIT_CodeBuffer_CurrentIndex(object->text);
-    UNIT_Size section_headers_size = sizeof(ELF_SectionHeader) * SECTION_COUNT;
-    UNIT_Size text_offset = header_size + section_headers_size;
-
-    sections[SECTION_TEXT] = (ELF_SectionHeader) {
-        .name = 1,
-        .type = ELF_SECTION_TYPE_PROGRAM_DATA,
-        .flags = ELF_SECTION_FLAG_ALLOC | ELF_SECTION_FLAG_EXECUTABLE,
-        .offset = text_offset,
-        .size = text_size,
-        .alignment = 16,
-    };
-
-    UNIT_Size rodata_offset = text_offset + text_size;
-    UNIT_Size rodata_size = compile_context->string_data.constant_buffer.size;
-
-    sections[SECTION_RODATA] = (ELF_SectionHeader) {
-        .name = 7,
-        .type = ELF_SECTION_TYPE_PROGRAM_DATA,
-        .flags = ELF_SECTION_FLAG_ALLOC,
-        .offset = rodata_offset,
-        .size = rodata_size,
-        .alignment = 1,
-    };
-
-    UNIT_Size relocation_offset = rodata_offset + rodata_size;
-    UNIT_Size relocation_count = _UNIT_Vector_SIZE(&object->relocations_table);
-    UNIT_Size relocation_table_size = relocation_count *
-                                      sizeof(ELF_RelocationAddend);
-
-    sections[SECTION_RELA_TEXT] = (ELF_SectionHeader) {
-        .name = 15,
-        .type = ELF_SECTION_TYPE_RELA,
-        .flags = ELF_SECTION_FLAG_INFO_LINK,
-        .offset = relocation_offset,
-        .size = relocation_table_size,
-        .link = SECTION_SYMTAB,
-        .info = SECTION_TEXT,
-        .alignment = 8,
-        .entry_size = sizeof(ELF_RelocationAddend),
-    };
-
-    UNIT_Size symbol_offset = relocation_offset + relocation_table_size;
-    UNIT_Size symbol_count = _UNIT_Vector_SIZE(&object->symbols);
-    UNIT_Size symbol_table_size = symbol_count * sizeof(ELF_Symbol);
-
-    sections[SECTION_SYMTAB] = (ELF_SectionHeader) {
-        .name = 26,
-        .type = ELF_SECTION_TYPE_SYMBOL_TABLE,
-        .offset = symbol_offset,
-        .size = symbol_table_size,
-        .link = SECTION_STRTAB,
-        .info = 2,  // first global symbol (after null + rodata section sym)
-        .alignment = 8,
-        .entry_size = sizeof(ELF_Symbol),
-    };
-
-    UNIT_Size string_table_size = _UNIT_Vector_SIZE(&object->string_table);
-    UNIT_Size string_offset = symbol_offset + symbol_table_size;
-
-    sections[SECTION_STRTAB] = (ELF_SectionHeader) {
-        .name = 34,
-        .type = ELF_SECTION_TYPE_STRING_TABLE,
-        .offset = string_offset,
-        .size = string_table_size,
-        .alignment = 1,
-    };
-
-    UNIT_Size section_string_offset = string_offset + string_table_size;
-
-    sections[SECTION_SHSTRTAB] = (ELF_SectionHeader) {
-        .name = 42,
-        .type = ELF_SECTION_TYPE_STRING_TABLE,
-        .offset = section_string_offset,
-        .size = object->section_string_table_size,
-        .alignment = 1,
-    };
+    return add_symbol(elf_object, name, section_offset, section_number, binding, type);
 }
 
 static UNIT_Status
-build_symbol_table(ELF_Object *object,
-                   const _UNIT_CompileContext *context)
+build_defined_symbols(ELF_Object *elf_object, const _UNIT_CompileContext *compile_context)
 {
-    if (UNIT_FAILED(add_null_symbol(object))) {
-        return _UNIT_FAIL;
-    }
+    assert(elf_object != NULL);
+    assert(compile_context != NULL);
 
-    if (UNIT_FAILED(add_rodata_section_symbol(object))) {
-        return _UNIT_FAIL;
-    }
+    UNIT_Size size = _UNIT_Vector_SIZE(&compile_context->symbol_table.symbols);
+    for (UNIT_Size index = 0; index < size; ++index) {
+        _UNIT_Symbol *symbol = _UNIT_Vector_GET(&compile_context->symbol_table.symbols, index);
+        assert(symbol != NULL);
+        if (!symbol->is_defined) {
+            continue;
+        }
 
-    if (UNIT_FAILED(add_symbols(object, context))) {
-        return _UNIT_FAIL;
+        if (add_symbol(elf_object,
+                       symbol->name,
+                       symbol->text_offset,
+                       _UNIT_Vector_SIZE(&elf_object->sections),
+                       ELF_SYMBOL_BINDING_GLOBAL,
+                       ELF_SYMBOL_TYPE_FUNCTION) == -1) {
+            return _UNIT_FAIL;
+        }
     }
 
     return _UNIT_OK;
 }
 
-static void
-populate_elf_data(ELF_Object *object,
+static UNIT_Status
+build_relocations(ELF_Object *elf_object,
+                  ELF_Section *text_section,
                   const _UNIT_CompileContext *compile_context)
 {
-    object->constant_data = &compile_context->string_data.constant_buffer;
-    object->header = (ELF_Header) {
-        .identification = {
-            [ELF_IDENT_MAGIC_0] = 0x7f,
-            [ELF_IDENT_MAGIC_1] = 'E',
-            [ELF_IDENT_MAGIC_2] = 'L',
-            [ELF_IDENT_MAGIC_3] = 'F',
-            [ELF_IDENT_CLASS] = ELF_CLASS_64,
-            [ELF_IDENT_DATA_ENCODING] = ELF_DATA_LITTLE_ENDIAN,
-            [ELF_IDENT_VERSION] = ELF_VERSION_CURRENT,
-        },
-        .type = ELF_TYPE_RELOCATABLE,
-        .machine = ELF_MACHINE_AMD64,
-        .version = ELF_VERSION_CURRENT,
-        .section_header_offset = sizeof(ELF_Header),
-        .header_size = sizeof(ELF_Header),
-        .section_header_entry_size = sizeof(ELF_SectionHeader),
-        .section_header_count = SECTION_COUNT,
-        .section_name_string_table_index = SECTION_SHSTRTAB,
-    };
-    object->section_string_table = section_string_table;
-    object->section_string_table_size = sizeof(section_string_table);
+    assert(elf_object != NULL);
+    assert(text_section != NULL);
+    assert(compile_context != NULL);
 
-    build_section_headers(object, compile_context);
+    UNIT_Context *context = compile_context->context;
+    assert(context != NULL);
+
+    UNIT_Size size = _UNIT_Vector_SIZE(&compile_context->symbol_table.relocations);
+    for (UNIT_Size index = 0; index < size; ++index) {
+        _UNIT_Relocation *relocation = _UNIT_Vector_GET(&compile_context->symbol_table.relocations,
+                                                        index);
+        assert(relocation != NULL);
+        ELF_Relocation *elf_relocation = _UNIT_Alloc(context, sizeof(ELF_Relocation));
+        if (elf_relocation == NULL) {
+            return _UNIT_FAIL;
+        }
+
+        if (UNIT_FAILED(_UNIT_Vector_Append(&text_section->relocations, elf_relocation))) {
+            return _UNIT_FAIL;
+        }
+
+        elf_relocation->offset = relocation->offset;
+        if (relocation->type == _UNIT_RELOCATION_CALL) {
+            _UNIT_Symbol *symbol = _UNIT_Vector_GET(&compile_context->symbol_table.symbols,
+                                                    relocation->symbol_index);
+            assert(symbol != NULL);
+            uint16_t section_number = symbol->is_defined ?
+                                      _UNIT_Vector_SIZE(&elf_object->sections) :
+                                      ELF_SECTION_UNDEFINED;
+            UNIT_Size symbol_table_index = find_or_add_symbol(elf_object,
+                                                              symbol->name,
+                                                              symbol->text_offset,
+                                                              section_number,
+                                                              ELF_SYMBOL_BINDING_GLOBAL,
+                                                              symbol->is_defined ?
+                                                              ELF_SYMBOL_TYPE_FUNCTION :
+                                                              ELF_SYMBOL_TYPE_NONE);
+            if (symbol_table_index == -1) {
+                return _UNIT_FAIL;
+            }
+
+            elf_relocation->symbol_table_index = symbol_table_index;
+            elf_relocation->type = ELF_RELOCATION_AMD64_PLT32;
+            elf_relocation->addend = -4;
+        } else {
+            assert(relocation->type == _UNIT_RELOCATION_DATA);
+            UNIT_Size rodata_symbol_index = find_symbol(elf_object,
+                                                        ".rodata",
+                                                        ELF_SYMBOL_BINDING_LOCAL);
+            assert(rodata_symbol_index != -1);
+            elf_relocation->symbol_table_index = rodata_symbol_index;
+            elf_relocation->type = ELF_RELOCATION_AMD64_PC32;
+            elf_relocation->addend = relocation->symbol_index - 4;
+        }
+    }
+
+    if (size == 0) {
+        return _UNIT_OK;
+    }
+
+    uint32_t text_section_index = _UNIT_Vector_SIZE(&elf_object->sections);
+    ELF_Section *relocation_section = add_section(elf_object,
+                                                  ".rela.text",
+                                                  ELF_SECTION_TYPE_RELA,
+                                                  ELF_SECTION_FLAG_INFO_LINK,
+                                                  8);
+    if (relocation_section == NULL) {
+        return _UNIT_FAIL;
+    }
+
+    relocation_section->size = size * ELF_RELOCATION_SIZE;
+    relocation_section->info = text_section_index;
+    relocation_section->entry_size = ELF_RELOCATION_SIZE;
+    return _UNIT_OK;
 }
 
-/* Assembles the complete ELF object in memory: header, section
- * headers, symbol table, string tables, and relocation entries.
- * Does not write anything to disk. */
 static UNIT_Status
-build_elf_object(ELF_Object *object,
-                 const _UNIT_CompileContext *compile_context)
+build_text_section(ELF_Object *elf_object, const _UNIT_CompileContext *compile_context)
 {
-    assert(object != NULL);
+    assert(elf_object != NULL);
     assert(compile_context != NULL);
-    object->context = compile_context->context;
-    object->text = &compile_context->buffer;
 
-    if (UNIT_FAILED(_UNIT_Vector_Init(&object->string_table,
-                                      compile_context->context,
-                                      8,
-                                      _UNIT_Dealloc))) {
+    ELF_Section *text_section = add_section(elf_object,
+                                            ".text",
+                                            ELF_SECTION_TYPE_PROGRAM_DATA,
+                                            ELF_SECTION_FLAG_ALLOC | ELF_SECTION_FLAG_EXECUTABLE,
+                                            16);
+    if (text_section == NULL) {
         return _UNIT_FAIL;
     }
 
-    if (UNIT_FAILED(_UNIT_Vector_Init(&object->symbols,
-                                      compile_context->context,
-                                      16,
-                                      _UNIT_Dealloc))) {
-        _UNIT_Vector_Clear(&object->string_table);
+    text_section->data = &compile_context->buffer;
+    text_section->size = compile_context->buffer.size;
+
+    if (UNIT_FAILED(build_defined_symbols(elf_object, compile_context))) {
         return _UNIT_FAIL;
     }
 
-    if (UNIT_FAILED(_UNIT_Vector_Init(&object->relocations_table,
-                                      compile_context->context,
-                                      16,
-                                      _UNIT_Dealloc))) {
-        _UNIT_Vector_Clear(&object->string_table);
-        _UNIT_Vector_Clear(&object->symbols);
+    if (UNIT_FAILED(build_relocations(elf_object, text_section, compile_context))) {
         return _UNIT_FAIL;
     }
-
-    if (UNIT_FAILED(_UNIT_SizeMap_Init(&object->symtab_indices,
-                                       compile_context->context,
-                                       8))) {
-        _UNIT_Vector_Clear(&object->string_table);
-        _UNIT_Vector_Clear(&object->symbols);
-        return _UNIT_FAIL;
-    }
-
-    // String table starts with a null byte
-    if (append_string(object, "") == -1) {
-        goto error;
-    }
-
-    if (UNIT_FAILED(build_symbol_table(object, compile_context))) {
-        goto error;
-    }
-
-    if (UNIT_FAILED(build_relocation_table(object, compile_context))) {
-        goto error;
-    }
-
-    populate_elf_data(object, compile_context);
 
     return _UNIT_OK;
+}
+
+static UNIT_Status
+build_rodata_section(ELF_Object *elf_object, const _UNIT_CompileContext *compile_context)
+{
+    assert(elf_object != NULL);
+    assert(compile_context != NULL);
+
+    if (compile_context->string_data.constant_buffer.size == 0) {
+        return _UNIT_OK;
+    }
+
+    ELF_Section *data_section = add_section(elf_object,
+                                            ".rodata",
+                                            ELF_SECTION_TYPE_PROGRAM_DATA,
+                                            ELF_SECTION_FLAG_ALLOC,
+                                            1);
+    if (data_section == NULL) {
+        return _UNIT_FAIL;
+    }
+
+    data_section->data = &compile_context->string_data.constant_buffer;
+    data_section->size = compile_context->string_data.constant_buffer.size;
+
+    if (add_symbol(elf_object,
+                   ".rodata",
+                   0,
+                   _UNIT_Vector_SIZE(&elf_object->sections),
+                   ELF_SYMBOL_BINDING_LOCAL,
+                   ELF_SYMBOL_TYPE_SECTION) == -1) {
+        return _UNIT_FAIL;
+    }
+
+    return _UNIT_OK;
+}
+
+static UNIT_Status
+build_table_sections(ELF_Object *elf_object)
+{
+    assert(elf_object != NULL);
+
+    ELF_Section *symbol_table = add_section(elf_object,
+                                            ".symtab",
+                                            ELF_SECTION_TYPE_SYMBOL_TABLE,
+                                            0,
+                                            8);
+    if (symbol_table == NULL) {
+        return _UNIT_FAIL;
+    }
+
+    uint32_t symbol_table_index = _UNIT_Vector_SIZE(&elf_object->sections);
+    symbol_table->size = (_UNIT_Vector_SIZE(&elf_object->symbols) + 1) * ELF_SYMBOL_SIZE;
+    symbol_table->info = elf_object->first_global_symbol;
+    symbol_table->entry_size = ELF_SYMBOL_SIZE;
+
+    ELF_Section *string_table = add_section(elf_object,
+                                            ".strtab",
+                                            ELF_SECTION_TYPE_STRING_TABLE,
+                                            0,
+                                            1);
+    if (string_table == NULL) {
+        return _UNIT_FAIL;
+    }
+
+    symbol_table->link = _UNIT_Vector_SIZE(&elf_object->sections);
+    string_table->size = get_string_table_offset(&elf_object->strings,
+                                                 _UNIT_Vector_SIZE(&elf_object->strings));
+
+    ELF_Section *section_string_table = add_section(elf_object,
+                                                    ".shstrtab",
+                                                    ELF_SECTION_TYPE_STRING_TABLE,
+                                                    0,
+                                                    1);
+    if (section_string_table == NULL) {
+        return _UNIT_FAIL;
+    }
+
+    section_string_table->size = get_string_table_offset(&elf_object->section_strings,
+                                                         _UNIT_Vector_SIZE(
+                                                             &elf_object->section_strings));
+    elf_object->section_string_table_index = _UNIT_Vector_SIZE(&elf_object->sections);
+
+    UNIT_Size size = _UNIT_Vector_SIZE(&elf_object->sections);
+    for (UNIT_Size index = 0; index < size; ++index) {
+        ELF_Section *section = _UNIT_Vector_GET(&elf_object->sections, index);
+        if (section->type == ELF_SECTION_TYPE_RELA) {
+            section->link = symbol_table_index;
+        }
+    }
+
+    return _UNIT_OK;
+}
+
+static void
+build_section_offsets(ELF_Object *elf_object)
+{
+    assert(elf_object != NULL);
+
+    UNIT_Size size = _UNIT_Vector_SIZE(&elf_object->sections);
+    uint64_t offset = ELF_FILE_HEADER_SIZE + ((size + 1) * ELF_SECTION_HEADER_SIZE);
+    for (UNIT_Size index = 0; index < size; ++index) {
+        ELF_Section *section = _UNIT_Vector_GET(&elf_object->sections, index);
+        assert(section != NULL);
+        offset = (offset + section->alignment - 1) & ~(section->alignment - 1);
+        section->offset = offset;
+        offset += section->size;
+    }
+}
+
+static UNIT_Status
+build_elf_object(ELF_Object *elf_object, const _UNIT_CompileContext *compile_context)
+{
+    assert(elf_object != NULL);
+    assert(compile_context != NULL);
+
+    if (UNIT_FAILED(ELF_Object_Init(elf_object, compile_context->context))) {
+        return _UNIT_FAIL;
+    }
+
+    if (UNIT_FAILED(build_rodata_section(elf_object, compile_context))) {
+        goto error;
+    }
+
+    // ELF requires all local symbols to precede the global symbols.
+    elf_object->first_global_symbol = _UNIT_Vector_SIZE(&elf_object->symbols) + 1;
+    if (UNIT_FAILED(build_text_section(elf_object, compile_context))) {
+        goto error;
+    }
+
+    if (UNIT_FAILED(build_table_sections(elf_object))) {
+        goto error;
+    }
+
+    build_section_offsets(elf_object);
+    return _UNIT_OK;
+
 error:
-    _UNIT_Vector_Clear(&object->string_table);
-    _UNIT_Vector_Clear(&object->symbols);
-    _UNIT_SizeMap_Clear(&object->symtab_indices);
+    ELF_Object_Clear(elf_object);
     return _UNIT_FAIL;
 }
 
 static UNIT_Status
-write_object_to_file(const ELF_Object *object,
-                     const char *path)
+write_padding(UNIT_Context *context, FILE *file, uint64_t size)
 {
-    FILE *file = fopen(path, "wb");
-    if (!file) {
-        _UNIT_SetOSError(object->context, "writing ELF object");
-        return _UNIT_FAIL;
+    assert(context != NULL);
+    assert(file != NULL);
+
+    const uint8_t zeros[ELF_SECTION_HEADER_SIZE] = {0};
+    while (size > 0) {
+        size_t count = size < sizeof(zeros) ? size : sizeof(zeros);
+        if (UNIT_FAILED(_UNIT_File_WriteBytes(context, file, zeros, count))) {
+            return _UNIT_FAIL;
+        }
+
+        size -= count;
     }
 
-    // ELF header
-    fwrite(&object->header, sizeof(object->header), 1, file);
-
-    // Section headers
-    fwrite(object->sections, sizeof(object->sections), 1, file);
-
-    // .text
-    fwrite(object->text->data, 1, object->text->size, file);
-
-    // .rodata
-    if (object->constant_data->size > 0) {
-        fwrite(object->constant_data->data,
-               1,
-               object->constant_data->size,
-               file);
-    }
-
-    // .rela.text
-    UNIT_Size relocation_count = _UNIT_Vector_SIZE(&object->relocations_table);
-    for (UNIT_Size index = 0; index < relocation_count; ++index) {
-        ELF_RelocationAddend *entry =
-            _UNIT_Vector_GET(&object->relocations_table, index);
-        fwrite(entry, sizeof(ELF_RelocationAddend), 1, file);
-    }
-
-    // .symtab
-    UNIT_Size symbol_count = _UNIT_Vector_SIZE(&object->symbols);
-    for (UNIT_Size index = 0; index < symbol_count; ++index) {
-        ELF_Symbol *symbol = _UNIT_Vector_GET(&object->symbols, index);
-        fwrite(symbol, sizeof(ELF_Symbol), 1, file);
-    }
-
-    // .strtab
-    UNIT_Size string_table_size = _UNIT_Vector_SIZE(&object->string_table);
-    for (UNIT_Size index = 0; index < string_table_size; ++index) {
-        char *character = _UNIT_Vector_GET(&object->string_table, index);
-        fwrite(character, 1, 1, file);
-    }
-
-    // .shstrtab
-    fwrite(object->section_string_table,
-           1,
-           object->section_string_table_size,
-           file);
-
-    fclose(file);
     return _UNIT_OK;
 }
 
-UNIT_Status
-_UNIT_ELF_WriteObjectFile(const _UNIT_CompileContext *context,
-                          const char *path)
+static UNIT_Status
+write_elf_header(ELF_Object *elf_object, UNIT_Context *context, FILE *file)
 {
+    assert(elf_object != NULL);
+    assert(context != NULL);
+    assert(file != NULL);
+
+    WRITE_U8(0x7f);
+    WRITE_U8('E');
+    WRITE_U8('L');
+    WRITE_U8('F');
+    WRITE_U8(ELF_CLASS_64);
+    WRITE_U8(ELF_DATA_LITTLE_ENDIAN);
+    WRITE_U8(ELF_VERSION_CURRENT);
+    WRITE_U8(0); // System V ABI
+    WRITE_U8(0); // ABI version
+    if (UNIT_FAILED(write_padding(context, file, 7))) {
+        return _UNIT_FAIL;
+    }
+
+    WRITE_U16(ELF_TYPE_RELOCATABLE);
+    WRITE_U16(ELF_MACHINE_AMD64);
+    WRITE_U32(ELF_VERSION_CURRENT);
+    WRITE_U64(0); // Entry point
+    WRITE_U64(0); // Program header offset
+    WRITE_U64(ELF_FILE_HEADER_SIZE);
+    WRITE_U32(0); // Flags
+    WRITE_U16(ELF_FILE_HEADER_SIZE);
+    WRITE_U16(0); // Program header entry size
+    WRITE_U16(0); // Number of program headers
+    WRITE_U16(ELF_SECTION_HEADER_SIZE);
+    WRITE_U16(_UNIT_Vector_SIZE(&elf_object->sections) + 1);
+    WRITE_U16(elf_object->section_string_table_index);
+    return _UNIT_OK;
+}
+
+static UNIT_Status
+write_section_header(UNIT_Context *context, ELF_Section *section, FILE *file)
+{
+    assert(context != NULL);
+    assert(section != NULL);
+    assert(file != NULL);
+
+    WRITE_U32(section->name);
+    WRITE_U32(section->type);
+    WRITE_U64(section->flags);
+    WRITE_U64(0); // Virtual address
+    WRITE_U64(section->offset);
+    WRITE_U64(section->size);
+    WRITE_U32(section->link);
+    WRITE_U32(section->info);
+    WRITE_U64(section->alignment);
+    WRITE_U64(section->entry_size);
+    return _UNIT_OK;
+}
+
+static UNIT_Status
+write_section_relocations(UNIT_Context *context, ELF_Section *section, FILE *file)
+{
+    assert(context != NULL);
+    assert(section != NULL);
+    assert(file != NULL);
+
+    // ELF stores addends in relocation entries, leaving the code buffer untouched.
+    UNIT_Size size = _UNIT_Vector_SIZE(&section->relocations);
+    for (UNIT_Size index = 0; index < size; ++index) {
+        ELF_Relocation *relocation = _UNIT_Vector_GET(&section->relocations, index);
+        assert(relocation != NULL);
+        WRITE_U64(relocation->offset);
+        WRITE_U64(((uint64_t)relocation->symbol_table_index << 32) | relocation->type);
+        WRITE_I64(relocation->addend);
+    }
+
+    return _UNIT_OK;
+}
+
+static UNIT_Status
+write_symbol_table(ELF_Object *object, UNIT_Context *context, FILE *file)
+{
+    assert(object != NULL);
+    assert(context != NULL);
+    assert(file != NULL);
+
+    if (UNIT_FAILED(write_padding(context, file, ELF_SYMBOL_SIZE))) {
+        return _UNIT_FAIL;
+    }
+
+    UNIT_Size size = _UNIT_Vector_SIZE(&object->symbols);
+    for (UNIT_Size index = 0; index < size; ++index) {
+        ELF_Symbol *symbol = _UNIT_Vector_GET(&object->symbols, index);
+        assert(symbol != NULL);
+        WRITE_U32(symbol->offset_in_string_table);
+        WRITE_U8((symbol->binding << 4) | symbol->type);
+        WRITE_U8(0); // Default visibility
+        WRITE_U16(symbol->section_number);
+        WRITE_U64(symbol->section_offset);
+        WRITE_U64(0); // Symbol size is not recorded by the compiler.
+    }
+
+    return _UNIT_OK;
+}
+
+static UNIT_Status
+write_string_table(const _UNIT_Vector *strings, UNIT_Context *context, FILE *file)
+{
+    assert(strings != NULL);
+    assert(context != NULL);
+    assert(file != NULL);
+
+    WRITE_U8(0);
+    UNIT_Size size = _UNIT_Vector_SIZE(strings);
+    for (UNIT_Size index = 0; index < size; ++index) {
+        const char *string = _UNIT_Vector_GET(strings, index);
+        assert(string != NULL);
+        if (UNIT_FAILED(_UNIT_File_WriteBytes(context, file, string, strlen(string) + 1))) {
+            return _UNIT_FAIL;
+        }
+    }
+
+    return _UNIT_OK;
+}
+
+static UNIT_Status
+write_elf_sections(ELF_Object *object, UNIT_Context *context, FILE *file)
+{
+    assert(object != NULL);
+    assert(context != NULL);
+    assert(file != NULL);
+
+    if (UNIT_FAILED(write_padding(context, file, ELF_SECTION_HEADER_SIZE))) {
+        return _UNIT_FAIL;
+    }
+
+    UNIT_Size size = _UNIT_Vector_SIZE(&object->sections);
+    for (UNIT_Size index = 0; index < size; ++index) {
+        ELF_Section *section = _UNIT_Vector_GET(&object->sections, index);
+        if (UNIT_FAILED(write_section_header(context, section, file))) {
+            return _UNIT_FAIL;
+        }
+    }
+
+    uint64_t offset = ELF_FILE_HEADER_SIZE + ((size + 1) * ELF_SECTION_HEADER_SIZE);
+    for (UNIT_Size index = 0; index < size; ++index) {
+        ELF_Section *section = _UNIT_Vector_GET(&object->sections, index);
+        assert(section != NULL);
+        assert(section->offset >= offset);
+        if (UNIT_FAILED(write_padding(context, file, section->offset - offset))) {
+            return _UNIT_FAIL;
+        }
+
+        UNIT_Status status;
+        switch (section->type) {
+            case ELF_SECTION_TYPE_PROGRAM_DATA: {
+                assert(section->data != NULL);
+                status = _UNIT_File_WriteBytes(context, file, section->data->data, section->size);
+                break;
+            }
+            case ELF_SECTION_TYPE_RELA: {
+                ELF_Section *target = _UNIT_Vector_GET(&object->sections, section->info - 1);
+                status = write_section_relocations(context, target, file);
+                break;
+            }
+            case ELF_SECTION_TYPE_SYMBOL_TABLE: {
+                status = write_symbol_table(object, context, file);
+                break;
+            }
+            case ELF_SECTION_TYPE_STRING_TABLE: {
+                const _UNIT_Vector *strings = index + 1 == object->section_string_table_index ?
+                                              &object->section_strings : &object->strings;
+                status = write_string_table(strings, context, file);
+                break;
+            }
+            default: {
+                _UNIT_Unreachable();
+            }
+        }
+
+        if (UNIT_FAILED(status)) {
+            return _UNIT_FAIL;
+        }
+
+        offset = section->offset + section->size;
+    }
+
+    return _UNIT_OK;
+}
+
+static UNIT_Status
+write_elf_object_to_file(ELF_Object *object, UNIT_Context *context, const char *path)
+{
+    assert(object != NULL);
     assert(context != NULL);
     assert(path != NULL);
 
+    FILE *file = fopen(path, "wb");
+    if (!file) {
+        _UNIT_SetOSError(context, "opening ELF file");
+        return _UNIT_FAIL;
+    }
+
+    if (UNIT_FAILED(write_elf_header(object, context, file))) {
+        goto error;
+    }
+
+    if (UNIT_FAILED(write_elf_sections(object, context, file))) {
+        goto error;
+    }
+
+    if (fclose(file) != 0) {
+        _UNIT_SetOSError(context, "closing ELF file");
+        return _UNIT_FAIL;
+    }
+
+    return _UNIT_OK;
+
+error:
+    fclose(file);
+    return _UNIT_FAIL;
+}
+
+UNIT_Status
+_UNIT_ELF_WriteObjectFile(const _UNIT_CompileContext *compile_context,
+                          const char *path)
+{
+    assert(compile_context != NULL);
+    assert(path != NULL);
+
     ELF_Object elf_object;
-    if (UNIT_FAILED(build_elf_object(&elf_object, context))) {
+    if (UNIT_FAILED(build_elf_object(&elf_object, compile_context))) {
         return _UNIT_FAIL;
     }
 
-    if (UNIT_FAILED(write_object_to_file(&elf_object, path))) {
+    if (UNIT_FAILED(write_elf_object_to_file(&elf_object, compile_context->context, path))) {
+        ELF_Object_Clear(&elf_object);
         return _UNIT_FAIL;
     }
 
-    _UNIT_SizeMap_Clear(&elf_object.symtab_indices);
-    _UNIT_Vector_Clear(&elf_object.relocations_table);
-    _UNIT_Vector_Clear(&elf_object.string_table);
-    _UNIT_Vector_Clear(&elf_object.symbols);
-
+    ELF_Object_Clear(&elf_object);
     return _UNIT_OK;
 }
