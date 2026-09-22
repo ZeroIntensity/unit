@@ -1,11 +1,12 @@
 import unittest
 from typing import Any
+import io
 
 import unit
 
 
 class BasicTests(unittest.TestCase):
-    def make_procedure(self):
+    def make_procedure(self) -> unit.Procedure:
         return unit.Procedure(self.id())
 
     def compile_and_run(self, procedure: unit.Procedure, expected: Any, *args: Any):
@@ -767,5 +768,26 @@ class BasicTests(unittest.TestCase):
         with self.assertRaises(unit.UnsupportedPlatform):
             compiled.write_object_file("test.o", "macho")
 
-    if __name__ == "__main__":
-        unittest.main()
+    def test_print_helpers(self):
+        proc = self.make_procedure()
+
+        proc.load_string("%d")
+        proc.load_integer(40)
+        proc.load_integer(2)
+        proc.add()
+        proc.call_name("printf", 2)
+        proc.pop()
+
+        proc.optimize()
+
+        buffer = io.StringIO()
+        proc.print_instructions(file=buffer)
+        self.assertIn("42", buffer.getvalue())
+
+        buffer = io.StringIO()
+        compiled = proc.compile()
+        compiled.print_translation(file=buffer)
+        self.assertIn("42", buffer.getvalue())
+
+if __name__ == "__main__":
+    unittest.main()
