@@ -5,6 +5,13 @@ on:
         branches: [main]
         tags: ["v*"]
     pull_request:
+        types:
+            - opened
+            - reopened
+            - synchronize
+            # For the "skip changelog" label in the changelog job.
+            - labeled
+            - unlabeled
 
 permissions:
     contents: read
@@ -149,9 +156,28 @@ jobs:
               with:
                   repository-url: https://test.pypi.org/legacy/
 
+    changelog:
+        if: github.event_name == 'pull_request'
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            pull-requests: read
+        steps:
+            - name: Check for changelog updates
+              uses: brettcannon/check-for-changed-files@d85c64d17b3c1d0ac57c9cc46ea39399b0d6fa71 # v1.2.2
+              with:
+                  prereq-pattern: |
+                      src/**
+                      include/**
+                      python/**
+                  file-pattern: CHANGES.rst
+                  skip-label: "skip changelog"
+                  failure-message: "Missing a CHANGES.rst update; please add one or apply the ${skip-label} label to the pull request"
+                  token: ${{ secrets.GITHUB_TOKEN }}
+
     check:
         if: always()
-        needs: [test, build-sdist, build-wheels]
+        needs: [test, build-sdist, build-wheels, changelog]
         runs-on: ubuntu-latest
         steps:
             - name: Decide status
