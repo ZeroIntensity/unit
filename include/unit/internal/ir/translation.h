@@ -19,6 +19,7 @@ typedef enum {
     _UNIT_TYPE_LOCATION,
     _UNIT_TYPE_REGISTER,
     _UNIT_TYPE_CALL_ARGS,
+    _UNIT_TYPE_PHI_ARGS,
     _UNIT_TYPE_COMPARISON,
     _UNIT_TYPE_MEMORY
 } _UNIT_MachineItem_Type;
@@ -28,6 +29,7 @@ typedef struct _UNIT_MachineItem {
     union {
         int64_t value;
         _UNIT_Vector *call_args;
+        _UNIT_Vector *phi_args; // Holds _UNIT_PhiInput*
         struct {
             struct _UNIT_MachineItem *left;
             struct _UNIT_MachineItem *right;
@@ -42,6 +44,13 @@ typedef struct _UNIT_MachineItem {
         UNIT_Size index;
     } created_by;
 } _UNIT_MachineItem;
+
+struct _UNIT_BasicBlock;
+
+typedef struct {
+    struct _UNIT_BasicBlock *predecessor;
+    _UNIT_MachineItem *value;
+} _UNIT_PhiInput;
 
 typedef struct {
     uintptr_t _tagged;
@@ -105,6 +114,7 @@ _UNIT_MachineDestination_GetPointerNullable(_UNIT_MachineDestination dest)
 typedef enum {
     // General
     _UNIT_I_LOAD,
+    _UNIT_I_PHI,
     _UNIT_I_CALL_SYMBOL,
     _UNIT_I_LOAD_STRING,
 
@@ -151,12 +161,35 @@ typedef struct {
 
 typedef struct {
     UNIT_Context *context;
-    _UNIT_Vector blocks; // Holds _UNIT_BasicBlock
+    _UNIT_Vector blocks; // Holds _UNIT_BasicBlock*
     _UNIT_SizeMap symbols;
     _UNIT_Map strings; // UNIT_Size -> char*
     _UNIT_MachineItem *item_list_head; // Head of machine item linked list
-    UNIT_Size num_memory_slots; // Not a huge fan of this but it'll do
+    UNIT_Size num_memory_slots; // Stable slots for address-taken locals
+    UNIT_Size num_locations; // Next procedure-wide SSA location ID
 } _UNIT_Translation;
+
+_UNIT_MachineItem *
+_UNIT_Translation_NewItem(_UNIT_Translation *translation,
+                          _UNIT_MachineItem_Type type,
+                          int64_t value,
+                          const char *hint);
+
+UNIT_Status
+_UNIT_Translation_Emit(struct _UNIT_BasicBlock *block,
+                       _UNIT_MachineInstruction instruction,
+                       _UNIT_MachineDestination destination,
+                       _UNIT_MachineItem *argument_1,
+                       _UNIT_MachineItem *argument_2);
+
+UNIT_Status
+_UNIT_Translation_AnalyzeLiveness(_UNIT_Translation *translation);
+
+// Run after allocation: PHIs become parallel copies on their incoming edges.
+struct _UNIT_CompileContext;
+UNIT_Status
+_UNIT_Translation_LowerPhis(_UNIT_Translation *translation,
+                            struct _UNIT_CompileContext *compile_context);
 
 UNIT_Status
 _UNIT_Translate(_UNIT_Translation *translation,

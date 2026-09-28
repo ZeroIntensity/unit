@@ -113,6 +113,50 @@ of the special cases in UNIT's translation step, but if you're confused about
 how UNIT translates something, it may be done using a special case like this.
 
 
+Control flow and SSA
+--------------------
+
+Before translating values, UNIT divides the procedure into basic blocks and
+records each block's predecessors and successors. Every virtual location is
+assigned exactly once in the entire procedure. This is called static single
+assignment (SSA) form.
+
+When different paths supply different values for a local variable or an operand
+stack entry, the receiving block defines a new location with a ``PHI`` node:
+
+.. code-block::
+
+   block 1:
+       location_0 = LOAD(10)
+       JUMP(3)
+   block 2:
+       location_1 = LOAD(20)
+       JUMP(3)
+   block 3:
+       location_2 = PHI([block 1: location_0], [block 2: location_1])
+       RETURN_VALUE(location_2)
+
+A PHI selects the value associated with the predecessor that actually executed.
+Loop headers use the same mechanism to merge initial values with values from
+backedges. PHIs whose inputs are identical are removed. Unreachable blocks do
+not contribute inputs, and reachable predecessors must agree on operand stack
+depth. Reading a register-backed local that is unassigned on an incoming path
+is an error.
+
+Locals whose addresses are taken remain in stable memory slots because pointer
+writes can change their contents. Each load from such a slot defines a fresh SSA
+location; memory itself is mutable.
+
+PHI operands are live on their incoming edges. After register allocation, UNIT
+replaces PHIs with copies in edge blocks, so each copy runs only on its intended
+path. These copies execute as a parallel assignment: cycles such as swapping two
+values use a temporary slot to preserve the original values.
+
+The ``UNIT_FLAG_PRINT_TRANSLATION_PREOP`` flag displays the SSA representation,
+including PHIs. Compiled translation dumps show allocated registers, stack slots,
+and the copies that implement those PHIs.
+
+
 Register allocation
 -------------------
 

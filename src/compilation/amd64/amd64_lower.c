@@ -1,4 +1,5 @@
 #include <unit/internal/platform.h>
+#include <unit/internal/errors.h>
 
 #include <unit/internal/compilation/architectures.h>
 #include <unit/internal/compilation/compile_context.h>
@@ -190,7 +191,8 @@ compare_items(_UNIT_CompileContext *context,
 static UNIT_Status
 lower_operation(_UNIT_CompileContext *compile_context,
                 _UNIT_MachineOperation *operation,
-                _UNIT_SizeVector *epilogue_patches)
+                _UNIT_SizeVector *epilogue_patches,
+                AMD64_StackSlot *argument_slots)
 {
     assert(compile_context != NULL);
     assert(operation != NULL);
@@ -204,6 +206,12 @@ lower_operation(_UNIT_CompileContext *compile_context,
     UNIT_ABI abi = UNIT_Platform_GET_ABI(compile_context->target);
 
     switch (operation->instruction) {
+        case _UNIT_I_PHI: {
+            _UNIT_SetError(ctx,
+                           UNIT_ERROR_INVALID_USAGE,
+                           "PHI must be lowered before code generation");
+            return _UNIT_FAIL;
+        }
         case _UNIT_I_LOAD: {
             if (destination->type == _UNIT_TYPE_REGISTER) {
                 EMIT(load_register(compile_context,
@@ -284,7 +292,7 @@ lower_operation(_UNIT_CompileContext *compile_context,
         }
 
         case _UNIT_I_EXIT: {
-            EMIT(load_register(compile_context, REG_RDI, destination));
+            EMIT(load_register(compile_context, REG_RDI, left));
             EMIT(AMD64_Move_RegImmediate(buffer, REG_RAX, (AMD64_Immediate) {60}));
             EMIT(AMD64_Syscall(buffer));
             break;
@@ -299,10 +307,9 @@ lower_operation(_UNIT_CompileContext *compile_context,
         }
 
         case _UNIT_I_LOAD_ARGUMENT: {
-            const AMD64_Register *argument_registers =
-                get_argument_registers(compile_context->target);
             assert(left->value >= 0 && left->value < (abi == UNIT_ABI_WIN64 ? 4 : 6));
-            EMIT(store_register(compile_context, destination, argument_registers[left->value]));
+            EMIT(AMD64_Move_RegStack(buffer, REG_SCRATCH, argument_slots[left->value]));
+            EMIT(store_register(compile_context, destination, REG_SCRATCH));
             break;
         }
 
@@ -523,6 +530,44 @@ _UNIT_AMD64_Compile(_UNIT_Translation *translation,
 
     assert(translation != NULL);
     UNIT_Size blocks_size = _UNIT_Vector_SIZE(&translation->blocks);
+    AMD64_StackSlot argument_slots[6];
+    int8_t saved_arguments[6] = {0};
+    UNIT_Size argument_count = UNIT_Platform_GET_ABI(compile_context->target) ==
+                               UNIT_ABI_WIN64 ? 4 : 6;
+    const AMD64_Register *argument_registers = get_argument_registers(compile_context->target);
+    // Arguments remain available even after allocation reuses ABI argument registers.
+    for (UNIT_Size b = 0; b < blocks_size; ++b) {
+        _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks, b);
+        for (UNIT_Size i = 0; i < _UNIT_Vector_SIZE(&block->instructions); ++i) {
+            _UNIT_MachineOperation *op = _UNIT_Vector_GET(&block->instructions, i);
+            if (op->instruction != _UNIT_I_LOAD_ARGUMENT) {
+                continue;
+            }
+
+            UNIT_Size argument = op->argument_1->value;
+            if (argument < 0 || argument >= argument_count) {
+                _UNIT_SetError(compile_context->context,
+                               UNIT_ERROR_INVALID_USAGE,
+                               "invalid argument index");
+                _UNIT_SizeVector_Clear(&epilogue_patches);
+                return _UNIT_FAIL;
+            }
+
+            if (!saved_arguments[argument]) {
+                argument_slots[argument].offset =
+                    _UNIT_StackFrame_AllocateSlot(&compile_context->stack_frame);
+                if (UNIT_FAILED(AMD64_Move_StackReg(&compile_context->buffer,
+                                                    argument_slots[argument],
+                                                    argument_registers[argument]))) {
+                    _UNIT_SizeVector_Clear(&epilogue_patches);
+                    return _UNIT_FAIL;
+                }
+
+                saved_arguments[argument] = 1;
+            }
+        }
+    }
+
     for (UNIT_Size block_index = 0; block_index < blocks_size; ++block_index) {
         _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks,
                                                    block_index);
@@ -535,7 +580,8 @@ _UNIT_AMD64_Compile(_UNIT_Translation *translation,
             assert(operation != NULL);
             if (UNIT_FAILED(lower_operation(compile_context,
                                             operation,
-                                            &epilogue_patches))) {
+                                            &epilogue_patches,
+                                            argument_slots))) {
                 _UNIT_SizeVector_Clear(&epilogue_patches);
                 return _UNIT_FAIL;
             }

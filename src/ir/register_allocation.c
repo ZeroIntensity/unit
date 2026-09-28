@@ -1,135 +1,29 @@
 #include <unit/internal/ir/basic_block.h>
 #include <unit/internal/ir/register_allocation.h>
 
+// Assign a location once for the entire procedure. In particular, a loop's
+// incoming value must have the same home before and after its backedge.
 typedef struct {
     _UNIT_Translation *translation;
-    _UNIT_SizeMap assignments;
-    _UNIT_SizeMap spills;
-    _UNIT_StackFrame *stack_frame;
-    int8_t num_registers;
-} _UNIT_RegisterAllocator;
+    _UNIT_SizeSet *interference;
+    UNIT_Size *registers;
+    UNIT_Size *spills;
+} Allocator;
 
 static UNIT_Status
-_UNIT_RegisterAllocator_Init(_UNIT_RegisterAllocator *allocator,
-                             _UNIT_Translation *translation,
-                             _UNIT_CompileContext *compile_context,
-                             int8_t num_registers)
+add_uses(_UNIT_SizeSet *live, _UNIT_MachineItem *item)
 {
-    assert(allocator != NULL);
-    assert(translation != NULL);
-    assert(compile_context != NULL);
-    assert(num_registers > 0);
-    UNIT_Context *context = translation->context;
-    assert(context != NULL);
-    if (UNIT_FAILED(_UNIT_SizeMap_Init(&allocator->assignments,
-                                       context,
-                                       num_registers))) {
-        return _UNIT_FAIL;
-    }
-
-    if (UNIT_FAILED(_UNIT_SizeMap_Init(&allocator->spills, context, 8))) {
-        _UNIT_SizeMap_Clear(&allocator->assignments);
-        return _UNIT_FAIL;
-    }
-
-    allocator->translation = translation;
-    allocator->stack_frame = &compile_context->stack_frame;
-    allocator->num_registers = num_registers;
-
-    return _UNIT_OK;
-}
-
-static void
-_UNIT_RegisterAllocator_Clear(_UNIT_RegisterAllocator *allocator)
-{
-    assert(allocator != NULL);
-    _UNIT_SizeMap_Clear(&allocator->assignments);
-    _UNIT_SizeMap_Clear(&allocator->spills);
-}
-
-static void
-free_dead_registers(_UNIT_RegisterAllocator *allocator,
-                    _UNIT_BasicBlock *block,
-                    UNIT_Size index,
-                    _UNIT_SizeSet *registers_in_use)
-{
-    _UNIT_SizeMap *assignments = &allocator->assignments;
-
-    UNIT_Size to_remove[64];
-    UNIT_Size to_remove_regs[64];
-    UNIT_Size remove_count = 0;
-
-    _UNIT_SizeMap_ITER(assignments, location, register_id) {
-        if (_UNIT_SizeSet_Contains(&block->liveness.alive_at_end, location)) {
-            continue;
-        }
-
-        UNIT_Size last;
-        if (!UNIT_FAILED(_UNIT_SizeMap_Get(&block->liveness.last_uses,
-                                           location,
-                                           &last))) {
-            if (last < index) {
-                to_remove[remove_count] = location;
-                to_remove_regs[remove_count] = register_id;
-                remove_count++;
-            }
-        }
-    }
-    _UNIT_SizeSet_END_ITER();
-
-    for (UNIT_Size i = 0; i < remove_count; ++i) {
-        _UNIT_SizeSet_Remove(registers_in_use, to_remove_regs[i]);
-        _UNIT_SizeMap_Remove(assignments, to_remove[i]);
-    }
-}
-
-static UNIT_Status
-potentially_rewrite_item(_UNIT_RegisterAllocator *allocator,
-                         _UNIT_MachineItem *item)
-{
-    assert(allocator != NULL);
     if (item == NULL) {
         return _UNIT_OK;
     }
 
-    _UNIT_Translation *translation = allocator->translation;
-    assert(translation != NULL);
-    _UNIT_SizeMap *assignments = &allocator->assignments;
-    _UNIT_SizeMap *spills = &allocator->spills;
-
-    assert(item->type != _UNIT_TYPE_COMPARISON);
     if (item->type == _UNIT_TYPE_LOCATION) {
-        UNIT_Size register_id;
-        UNIT_Size slot_id;
-        if (!UNIT_FAILED(_UNIT_SizeMap_Get(assignments,
-                                           item->value,
-                                           &register_id))) {
-            item->type = _UNIT_TYPE_REGISTER;
-            item->value = register_id;
-        } else if (!UNIT_FAILED(_UNIT_SizeMap_Get(spills,
-                                                  item->value,
-                                                  &slot_id))) {
-            item->type = _UNIT_TYPE_MEMORY;
-            item->value = slot_id;
-        } else {
-            // Spill :(
-            item->type = _UNIT_TYPE_MEMORY;
-            UNIT_Size new_slot_id =
-                _UNIT_StackFrame_AllocateSlotID(allocator->stack_frame);
-            if (UNIT_FAILED(_UNIT_SizeMap_Set(spills,
-                                              item->value,
-                                              new_slot_id))) {
-                return _UNIT_FAIL;
-            }
+        return _UNIT_SizeSet_Add(live, item->value);
+    }
 
-            item->value = new_slot_id;
-        }
-    } else if (item->type == _UNIT_TYPE_CALL_ARGS) {
-        UNIT_Size count = _UNIT_Vector_SIZE(item->call_args);
-        for (UNIT_Size index = 0; index < count; ++index) {
-            _UNIT_MachineItem *arg = _UNIT_Vector_GET(item->call_args, index);
-            assert(arg != NULL);
-            if (UNIT_FAILED(potentially_rewrite_item(allocator, arg))) {
+    if (item->type == _UNIT_TYPE_CALL_ARGS) {
+        for (UNIT_Size i = 0; i < _UNIT_Vector_SIZE(item->call_args); ++i) {
+            if (UNIT_FAILED(add_uses(live, _UNIT_Vector_GET(item->call_args, i)))) {
                 return _UNIT_FAIL;
             }
         }
@@ -138,94 +32,177 @@ potentially_rewrite_item(_UNIT_RegisterAllocator *allocator,
     return _UNIT_OK;
 }
 
-static void
-assign_destination_register(_UNIT_RegisterAllocator *allocator,
-                            _UNIT_MachineOperation *op,
-                            _UNIT_SizeSet *registers_in_use)
+static UNIT_Status
+record_interference(Allocator *allocator, _UNIT_SizeSet *live, _UNIT_MachineDestination dest)
 {
-    if (_UNIT_MachineDestination_IsNull(op->destination)
-        || _UNIT_MachineDestination_IsInput(op->destination)) {
-        return;
+    if (_UNIT_MachineDestination_IsNull(dest) || _UNIT_MachineDestination_IsInput(dest)) {
+        return _UNIT_OK;
     }
 
-    _UNIT_MachineItem *item =
-        _UNIT_MachineDestination_GetPointer(op->destination);
+    _UNIT_MachineItem *item = _UNIT_MachineDestination_GetPointer(dest);
     if (item->type != _UNIT_TYPE_LOCATION) {
-        return;
+        return _UNIT_OK;
     }
 
     UNIT_Size location = item->value;
-    UNIT_Size existing;
-    if (!UNIT_FAILED(_UNIT_SizeMap_Get(&allocator->assignments,
-                                       location,
-                                       &existing))) {
-        return;
-    }
-
-    for (UNIT_Size register_id = 0; register_id < allocator->num_registers;
-         ++register_id) {
-        if (!_UNIT_SizeSet_Contains(registers_in_use, register_id)) {
-            _UNIT_SizeMap_Set(&allocator->assignments, location, register_id);
-            _UNIT_SizeSet_Add(registers_in_use, register_id);
-            return;
-        }
-    }
-}
-
-static UNIT_Status
-allocate_registers_for_block(_UNIT_RegisterAllocator *allocator,
-                             _UNIT_BasicBlock *block)
-{
-    assert(allocator != NULL);
-    assert(block != NULL);
-    _UNIT_SizeMap *assignments = &allocator->assignments;
-
-    _UNIT_SizeSet registers_in_use;
-    if (UNIT_FAILED(_UNIT_SizeSet_Init(&registers_in_use,
-                                       block->context,
-                                       allocator->num_registers))) {
-        return _UNIT_FAIL;
-    }
-
-    _UNIT_SizeSet_ITER(&block->liveness.alive_at_start, location) {
-        UNIT_Size register_id;
-        if (!UNIT_FAILED(_UNIT_SizeMap_Get(assignments,
-                                           location,
-                                           &register_id))) {
-            _UNIT_SizeSet_Add(&registers_in_use, register_id);
-        } else {
-            for (UNIT_Size reg_id = 0; reg_id < allocator->num_registers;
-                 ++reg_id) {
-                if (!_UNIT_SizeSet_Contains(&registers_in_use, reg_id)) {
-                    _UNIT_SizeMap_Set(assignments, location, reg_id);
-                    _UNIT_SizeSet_Add(&registers_in_use, reg_id);
-                    break;
-                }
-            }
-        }
-    }
-    _UNIT_SizeSet_END_ITER();
-
-    UNIT_Size size = _UNIT_Vector_SIZE(&block->instructions);
-    for (UNIT_Size index = 0; index < size; ++index) {
-        _UNIT_MachineOperation *op = _UNIT_Vector_GET(&block->instructions,
-                                                      index);
-
-        potentially_rewrite_item(allocator, op->argument_1);
-        potentially_rewrite_item(allocator, op->argument_2);
-
-        free_dead_registers(allocator, block, index, &registers_in_use);
-
-        assign_destination_register(allocator, op, &registers_in_use);
-
-        _UNIT_MachineItem *dest_item =
-            _UNIT_MachineDestination_GetPointerNullable(op->destination);
-        if (UNIT_FAILED(potentially_rewrite_item(allocator, dest_item))) {
+    _UNIT_SizeSet_ITER(live, other) {
+        if (location != other
+            && (UNIT_FAILED(_UNIT_SizeSet_Add(&allocator->interference[location], other))
+                || UNIT_FAILED(_UNIT_SizeSet_Add(&allocator->interference[other], location)))) {
             return _UNIT_FAIL;
         }
     }
+    _UNIT_SizeSet_END_ITER();
+    _UNIT_SizeSet_Remove(live, location);
+    return _UNIT_OK;
+}
 
-    _UNIT_SizeSet_Clear(&registers_in_use);
+static UNIT_Status
+build_interference(Allocator *allocator)
+{
+    _UNIT_Translation *translation = allocator->translation;
+    for (UNIT_Size b = 0; b < _UNIT_Vector_SIZE(&translation->blocks); ++b) {
+        _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks, b);
+        _UNIT_SizeSet live;
+        if (UNIT_FAILED(_UNIT_SizeSet_Init(&live, translation->context, 8))) {
+            return _UNIT_FAIL;
+        }
+
+        _UNIT_SizeSet_ITER(&block->liveness.alive_at_end, location) {
+            if (UNIT_FAILED(_UNIT_SizeSet_Add(&live, location))) {
+                goto error;
+            }
+        }
+        _UNIT_SizeSet_END_ITER();
+        for (UNIT_Size i = _UNIT_Vector_SIZE(&block->instructions); i > 0; --i) {
+            _UNIT_MachineOperation *op = _UNIT_Vector_GET(&block->instructions, i - 1);
+            if (UNIT_FAILED(record_interference(allocator, &live, op->destination))
+                || UNIT_FAILED(add_uses(&live, op->argument_1))
+                || UNIT_FAILED(add_uses(&live, op->argument_2))) {
+                goto error;
+            }
+
+            if (_UNIT_MachineDestination_IsInput(op->destination)
+                && UNIT_FAILED(add_uses(&live,
+                                        _UNIT_MachineDestination_GetPointer(op->destination)))) {
+                goto error;
+            }
+        }
+
+        // The PHIs define all their results at block entry; their operands were
+        // already accounted for on predecessor edges by liveness analysis.
+        for (UNIT_Size i = _UNIT_Vector_SIZE(&block->phis); i > 0; --i) {
+            _UNIT_MachineOperation *phi = _UNIT_Vector_GET(&block->phis, i - 1);
+            if (UNIT_FAILED(record_interference(allocator, &live, phi->destination))) {
+                goto error;
+            }
+        }
+
+        _UNIT_SizeSet_Clear(&live);
+        continue;
+error:
+        _UNIT_SizeSet_Clear(&live);
+        return _UNIT_FAIL;
+    }
+
+    return _UNIT_OK;
+}
+
+static _UNIT_MachineItem *
+allocated_item(Allocator *allocator, _UNIT_MachineItem *original)
+{
+    _UNIT_Translation *translation = allocator->translation;
+    _UNIT_MachineItem *item = _UNIT_Translation_NewItem(translation,
+                                                        _UNIT_TYPE_CONSTANT,
+                                                        0,
+                                                        original->hint);
+    if (item == NULL) {
+        return NULL;
+    }
+
+    if (original->type == _UNIT_TYPE_CALL_ARGS || original->type == _UNIT_TYPE_PHI_ARGS) {
+        _UNIT_Vector *source = original->call_args;
+        _UNIT_Vector *args = _UNIT_Vector_New(translation->context,
+                                              _UNIT_Vector_SIZE(source),
+                                              original->type ==
+                                              _UNIT_TYPE_PHI_ARGS ? _UNIT_Dealloc : NULL);
+        if (args == NULL) {
+            return NULL;
+        }
+
+        item->type = original->type;
+        item->call_args = args;
+        for (UNIT_Size i = 0; i < _UNIT_Vector_SIZE(source); ++i) {
+            if (original->type == _UNIT_TYPE_CALL_ARGS) {
+                _UNIT_MachineItem *arg = allocated_item(allocator, _UNIT_Vector_GET(source, i));
+                if (arg == NULL) {
+                    return NULL;
+                }
+
+                _UNIT_Vector_APPEND(args, arg);
+            } else {
+                _UNIT_PhiInput *input = _UNIT_Vector_GET(source, i);
+                _UNIT_MachineItem *value = allocated_item(allocator, input->value);
+                if (value == NULL) {
+                    return NULL;
+                }
+
+                _UNIT_PhiInput *copy = _UNIT_Alloc(translation->context, sizeof(*copy));
+                if (copy == NULL) {
+                    return NULL;
+                }
+
+                *copy = (_UNIT_PhiInput) {input->predecessor, value};
+                _UNIT_Vector_APPEND(args, copy);
+            }
+        }
+    } else if (original->type == _UNIT_TYPE_LOCATION) {
+        UNIT_Size location = original->value;
+        if (allocator->registers[location] >= 0) {
+            item->type = _UNIT_TYPE_REGISTER;
+            item->value = allocator->registers[location];
+        } else {
+            item->type = _UNIT_TYPE_MEMORY;
+            item->value = allocator->spills[location];
+        }
+    } else {
+        assert(original->type != _UNIT_TYPE_COMPARISON);
+        item->type = original->type;
+        item->value = original->value;
+    }
+
+    return item;
+}
+
+static UNIT_Status
+rewrite_operations(Allocator *allocator, _UNIT_Vector *operations)
+{
+    for (UNIT_Size i = 0; i < _UNIT_Vector_SIZE(operations); ++i) {
+        _UNIT_MachineOperation *op = _UNIT_Vector_GET(operations, i);
+        _UNIT_MachineItem **arguments[] = {&op->argument_1, &op->argument_2};
+        for (UNIT_Size a = 0; a < 2; ++a) {
+            if (*arguments[a] != NULL) {
+                *arguments[a] = allocated_item(allocator, *arguments[a]);
+                if (*arguments[a] == NULL) {
+                    return _UNIT_FAIL;
+                }
+            }
+        }
+
+        if (!_UNIT_MachineDestination_IsNull(op->destination)) {
+            _UNIT_MachineItem *item = allocated_item(allocator,
+                                                     _UNIT_MachineDestination_GetPointer(
+                                                         op->destination));
+            if (item == NULL) {
+                return _UNIT_FAIL;
+            }
+
+            op->destination = _UNIT_MachineDestination_IsInput(op->destination)
+                              ? _UNIT_MachineDestination_FromInput(item)
+                              : _UNIT_MachineDestination_FromDestination(item);
+        }
+    }
+
     return _UNIT_OK;
 }
 
@@ -234,27 +211,82 @@ _UNIT_Translation_AllocateRegisters(_UNIT_Translation *translation,
                                     _UNIT_CompileContext *compile_context,
                                     int8_t num_registers)
 {
-    assert(translation != NULL);
-    assert(compile_context != NULL);
-    assert(num_registers > 0);
-    _UNIT_RegisterAllocator allocator;
-    if (UNIT_FAILED(_UNIT_RegisterAllocator_Init(&allocator,
-                                                 translation,
-                                                 compile_context,
-                                                 num_registers))) {
-        return _UNIT_FAIL;
+    assert(num_registers > 0 && num_registers <= 64);
+    UNIT_Context *context = translation->context;
+    UNIT_Size count = translation->num_locations;
+    UNIT_Size capacity = count ? count : 1;
+    Allocator allocator = {.translation = translation};
+    allocator.interference = _UNIT_Alloc(context, capacity * sizeof(*allocator.interference));
+    allocator.registers = _UNIT_Alloc(context, capacity * sizeof(*allocator.registers));
+    allocator.spills = _UNIT_Alloc(context, capacity * sizeof(*allocator.spills));
+    UNIT_Size initialized = 0;
+    UNIT_Status status = _UNIT_FAIL;
+    if (allocator.interference == NULL || allocator.registers == NULL || allocator.spills == NULL) {
+        goto done;
     }
 
-    UNIT_Size size = _UNIT_Vector_SIZE(&translation->blocks);
-    for (UNIT_Size index = 0; index < size; ++index) {
-        _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks,
-                                                   index);
-        if (UNIT_FAILED(allocate_registers_for_block(&allocator, block))) {
-            _UNIT_RegisterAllocator_Clear(&allocator);
-            return _UNIT_FAIL;
+    for (UNIT_Size i = 0; i < count; ++i) {
+        if (UNIT_FAILED(_UNIT_SizeSet_Init(&allocator.interference[i], context, 4))) {
+            goto done;
+        }
+
+        ++initialized;
+        allocator.registers[i] = -1;
+        allocator.spills[i] = -1;
+    }
+
+    if (UNIT_FAILED(build_interference(&allocator))) {
+        goto done;
+    }
+
+    for (UNIT_Size location = 0; location < count; ++location) {
+        uint64_t used = 0;
+        _UNIT_SizeSet_ITER(&allocator.interference[location], other) {
+            if (allocator.registers[other] >= 0) {
+                used |= UINT64_C(1) << allocator.registers[other];
+            }
+        }
+        _UNIT_SizeSet_END_ITER();
+        for (UNIT_Size reg = 0; reg < num_registers; ++reg) {
+            if (!(used & (UINT64_C(1) << reg))) {
+                allocator.registers[location] = reg;
+                break;
+            }
+        }
+
+        if (allocator.registers[location] == -1) {
+            allocator.spills[location] =
+                _UNIT_StackFrame_AllocateSlotID(&compile_context->stack_frame);
         }
     }
 
-    _UNIT_RegisterAllocator_Clear(&allocator);
-    return _UNIT_OK;
+    for (UNIT_Size b = 0; b < _UNIT_Vector_SIZE(&translation->blocks); ++b) {
+        _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks, b);
+        // Independent operand objects are necessary after leaving SSA: physical
+        // register folding must not mutate another instruction's operands.
+        if (UNIT_FAILED(rewrite_operations(&allocator, &block->phis))
+            || UNIT_FAILED(rewrite_operations(&allocator, &block->instructions))) {
+            goto done;
+        }
+    }
+
+    status = _UNIT_OK;
+done:
+    for (UNIT_Size i = 0; i < initialized; ++i) {
+        _UNIT_SizeSet_Clear(&allocator.interference[i]);
+    }
+
+    if (allocator.interference != NULL) {
+        _UNIT_Dealloc(context, allocator.interference);
+    }
+
+    if (allocator.registers != NULL) {
+        _UNIT_Dealloc(context, allocator.registers);
+    }
+
+    if (allocator.spills != NULL) {
+        _UNIT_Dealloc(context, allocator.spills);
+    }
+
+    return status;
 }

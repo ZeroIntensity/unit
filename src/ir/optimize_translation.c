@@ -98,9 +98,7 @@ item_dead_in_block_recursive(_UNIT_BasicBlock *block,
     }
 
     for (UNIT_Size index = start; index < end; ++index) {
-        _UNIT_MachineOperation *operation = _UNIT_Vector_GET(instructions,
-                                                             index);
-        assert(operation != NULL);
+        _UNIT_MachineOperation *operation = instructions->items[index];
         if (operation == NULL) {
             continue;
         }
@@ -122,16 +120,14 @@ item_dead_in_block_recursive(_UNIT_BasicBlock *block,
                                                        successor_index);
         assert(successor != NULL);
         if (_UNIT_Set_Contains(checked, successor)) {
-            continue;
+            // A loop may use the value before the current scan's starting point.
+            return 0;
         }
 
         UNIT_Size length = _UNIT_Vector_SIZE(&successor->instructions);
-        if (!item_dead_in_block_recursive(successor,
-                                          0,
-                                          length,
-                                          item,
-                                          checked)) {
-            return 0;
+        int8_t result = item_dead_in_block_recursive(successor, 0, length, item, checked);
+        if (result != 1) {
+            return result;
         }
     }
 
@@ -200,6 +196,12 @@ optimize_block_loads(_UNIT_BasicBlock *block,
         _UNIT_MachineItem *source = op->argument_1;
         assert(op->argument_2 == NULL);
 
+        // Memory stores are observable through pointers, including ADDRESS_OF.
+        if (destination->type == _UNIT_TYPE_MEMORY) {
+            APPEND(op);
+            continue;
+        }
+
         if (compare_items(destination, source)) {
             // Self-load
             CONTINUE_AND_DISCARD(op);
@@ -261,7 +263,11 @@ optimize_block_loads(_UNIT_BasicBlock *block,
             continue;
         }
 
-        assert(!_UNIT_MachineDestination_IsInput(previous->destination));
+        if (_UNIT_MachineDestination_IsInput(previous->destination)) {
+            APPEND(op);
+            continue;
+        }
+
         previous->destination =
             _UNIT_MachineDestination_FromDestination(destination);
         CONTINUE_AND_DISCARD(op);
@@ -312,7 +318,39 @@ fold_register_value(RegisterValue *register_values,
         }
     }
 
-    return 0;
+    return did_change;
+}
+
+static int8_t
+fold_binary(_UNIT_MachineInstruction instruction, int64_t left, int64_t right, int64_t *result)
+{
+    switch (instruction) {
+        case _UNIT_I_ADD: {
+            *result = (int64_t)((uint64_t)left + (uint64_t)right);
+            return 1;
+        }
+        case _UNIT_I_SUB: {
+            *result = (int64_t)((uint64_t)left - (uint64_t)right);
+            return 1;
+        }
+        case _UNIT_I_MUL: {
+            *result = (int64_t)((uint64_t)left * (uint64_t)right);
+            return 1;
+        }
+        case _UNIT_I_DIV:
+        case _UNIT_I_MOD: {
+            // Preserve runtime division traps instead of evaluating them in C.
+            if (right == 0 || (left == INT64_MIN && right == -1)) {
+                return 0;
+            }
+
+            *result = instruction == _UNIT_I_DIV ? left / right : left % right;
+            return 1;
+        }
+        default: {
+            return 0;
+        }
+    }
 }
 
 static UNIT_Status
@@ -343,9 +381,6 @@ optimize_block_folds(_UNIT_BasicBlock *block,
     }
 
 #define APPEND(op) _UNIT_Vector_APPEND(&new_instructions, op)
-#define CONTINUE_AND_DISCARD(op) \
-        *did_change = 1;         \
-        _UNIT_Dealloc(block->context, op); continue
 
     for (UNIT_Size index = 0; index < size; ++index) {
         _UNIT_MachineOperation *op = _UNIT_Vector_STEAL(instructions, index);
@@ -376,38 +411,41 @@ optimize_block_folds(_UNIT_BasicBlock *block,
                     register_values[destination->value].value =
                         op->argument_1->value;
                     register_values[destination->value].is_known = 1;
-                    // TODO: We should delete the move if it's not used by a successor
-                    APPEND(op); //CONTINUE_AND_DISCARD(op);
+                    // Keep a materialized value for uses in successor blocks.
+                    APPEND(op);
                     continue;
                 }
 
                 break;
             }
 
-#define BINARY_OP(inst, operator)                                             \
-        case inst: {                                                          \
-                assert(destination != NULL);                                  \
-                if (destination->type == _UNIT_TYPE_REGISTER                  \
-                    && op->argument_1->type == _UNIT_TYPE_CONSTANT            \
-                    && op->argument_2->type == _UNIT_TYPE_CONSTANT) {         \
-                    register_values[destination->value].value =               \
-                        op->argument_1->value operator op->argument_2->value; \
-                    register_values[destination->value].is_known = 1;         \
-                    CONTINUE_AND_DISCARD(op);                                 \
-                }                                                             \
-                break;                                                        \
-        }
+            case _UNIT_I_ADD:
+            case _UNIT_I_SUB:
+            case _UNIT_I_MUL:
+            case _UNIT_I_DIV:
+            case _UNIT_I_MOD: {
+                int64_t value;
+                if (destination->type == _UNIT_TYPE_REGISTER
+                    && op->argument_1->type == _UNIT_TYPE_CONSTANT
+                    && op->argument_2->type == _UNIT_TYPE_CONSTANT
+                    && fold_binary(op->instruction,
+                                   op->argument_1->value,
+                                   op->argument_2->value,
+                                   &value)) {
+                    register_values[destination->value] = (RegisterValue) {value, 1};
+                    op->instruction = _UNIT_I_LOAD;
+                    op->argument_1->value = value;
+                    op->argument_2 = NULL;
+                    *did_change = 1;
+                    APPEND(op);
+                    continue;
+                }
 
-                BINARY_OP(_UNIT_I_ADD, +);
-                BINARY_OP(_UNIT_I_SUB, -);
-                BINARY_OP(_UNIT_I_MUL, *);
-                BINARY_OP(_UNIT_I_DIV, /);
-                BINARY_OP(_UNIT_I_MOD, %);
-
-            default:
                 break;
-
-#undef BINARY_OP
+            }
+            default: {
+                break;
+            }
         }
 
         if (destination != NULL
@@ -420,16 +458,11 @@ optimize_block_folds(_UNIT_BasicBlock *block,
     }
 
 #undef APPEND
-#undef CONTINUE_AND_DISCARD
 
     _UNIT_Dealloc(block->context, register_values);
     _UNIT_Vector_Clear(&block->instructions);
     block->instructions = new_instructions;
     return _UNIT_OK;
-error:
-    _UNIT_Dealloc(block->context, register_values);
-    _UNIT_Vector_Clear(&new_instructions);
-    return _UNIT_FAIL;
 }
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))

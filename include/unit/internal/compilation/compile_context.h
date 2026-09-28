@@ -124,7 +124,7 @@ _UNIT_StackFrame_FreeSlotID(_UNIT_StackFrame *frame, UNIT_Size slot_id);
 UNIT_Size
 _UNIT_StackFrame_ComputeSize(_UNIT_StackFrame *frame);
 
-typedef struct {
+typedef struct _UNIT_CompileContext {
     UNIT_Context *context;
     _UNIT_CodeBuffer buffer;
     _UNIT_SymbolTable symbol_table;

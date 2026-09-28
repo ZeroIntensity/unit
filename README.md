@@ -13,6 +13,7 @@ Currently, it supports:
 - Compiling to x86-64.
 - Writing ELF and COFF object files.
 - Some very simple optimization passes.
+- SSA translation with PHI nodes for branches and loops.
 
 UNIT is in the early stages of development; see below for UNIT's limitations.
 
@@ -142,8 +143,6 @@ UNIT is missing support for the following features:
 
 - Compiling to AArch64 and Mach-O files.
 - Floating point operations.
-- SSA (this is currently partial; locations are assigned once per block, but
-  not once per procedure).
 
 These will be added in the future.
 
