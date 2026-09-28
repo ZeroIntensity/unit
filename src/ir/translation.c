@@ -16,6 +16,7 @@ machine_instruction_name(_UNIT_MachineInstruction machine_instruction)
 {
     switch (machine_instruction) {
         NAME(LOAD);
+        NAME(PHI);
         NAME(JUMP_LABEL);
         NAME(CALL_SYMBOL);
         NAME(JUMP);
@@ -65,84 +66,6 @@ integer_type_name(UNIT_IntegerType type)
     _UNIT_Unreachable();
 }
 
-static UNIT_Status
-mark_last_use(_UNIT_BasicBlock *block,
-              _UNIT_MachineItem *item)
-{
-    assert(block != NULL);
-    _UNIT_SizeMap *last_uses = &block->liveness.last_uses;
-    UNIT_Size index = _UNIT_Vector_SIZE(&block->instructions) - 1;
-
-    assert(last_uses != NULL);
-    assert(item != NULL);
-    assert(index >= 0);
-    if (item->type == _UNIT_TYPE_LOCATION) {
-        return _UNIT_SizeMap_Set(last_uses, item->value, index);
-    } else if (item->type == _UNIT_TYPE_CALL_ARGS) {
-        UNIT_Size count = _UNIT_Vector_SIZE(item->call_args);
-        for (UNIT_Size i = 0; i < count; ++i) {
-            if (UNIT_FAILED(mark_last_use(block,
-                                          _UNIT_Vector_GET(item->call_args,
-                                                           i)))) {
-                return _UNIT_FAIL;
-            }
-        }
-    }
-
-    return _UNIT_OK;
-}
-
-UNIT_Status
-emit_machine_instruction(UNIT_Context *context,
-                         _UNIT_BasicBlock *block,
-                         _UNIT_MachineInstruction instruction,
-                         _UNIT_MachineDestination destination,
-                         _UNIT_MachineItem *arg1,
-                         _UNIT_MachineItem *arg2)
-{
-    assert(context != NULL);
-    assert(block != NULL);
-    _UNIT_MachineOperation *operation = _UNIT_Alloc(context,
-                                                    sizeof(
-                                                        _UNIT_MachineOperation));
-    if (operation == NULL) {
-        return _UNIT_FAIL;
-    }
-
-    operation->instruction = instruction;
-    operation->destination = destination;
-    operation->argument_1 = arg1;
-    operation->argument_2 = arg2;
-
-    if (UNIT_FAILED(_UNIT_Vector_Append(&block->instructions,
-                                        operation))) {
-        return _UNIT_FAIL;
-    }
-
-    if (!_UNIT_MachineDestination_IsNull(destination)
-        && _UNIT_MachineDestination_IsInput(destination)) {
-        _UNIT_MachineItem *unwrapped =
-            _UNIT_MachineDestination_GetPointer(destination);
-        if (UNIT_FAILED(mark_last_use(block, unwrapped))) {
-            return _UNIT_FAIL;
-        }
-    }
-
-    if (arg1 != NULL) {
-        if (UNIT_FAILED(mark_last_use(block, arg1))) {
-            return _UNIT_FAIL;
-        }
-    }
-
-    if (arg2 != NULL) {
-        if (UNIT_FAILED(mark_last_use(block, arg2))) {
-            return _UNIT_FAIL;
-        }
-    }
-
-    return _UNIT_OK;
-}
-
 UNIT_Status
 print_machine_item(FILE *stream,
                    _UNIT_MachineItem *item,
@@ -176,6 +99,16 @@ print_machine_item(FILE *stream,
         }
 
         PRINT("]");
+    } else if (item->type == _UNIT_TYPE_PHI_ARGS) {
+        for (UNIT_Size index = 0; index < _UNIT_Vector_SIZE(item->phi_args); ++index) {
+            _UNIT_PhiInput *input = _UNIT_Vector_GET(item->phi_args, index);
+            PRINT("%s[block %lld: ", index ? ", " : "", (long long)input->predecessor->id);
+            if (UNIT_FAILED(print_machine_item(stream, input->value, context))) {
+                return _UNIT_FAIL;
+            }
+
+            PRINT("]");
+        }
     } else if (item->type == _UNIT_TYPE_COMPARISON) {
         if (UNIT_FAILED(print_machine_item(stream,
                                            item->comparison.left,
@@ -251,12 +184,6 @@ print_instruction_stream(FILE *stream,
                                                              index);
         assert(operation != NULL);
         if (operation->instruction == _UNIT_I_JUMP_LABEL) {
-            // There should be a "block ..." right before this
-            _UNIT_MachineItem *destination =
-                _UNIT_MachineDestination_GetPointer(operation->destination);
-            PRINT(", label %s (%lld):\n",
-                  destination->hint,
-                  (long long)destination->value);
             continue;
         }
 
@@ -340,13 +267,17 @@ _UNIT_Translation_PrintInstructions(const _UNIT_Translation *translation,
                                                    index);
         assert(block != NULL);
         PRINT("    block %lld", (long long)block->id);
-        if (block->label_id != _UNIT_BasicBlock_NO_LABEL) {
-            // We don't have access to the label name here, but the
-            // instructions do. The jump label will be the first instruction
-            // and will print out the name for us, so we don't want to print
-            // a newline.
-        } else {
-            PRINT("\n");
+        if (_UNIT_Vector_SIZE(&block->instructions) > 0) {
+            _UNIT_MachineOperation *first = _UNIT_Vector_GET(&block->instructions, 0);
+            if (first->instruction == _UNIT_I_JUMP_LABEL) {
+                _UNIT_MachineItem *label = _UNIT_MachineDestination_GetPointer(first->destination);
+                PRINT(", label %s (%lld):", label->hint, (long long)label->value);
+            }
+        }
+
+        PRINT("\n");
+        if (UNIT_FAILED(print_instruction_stream(stream, &block->phis))) {
+            return _UNIT_FAIL;
         }
 
         if (UNIT_FAILED(print_instruction_stream(stream,
@@ -359,26 +290,13 @@ _UNIT_Translation_PrintInstructions(const _UNIT_Translation *translation,
     return _UNIT_OK;
 }
 
-static inline void
-attach_item_to_translation(_UNIT_Translation *translation,
-                           _UNIT_MachineItem *item)
+_UNIT_MachineItem *
+_UNIT_Translation_NewItem(_UNIT_Translation *translation,
+                          _UNIT_MachineItem_Type type,
+                          int64_t value,
+                          const char *hint)
 {
-    // Machine items have complicated lifetimes that are hard to reason about,
-    // so we just collect them all sequentially during cleanup of the whole
-    // translation.
-    _UNIT_MachineItem *next = translation->item_list_head;
-    item->next = next;
-    translation->item_list_head = item;
-}
-
-static inline _UNIT_MachineItem *
-new_machine_item(_UNIT_Translation *translation,
-                 _UNIT_MachineItem_Type type,
-                 int64_t value,
-                 const char *hint)
-{
-    _UNIT_MachineItem *item = _UNIT_Alloc(translation->context,
-                                          sizeof(_UNIT_MachineItem));
+    _UNIT_MachineItem *item = _UNIT_Calloc(translation->context, 1, sizeof(*item));
     if (item == NULL) {
         return NULL;
     }
@@ -391,489 +309,1044 @@ new_machine_item(_UNIT_Translation *translation,
             _UNIT_Dealloc(translation->context, item);
             return NULL;
         }
-    } else {
-        item->hint = NULL;
     }
 
-    attach_item_to_translation(translation, item);
+    item->next = translation->item_list_head;
+    translation->item_list_head = item;
     return item;
 }
 
-static _UNIT_MachineItem *
-get_jump_target_item(_UNIT_Translation *translation,
-                     _UNIT_Vector *jump_labels,
-                     int32_t id,
-                     UNIT_JumpLabel **jump_label_ptr)
+static UNIT_Status
+append_operation(_UNIT_Vector *instructions,
+                 _UNIT_MachineInstruction instruction,
+                 _UNIT_MachineDestination destination,
+                 _UNIT_MachineItem *argument_1,
+                 _UNIT_MachineItem *argument_2)
 {
-    assert(translation != NULL);
-    assert(jump_labels != NULL);
-    assert(id >= 0);
-
-    UNIT_JumpLabel *label = _UNIT_Vector_GET(jump_labels, id);
-    if (label == NULL) {
-        _UNIT_SetErrorFormat(translation->context,
-                             UNIT_ERROR_INVALID_USAGE,
-                             "%d is not a known jump label",
-                             id);
-        return NULL;
+    _UNIT_MachineOperation *operation = _UNIT_Alloc(instructions->context, sizeof(*operation));
+    if (operation == NULL) {
+        return _UNIT_FAIL;
     }
 
-    if (jump_label_ptr != NULL) {
-        *jump_label_ptr = label;
-    }
-
-    _UNIT_MachineItem *item = new_machine_item(translation,
-                                               _UNIT_TYPE_CONSTANT,
-                                               label->id,
-                                               label->name);
-    if (item == NULL) {
-        return NULL;
-    }
-
-    return item;
+    *operation = (_UNIT_MachineOperation) {instruction, destination, argument_1, argument_2};
+    return _UNIT_Vector_Append(instructions, operation);
 }
 
 UNIT_Status
-analyze_liveness(_UNIT_Translation *translation)
+_UNIT_Translation_Emit(_UNIT_BasicBlock *block,
+                       _UNIT_MachineInstruction instruction,
+                       _UNIT_MachineDestination destination,
+                       _UNIT_MachineItem *argument_1,
+                       _UNIT_MachineItem *argument_2)
 {
-    assert(translation != NULL);
-    UNIT_Size block_count = _UNIT_Vector_SIZE(&translation->blocks);
+    return append_operation(&block->instructions, instruction, destination, argument_1, argument_2);
+}
 
-    int8_t changed = 1;
-    while (changed) {
-        changed = 0;
-        for (UNIT_Size index = block_count; index > 0; --index) {
-            _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks,
-                                                       index - 1);
-            assert(block != NULL);
-            if (UNIT_FAILED(_UNIT_BasicBlock_PopulateLivenessStep(block,
-                                                                  &changed))) {
+// Blocks are translated once, in reachable order. Entry values are placeholders
+// until every predecessor (including loop backedges) has been translated.
+typedef struct {
+    _UNIT_BasicBlock *block;
+    UNIT_Size start;
+    UNIT_Size end;
+    _UNIT_Vector entry_stack;
+    _UNIT_Vector stack;
+    _UNIT_MachineItem **definitions;
+    int8_t reachable;
+    int8_t queued;
+} BlockState;
+
+typedef struct {
+    BlockState *state;
+    UNIT_Size local;
+    _UNIT_MachineOperation *phi;
+} PendingLocal;
+
+typedef struct {
+    const UNIT_Procedure *procedure;
+    _UNIT_Translation *translation;
+    _UNIT_Vector states;
+    _UNIT_Vector pending_locals;
+    _UNIT_SizeMap labels;
+    _UNIT_SizeMap locals;
+    UNIT_Size *memory_slots;
+} Builder;
+
+static void
+free_block_state(UNIT_Context *context, void *ptr)
+{
+    BlockState *state = ptr;
+    _UNIT_Vector_Clear(&state->entry_stack);
+    _UNIT_Vector_Clear(&state->stack);
+    if (state->definitions != NULL) {
+        _UNIT_Dealloc(context, state->definitions);
+    }
+
+    _UNIT_Dealloc(context, state);
+}
+
+static UNIT_Status
+invalid(Builder *builder, const char *message)
+{
+    _UNIT_SetError(builder->translation->context, UNIT_ERROR_INVALID_USAGE, message);
+    return _UNIT_FAIL;
+}
+
+static int8_t
+is_terminator(UNIT_OperationCode instruction)
+{
+    return instruction == UNIT_OP_JUMP || instruction == UNIT_OP_JUMP_IF_TRUE
+           || instruction == UNIT_OP_JUMP_IF_FALSE || instruction == UNIT_OP_RETURN_VALUE
+           || instruction == UNIT_OP_EXIT;
+}
+
+static UNIT_Status
+create_block(Builder *builder, UNIT_Size start)
+{
+    _UNIT_Translation *translation = builder->translation;
+    UNIT_Context *context = translation->context;
+    _UNIT_BasicBlock *block = _UNIT_BasicBlock_New(context, _UNIT_Vector_SIZE(&builder->states));
+    if (block == NULL || UNIT_FAILED(_UNIT_Vector_Append(&translation->blocks, block))) {
+        return _UNIT_FAIL;
+    }
+
+    block->label_id = block->id;
+    BlockState *state = _UNIT_Calloc(context, 1, sizeof(*state));
+    if (state == NULL) {
+        return _UNIT_FAIL;
+    }
+
+    state->block = block;
+    state->start = start;
+    state->end = _UNIT_Vector_SIZE(&builder->procedure->_instructions);
+    if (UNIT_FAILED(_UNIT_Vector_Init(&state->entry_stack, context, 8, NULL))) {
+        _UNIT_Dealloc(context, state);
+        return _UNIT_FAIL;
+    }
+
+    if (UNIT_FAILED(_UNIT_Vector_Init(&state->stack, context, 8, NULL))) {
+        _UNIT_Vector_Clear(&state->entry_stack);
+        _UNIT_Dealloc(context, state);
+        return _UNIT_FAIL;
+    }
+
+    return _UNIT_Vector_Append(&builder->states, state);
+}
+
+static BlockState *
+jump_state(Builder *builder, UNIT_Size label)
+{
+    UNIT_Size id;
+    if (UNIT_FAILED(_UNIT_SizeMap_Get(&builder->labels, label, &id))) {
+        invalid(builder, "jump target has no label definition");
+        return NULL;
+    }
+
+    return _UNIT_Vector_GET(&builder->states, id);
+}
+
+static UNIT_Status
+build_cfg(Builder *builder)
+{
+    const UNIT_Procedure *procedure = builder->procedure;
+    UNIT_Size size = _UNIT_Vector_SIZE(&procedure->_instructions);
+    if (UNIT_FAILED(create_block(builder, 0))) {
+        return _UNIT_FAIL;
+    }
+
+    BlockState *preheader = _UNIT_Vector_GET(&builder->states, 0);
+    preheader->end = 0;
+    if (UNIT_FAILED(create_block(builder, 0))) {
+        return _UNIT_FAIL;
+    }
+
+    int8_t terminated = 0;
+    for (UNIT_Size index = 0; index < size; ++index) {
+        _UNIT_Operation *op = _UNIT_Vector_GET(&procedure->_instructions, index);
+        if (index > 0 && (terminated || op->instruction == _UNIT_OP_JUMP_MARKER)) {
+            BlockState *previous = _UNIT_Vector_GET(&builder->states,
+                                                    _UNIT_Vector_SIZE(&builder->states) - 1);
+            previous->end = index;
+            if (UNIT_FAILED(create_block(builder, index))) {
+                return _UNIT_FAIL;
+            }
+        }
+
+        if (op->instruction == _UNIT_OP_JUMP_MARKER) {
+            UNIT_Size existing;
+            if (!_UNIT_Vector_INDEX_IS_VALID(&procedure->_jump_labels, op->argument)) {
+                return invalid(builder, "invalid jump label");
+            }
+
+            if (!UNIT_FAILED(_UNIT_SizeMap_Get(&builder->labels, op->argument, &existing))) {
+                return invalid(builder, "jump label defined more than once");
+            }
+
+            if (UNIT_FAILED(_UNIT_SizeMap_Set(&builder->labels,
+                                              op->argument,
+                                              _UNIT_Vector_SIZE(&builder->states) - 1))) {
+                return _UNIT_FAIL;
+            }
+        }
+
+        switch (op->instruction) {
+            case UNIT_OP_LOAD_LOCAL:
+            case UNIT_OP_STORE_LOCAL:
+            case _UNIT_OP_LOAD_LOCAL_NAME:
+            case _UNIT_OP_STORE_LOCAL_NAME:
+            case UNIT_OP_ADDRESS_OF: {
+                UNIT_Size local;
+                if (UNIT_FAILED(_UNIT_SizeMap_Get(&builder->locals, op->argument, &local))
+                    && UNIT_FAILED(_UNIT_SizeMap_Set(&builder->locals,
+                                                     op->argument,
+                                                     builder->locals.len))) {
+                    return _UNIT_FAIL;
+                }
+
+                break;
+            }
+            default: {
+                break;
+            }
+        }
+        terminated = is_terminator(op->instruction);
+    }
+
+    UNIT_Size local_count = builder->locals.len;
+    builder->memory_slots = _UNIT_Alloc(procedure->context,
+                                        sizeof(UNIT_Size) * (local_count ? local_count : 1));
+    if (builder->memory_slots == NULL) {
+        return _UNIT_FAIL;
+    }
+
+    for (UNIT_Size local = 0; local < local_count; ++local) {
+        builder->memory_slots[local] = -1;
+    }
+
+    for (UNIT_Size index = 0; index < size; ++index) {
+        _UNIT_Operation *op = _UNIT_Vector_GET(&procedure->_instructions, index);
+        if (op->instruction == UNIT_OP_ADDRESS_OF) {
+            UNIT_Size local = _UNIT_SizeMap_GET(&builder->locals, op->argument);
+            if (builder->memory_slots[local] == -1) {
+                builder->memory_slots[local] = builder->translation->num_memory_slots++;
+            }
+        }
+    }
+
+    UNIT_Size count = _UNIT_Vector_SIZE(&builder->states);
+    for (UNIT_Size index = 0; index < count; ++index) {
+        BlockState *state = _UNIT_Vector_GET(&builder->states, index);
+        state->definitions = _UNIT_Calloc(procedure->context,
+                                          local_count ? local_count : 1,
+                                          sizeof(*state->definitions));
+        if (state->definitions == NULL) {
+            return _UNIT_FAIL;
+        }
+
+        if (state->end == state->start) {
+            if (index + 1 < count) {
+                BlockState *next = _UNIT_Vector_GET(&builder->states, index + 1);
+                if (UNIT_FAILED(_UNIT_BasicBlock_AddSuccessor(state->block, next->block))) {
+                    return _UNIT_FAIL;
+                }
+            }
+
+            continue;
+        }
+
+        _UNIT_Operation *last = _UNIT_Vector_GET(&procedure->_instructions, state->end - 1);
+        if (last->instruction == UNIT_OP_JUMP || last->instruction == UNIT_OP_JUMP_IF_TRUE
+            || last->instruction == UNIT_OP_JUMP_IF_FALSE) {
+            BlockState *target = jump_state(builder, last->argument);
+            if (target == NULL || UNIT_FAILED(_UNIT_BasicBlock_AddSuccessor(state->block,
+                                                                            target->block))) {
+                return _UNIT_FAIL;
+            }
+        }
+
+        if (index + 1 < count && last->instruction != UNIT_OP_JUMP
+            && last->instruction != UNIT_OP_RETURN_VALUE && last->instruction != UNIT_OP_EXIT) {
+            BlockState *next = _UNIT_Vector_GET(&builder->states, index + 1);
+            if (UNIT_FAILED(_UNIT_BasicBlock_AddSuccessor(state->block, next->block))) {
                 return _UNIT_FAIL;
             }
         }
     }
 
+    // Reachability is independent of layout; dead instructions must not supply
+    // PHI operands or participate in definite-assignment checks.
+    BlockState *entry = _UNIT_Vector_GET(&builder->states, 0);
+    entry->reachable = 1;
+    int8_t changed;
+    do {
+        changed = 0;
+        for (UNIT_Size index = 0; index < count; ++index) {
+            BlockState *state = _UNIT_Vector_GET(&builder->states, index);
+            if (!state->reachable) {
+                continue;
+            }
+
+            for (UNIT_Size edge = 0; edge < _UNIT_Vector_SIZE(&state->block->successors); ++edge) {
+                _UNIT_BasicBlock *successor = _UNIT_Vector_GET(&state->block->successors, edge);
+                BlockState *next = _UNIT_Vector_GET(&builder->states, successor->id);
+                if (!next->reachable) {
+                    next->reachable = 1;
+                    changed = 1;
+                }
+            }
+        }
+    } while (changed);
+    for (UNIT_Size index = 0; index < count; ++index) {
+        BlockState *state = _UNIT_Vector_GET(&builder->states, index);
+        _UNIT_Vector *predecessors = &state->block->predecessors;
+        UNIT_Size length = 0;
+        for (UNIT_Size edge = 0; edge < _UNIT_Vector_SIZE(predecessors); ++edge) {
+            _UNIT_BasicBlock *pred = _UNIT_Vector_GET(predecessors, edge);
+            BlockState *previous = _UNIT_Vector_GET(&builder->states, pred->id);
+            if (previous->reachable) {
+                predecessors->items[length++] = pred;
+            }
+        }
+
+        predecessors->length = length;
+    }
+
     return _UNIT_OK;
 }
 
-_UNIT_BasicBlock *
-push_new_block(_UNIT_Translation *translation,
-               UNIT_Size *block_id)
+static _UNIT_MachineItem *
+new_location(Builder *builder)
 {
-    assert(translation != NULL);
-    _UNIT_BasicBlock *block = _UNIT_BasicBlock_New(translation->context,
-                                                   *block_id);
-    if (block == NULL) {
+    return _UNIT_Translation_NewItem(builder->translation,
+                                     _UNIT_TYPE_LOCATION,
+                                     builder->translation->num_locations++,
+                                     NULL);
+}
+
+static _UNIT_MachineOperation *
+new_phi(Builder *builder, BlockState *state)
+{
+    _UNIT_MachineItem *destination = new_location(builder);
+    _UNIT_MachineItem *arguments = _UNIT_Translation_NewItem(builder->translation,
+                                                             _UNIT_TYPE_CONSTANT,
+                                                             0,
+                                                             NULL);
+    if (destination == NULL || arguments == NULL) {
         return NULL;
     }
 
-    ++(*block_id);
-
-    if (UNIT_FAILED(_UNIT_Vector_Append(&translation->blocks,
-                                        block))) {
+    arguments->phi_args = _UNIT_Vector_New(builder->translation->context,
+                                           _UNIT_Vector_SIZE(&state->block->predecessors),
+                                           _UNIT_Dealloc);
+    if (arguments->phi_args == NULL) {
+        // Leave a scalar item so translation cleanup does not dereference NULL.
+        arguments->type = _UNIT_TYPE_CONSTANT;
         return NULL;
     }
 
-    return block;
+    arguments->type = _UNIT_TYPE_PHI_ARGS;
+    if (UNIT_FAILED(append_operation(&state->block->phis,
+                                     _UNIT_I_PHI,
+                                     _UNIT_MachineDestination_FromDestination(destination),
+                                     arguments,
+                                     NULL))) {
+        return NULL;
+    }
+
+    return _UNIT_Vector_GET(&state->block->phis, _UNIT_Vector_SIZE(&state->block->phis) - 1);
+}
+
+static UNIT_Status
+add_phi_input(_UNIT_MachineOperation *phi,
+              _UNIT_BasicBlock *predecessor,
+              _UNIT_MachineItem *value)
+{
+    _UNIT_Vector *inputs = phi->argument_1->phi_args;
+    _UNIT_PhiInput *input = _UNIT_Alloc(inputs->context, sizeof(*input));
+    if (input == NULL) {
+        return _UNIT_FAIL;
+    }
+
+    *input = (_UNIT_PhiInput) {predecessor, value};
+    return _UNIT_Vector_Append(inputs, input);
 }
 
 static _UNIT_MachineItem *
-create_new_location(_UNIT_Translation *translation,
-                    _UNIT_BasicBlock *block,
-                    int32_t value)
+read_local(Builder *builder, BlockState *state, UNIT_Size local)
 {
-    _UNIT_MachineItem *item = new_machine_item(translation,
-                                               _UNIT_TYPE_LOCATION,
-                                               value,
-                                               NULL);
+    if (state->definitions[local] != NULL) {
+        return state->definitions[local];
+    }
+
+    if (_UNIT_Vector_SIZE(&state->block->predecessors) == 0) {
+        invalid(builder, "local variable not assigned on every incoming path");
+        return NULL;
+    }
+
+    _UNIT_MachineOperation *phi = new_phi(builder, state);
+    if (phi == NULL) {
+        return NULL;
+    }
+
+    PendingLocal *pending = _UNIT_Alloc(builder->translation->context, sizeof(*pending));
+    if (pending == NULL) {
+        return NULL;
+    }
+
+    *pending = (PendingLocal) {state, local, phi};
+    if (UNIT_FAILED(_UNIT_Vector_Append(&builder->pending_locals, pending))) {
+        return NULL;
+    }
+
+    state->definitions[local] = _UNIT_MachineDestination_GetPointer(phi->destination);
+    return state->definitions[local];
+}
+
+// Comparisons and prepared calls are compile-time aggregates. Merge their
+// constituent values, retaining the aggregate's shape for subsequent consumers.
+static _UNIT_MachineItem *
+make_stack_entry(Builder *builder, BlockState *state, _UNIT_MachineItem *source)
+{
+    if (source->type != _UNIT_TYPE_CALL_ARGS && source->type != _UNIT_TYPE_COMPARISON) {
+        _UNIT_MachineOperation *phi = new_phi(builder, state);
+        return phi == NULL ? NULL : _UNIT_MachineDestination_GetPointer(phi->destination);
+    }
+
+    _UNIT_MachineItem *item = _UNIT_Translation_NewItem(builder->translation,
+                                                        source->type,
+                                                        0,
+                                                        NULL);
     if (item == NULL) {
         return NULL;
     }
 
-    assert(_UNIT_SizeSet_Contains(&block->liveness.created_locations,
-                                  value) == 0);
-    if (UNIT_FAILED(_UNIT_SizeSet_Add(&block->liveness.created_locations,
-                                      value))) {
-        return NULL;
-    }
+    if (source->type == _UNIT_TYPE_COMPARISON) {
+        item->comparison.type = source->comparison.type;
+        item->comparison.left = make_stack_entry(builder, state, source->comparison.left);
+        item->comparison.right = make_stack_entry(builder, state, source->comparison.right);
+        if (item->comparison.left == NULL || item->comparison.right == NULL) {
+            return NULL;
+        }
+    } else {
+        UNIT_Size size = _UNIT_Vector_SIZE(source->call_args);
+        item->call_args = _UNIT_Vector_New(builder->translation->context, size, NULL);
+        if (item->call_args == NULL) {
+            item->type = _UNIT_TYPE_CONSTANT;
+            return NULL;
+        }
 
-    UNIT_Size index = _UNIT_Vector_SIZE(&block->instructions);
-    if (UNIT_FAILED(_UNIT_SizeMap_Set(&block->liveness.last_uses,
-                                      value,
-                                      index))) {
-        return NULL;
+        for (UNIT_Size index = 0; index < size; ++index) {
+            _UNIT_MachineItem *arg = make_stack_entry(builder,
+                                                      state,
+                                                      _UNIT_Vector_GET(source->call_args, index));
+            if (arg == NULL) {
+                return NULL;
+            }
+
+            _UNIT_Vector_APPEND(item->call_args, arg);
+        }
     }
 
     return item;
 }
 
-static _UNIT_MachineItem *
-stack_pop(_UNIT_BasicBlock *block,
-          _UNIT_Vector *stack,
-          _UNIT_Operation *operation)
+static UNIT_Status
+merge_stack_entry(Builder *builder,
+                  BlockState *state,
+                  _UNIT_BasicBlock *predecessor,
+                  _UNIT_MachineItem *entry,
+                  _UNIT_MachineItem *source)
 {
-    assert(block != NULL);
-    assert(stack != NULL);
-    assert(operation != NULL);
-    assert(_UNIT_Vector_SIZE(stack) >= 0);
-    if (_UNIT_Vector_SIZE(stack) == 0) {
-        _UNIT_SetErrorFormat(block->context,
+    if (entry->type == _UNIT_TYPE_COMPARISON) {
+        if (source->type != _UNIT_TYPE_COMPARISON
+            || entry->comparison.type != source->comparison.type) {
+            return invalid(builder, "incompatible comparison values at control-flow merge");
+        }
+
+        if (UNIT_FAILED(merge_stack_entry(builder,
+                                          state,
+                                          predecessor,
+                                          entry->comparison.left,
+                                          source->comparison.left))) {
+            return _UNIT_FAIL;
+        }
+
+        return merge_stack_entry(builder,
+                                 state,
+                                 predecessor,
+                                 entry->comparison.right,
+                                 source->comparison.right);
+    }
+
+    if (entry->type == _UNIT_TYPE_CALL_ARGS) {
+        if (source->type != _UNIT_TYPE_CALL_ARGS
+            || _UNIT_Vector_SIZE(entry->call_args) != _UNIT_Vector_SIZE(source->call_args)) {
+            return invalid(builder, "incompatible call arguments at control-flow merge");
+        }
+
+        for (UNIT_Size index = 0; index < _UNIT_Vector_SIZE(entry->call_args); ++index) {
+            if (UNIT_FAILED(merge_stack_entry(builder,
+                                              state,
+                                              predecessor,
+                                              _UNIT_Vector_GET(entry->call_args, index),
+                                              _UNIT_Vector_GET(source->call_args, index)))) {
+                return _UNIT_FAIL;
+            }
+        }
+
+        return _UNIT_OK;
+    }
+
+    if (source->type == _UNIT_TYPE_COMPARISON || source->type == _UNIT_TYPE_CALL_ARGS) {
+        return invalid(builder, "incompatible stack values at control-flow merge");
+    }
+
+    for (UNIT_Size index = 0; index < _UNIT_Vector_SIZE(&state->block->phis); ++index) {
+        _UNIT_MachineOperation *phi = _UNIT_Vector_GET(&state->block->phis, index);
+        if (_UNIT_MachineDestination_GetPointer(phi->destination) == entry) {
+            return add_phi_input(phi, predecessor, source);
+        }
+    }
+
+    _UNIT_Unreachable();
+}
+
+static _UNIT_MachineItem *
+pop_stack(Builder *builder, BlockState *state, UNIT_OperationCode instruction)
+{
+    if (_UNIT_Vector_SIZE(&state->stack) == 0) {
+        _UNIT_SetErrorFormat(builder->translation->context,
                              UNIT_ERROR_INVALID_USAGE,
                              "stack underflow at %s",
-                             UNIT_OperationCode_GetName(
-                                 operation->instruction));
+                             UNIT_OperationCode_GetName(instruction));
         return NULL;
     }
 
-    _UNIT_MachineItem *result = _UNIT_Vector_Pop(stack);
-    assert(result != NULL);
-
-    if (result->type == _UNIT_TYPE_LOCATION) {
-        if (!_UNIT_SizeSet_Contains(&block->liveness.created_locations,
-                                    result->value)) {
-            _UNIT_SizeSet_Add(&block->liveness.used_locations, result->value);
-        }
-    }
-
-    return result;
-}
-
-// Eagerly create basic blocks for every jump label.
-UNIT_Status
-create_jump_label_blocks(UNIT_Context *context,
-                         const _UNIT_Vector *jump_labels,
-                         _UNIT_Vector *output_jump_labels)
-{
-    assert(jump_labels != NULL);
-    UNIT_Size block_id = 0;
-    UNIT_Size size = _UNIT_Vector_SIZE(jump_labels);
-    for (UNIT_Size index = 0; index < size; ++index) {
-        UNIT_JumpLabel *label = _UNIT_Vector_GET(jump_labels, index);
-        assert(label != NULL);
-        _UNIT_BasicBlock *label_block = _UNIT_BasicBlock_New(context,
-                                                             block_id++);
-        if (label_block == NULL) {
-            return _UNIT_FAIL;
-        }
-
-        // Procedures can be compiled multiple times, so we need our own copy of labels.
-        UNIT_JumpLabel *copy = _UNIT_Alloc(context, sizeof(UNIT_JumpLabel));
-        if (copy == NULL) {
-            _UNIT_BasicBlock_Free(context, label_block);
-            return _UNIT_FAIL;
-        }
-
-        copy->_block = label_block;
-        copy->name = _UNIT_StrDup(context, label->name);
-        if (copy->name == NULL) {
-            _UNIT_BasicBlock_Free(context, label_block);
-            _UNIT_Dealloc(context, copy);
-            return _UNIT_FAIL;
-        }
-
-        copy->id = label->id;
-
-        _UNIT_Vector_APPEND(output_jump_labels, copy);
-    }
-
-    return _UNIT_OK;
-
-}
-
-typedef struct {
-    UNIT_Size location_id;
-    // Assigned when address is taken, then location_id becomes invalid
-    UNIT_Size stack_slot;
-} LocalState;
-
-typedef struct {
-    UNIT_Context *context;
-    _UNIT_Map locals_map;
-    UNIT_Size next_stack_slot;
-} LocalVariables;
-
-static bool
-compare_int32_deref(const void *ptr_a,
-                    const void *ptr_b)
-{
-    return *((int32_t *)ptr_a) == *((int32_t *)ptr_b);
-}
-
-static UNIT_Size
-hash_int32_deref(const void *key)
-{
-    return (UNIT_Size)(*(int32_t *)key);
+    return _UNIT_Vector_Pop(&state->stack);
 }
 
 static UNIT_Status
-LocalVariables_Init(LocalVariables *locals,
-                    UNIT_Context *context)
+translate_block(Builder *builder, BlockState *state)
 {
-    assert(locals != NULL);
-    assert(context != NULL);
-    locals->context = context;
-    locals->next_stack_slot = 0;
-    if (UNIT_FAILED(_UNIT_Map_Init(&locals->locals_map,
-                                   context,
-                                   8,
-                                   compare_int32_deref,
-                                   hash_int32_deref,
-                                   _UNIT_Dealloc,
-                                   _UNIT_Dealloc))) {
+    _UNIT_Translation *translation = builder->translation;
+    const UNIT_Procedure *procedure = builder->procedure;
+    _UNIT_BasicBlock *block = state->block;
+    _UNIT_Vector *stack = &state->stack;
+
+#define CHECK(expr)                   \
+        do { if (UNIT_FAILED(expr)) { \
+                 return _UNIT_FAIL;   \
+             }                        \
+        } while (0)
+#define ITEM(name, type, value, hint)                                                        \
+        _UNIT_MachineItem *name = _UNIT_Translation_NewItem(translation, type, value, hint); \
+        if (name == NULL) {                                                                  \
+            return _UNIT_FAIL;                                                               \
+        }
+
+#define POP(name)                                                             \
+        _UNIT_MachineItem *name = pop_stack(builder, state, op->instruction); \
+        if (name == NULL) {                                                   \
+            return _UNIT_FAIL;                                                \
+        }
+
+#define EMIT(inst, dest, a, b) CHECK(_UNIT_Translation_Emit(block, inst, dest, a, b))
+#define RESULT(inst, a, b)                                                      \
+        do {                                                                    \
+            _UNIT_MachineItem *result = new_location(builder);                  \
+            if (result == NULL) {                                               \
+                return _UNIT_FAIL;                                              \
+            }                                                                   \
+            EMIT(inst, _UNIT_MachineDestination_FromDestination(result), a, b); \
+            CHECK(_UNIT_Vector_Append(stack, result));                          \
+        } while (0)
+
+    const char *name = "block";
+    if (state->start < state->end) {
+        _UNIT_Operation *first = _UNIT_Vector_GET(&procedure->_instructions, state->start);
+        if (first->instruction == _UNIT_OP_JUMP_MARKER) {
+            UNIT_JumpLabel *label = _UNIT_Vector_GET(&procedure->_jump_labels, first->argument);
+            name = label->name;
+        }
+    }
+
+    ITEM(label, _UNIT_TYPE_CONSTANT, block->label_id, name);
+    EMIT(_UNIT_I_JUMP_LABEL, _UNIT_MachineDestination_FromDestination(label), NULL, NULL);
+    for (UNIT_Size index = state->start; index < state->end; ++index) {
+        _UNIT_Operation *op = _UNIT_Vector_GET(&procedure->_instructions, index);
+        switch (op->instruction) {
+            case _UNIT_OP_JUMP_MARKER: {
+                break;
+            }
+            case UNIT_OP_LOAD_INTEGER: {
+                ITEM(value, _UNIT_TYPE_CONSTANT, op->argument, NULL);
+                CHECK(_UNIT_Vector_Append(stack, value));
+                break;
+            }
+            case UNIT_OP_LOAD_STRING: {
+                if (!_UNIT_Vector_INDEX_IS_VALID(&procedure->_global_strings, op->argument)) {
+                    return invalid(builder, "invalid string ID");
+                }
+
+                ITEM(value,
+                     _UNIT_TYPE_CONSTANT,
+                     op->argument,
+                     _UNIT_Vector_GET(&procedure->_global_strings, op->argument));
+                RESULT(_UNIT_I_LOAD_STRING, value, NULL);
+                break;
+            }
+            case UNIT_OP_STORE_LOCAL:
+            case _UNIT_OP_STORE_LOCAL_NAME: {
+                POP(value);
+                UNIT_Size local = _UNIT_SizeMap_GET(&builder->locals, op->argument);
+                _UNIT_MachineItem *result = new_location(builder);
+                if (result == NULL) {
+                    return _UNIT_FAIL;
+                }
+
+                EMIT(_UNIT_I_LOAD, _UNIT_MachineDestination_FromDestination(result), value, NULL);
+                state->definitions[local] = result;
+                if (builder->memory_slots[local] != -1) {
+                    ITEM(slot, _UNIT_TYPE_MEMORY, builder->memory_slots[local], NULL);
+                    EMIT(_UNIT_I_LOAD,
+                         _UNIT_MachineDestination_FromDestination(slot),
+                         result,
+                         NULL);
+                }
+
+                break;
+            }
+            case UNIT_OP_LOAD_LOCAL:
+            case _UNIT_OP_LOAD_LOCAL_NAME:
+            case UNIT_OP_ADDRESS_OF: {
+                UNIT_Size local = _UNIT_SizeMap_GET(&builder->locals, op->argument);
+                if (builder->memory_slots[local] != -1) {
+                    // Escaped locals can be initialized through their address
+                    // (for example by scanf); their contents are not SSA values.
+                    ITEM(slot, _UNIT_TYPE_MEMORY, builder->memory_slots[local], NULL);
+                    RESULT(op->instruction ==
+                           UNIT_OP_ADDRESS_OF ? _UNIT_I_ADDRESS_OF : _UNIT_I_LOAD,
+                           slot,
+                           NULL);
+                } else {
+                    _UNIT_MachineItem *value = read_local(builder, state, local);
+                    if (value == NULL) {
+                        return _UNIT_FAIL;
+                    }
+
+                    CHECK(_UNIT_Vector_Append(stack, value));
+                }
+
+                break;
+            }
+#define BINARY(opcode, inst)                                             \
+        case opcode: {                                                   \
+                POP(right); POP(left); RESULT(inst, left, right); break; \
+        }
+
+                BINARY(UNIT_OP_ADD, _UNIT_I_ADD)
+                BINARY(UNIT_OP_SUBTRACT, _UNIT_I_SUB)
+                BINARY(UNIT_OP_MULTIPLY, _UNIT_I_MUL)
+                BINARY(UNIT_OP_DIVIDE, _UNIT_I_DIV)
+                BINARY(UNIT_OP_MODULO, _UNIT_I_MOD)
+#undef BINARY
+            case UNIT_OP_JUMP: {
+                BlockState *target = jump_state(builder, op->argument);
+                if (target == NULL) {
+                    return _UNIT_FAIL;
+                }
+
+                ITEM(target_item, _UNIT_TYPE_CONSTANT, target->block->label_id, NULL);
+                EMIT(_UNIT_I_JUMP, _UNIT_MachineDestination_NULL, target_item, NULL);
+                break;
+            }
+            case UNIT_OP_JUMP_IF_TRUE:
+            case UNIT_OP_JUMP_IF_FALSE: {
+                if (index + 1 == _UNIT_Vector_SIZE(&procedure->_instructions)) {
+                    return invalid(builder, "conditional jump has no fallthrough block");
+                }
+
+                POP(value);
+                if (value->type != _UNIT_TYPE_COMPARISON) {
+                    return invalid(builder, "JUMP_IF_FALSE/JUMP_IF_TRUE got non-comparison");
+                }
+
+                BlockState *target = jump_state(builder, op->argument);
+                if (target == NULL) {
+                    return _UNIT_FAIL;
+                }
+
+                ITEM(target_item, _UNIT_TYPE_CONSTANT, target->block->label_id, NULL);
+                int8_t invert = op->instruction == UNIT_OP_JUMP_IF_FALSE;
+                _UNIT_MachineInstruction instruction;
+                switch (value->comparison.type) {
+                    case UNIT_OP_COMPARE_EQUAL: {
+                        instruction = invert ? _UNIT_I_JUMP_IF_NOT_EQUAL : _UNIT_I_JUMP_IF_EQUAL;
+                        break;
+                    }
+                    case UNIT_OP_COMPARE_NOT_EQUAL: {
+                        instruction = invert ? _UNIT_I_JUMP_IF_EQUAL : _UNIT_I_JUMP_IF_NOT_EQUAL;
+                        break;
+                    }
+                    case UNIT_OP_COMPARE_LESS: {
+                        instruction = invert ? _UNIT_I_JUMP_IF_GREATER_EQUAL : _UNIT_I_JUMP_IF_LESS;
+                        break;
+                    }
+                    case UNIT_OP_COMPARE_LESS_EQUAL: {
+                        instruction = invert ? _UNIT_I_JUMP_IF_GREATER : _UNIT_I_JUMP_IF_LESS_EQUAL;
+                        break;
+                    }
+                    case UNIT_OP_COMPARE_GREATER: {
+                        instruction = invert ? _UNIT_I_JUMP_IF_LESS_EQUAL : _UNIT_I_JUMP_IF_GREATER;
+                        break;
+                    }
+                    case UNIT_OP_COMPARE_GREATER_EQUAL: {
+                        instruction = invert ? _UNIT_I_JUMP_IF_LESS : _UNIT_I_JUMP_IF_GREATER_EQUAL;
+                        break;
+                    }
+                    default: {
+                        _UNIT_Unreachable();
+                    }
+                }
+                EMIT(instruction,
+                     _UNIT_MachineDestination_FromInput(target_item),
+                     value->comparison.left,
+                     value->comparison.right);
+                break;
+            }
+            case UNIT_OP_RETURN_VALUE:
+            case UNIT_OP_EXIT: {
+                POP(value);
+                EMIT(op->instruction == UNIT_OP_EXIT ? _UNIT_I_EXIT : _UNIT_I_RETURN_VALUE,
+                     _UNIT_MachineDestination_NULL,
+                     value,
+                     NULL);
+                // An exit discards the remainder of this path's operand stack.
+                stack->length = 0;
+                break;
+            }
+            case UNIT_OP_LOAD_ARGUMENT: {
+                ITEM(argument, _UNIT_TYPE_CONSTANT, op->argument, NULL);
+                RESULT(_UNIT_I_LOAD_ARGUMENT, argument, NULL);
+                break;
+            }
+            case UNIT_OP_PREPARE_CALL: {
+                if (op->argument < 0 || op->argument > _UNIT_Vector_SIZE(stack)) {
+                    return invalid(builder, "invalid call argument count");
+                }
+
+                ITEM(arguments, _UNIT_TYPE_CONSTANT, 0, NULL);
+                arguments->call_args = _UNIT_Vector_New(translation->context, op->argument, NULL);
+                if (arguments->call_args == NULL) {
+                    return _UNIT_FAIL;
+                }
+
+                arguments->type = _UNIT_TYPE_CALL_ARGS;
+                for (UNIT_Size arg = 0; arg < op->argument; ++arg) {
+                    _UNIT_Vector_APPEND(arguments->call_args, _UNIT_Vector_Pop(stack));
+                }
+
+                _UNIT_Vector_Reverse(arguments->call_args);
+                CHECK(_UNIT_Vector_Append(stack, arguments));
+                break;
+            }
+            case UNIT_OP_CALL_NAME:
+            case UNIT_OP_CALL_PROCEDURE: {
+                const char *symbol_name;
+                if (op->instruction == UNIT_OP_CALL_NAME) {
+                    if (!_UNIT_Vector_INDEX_IS_VALID(&procedure->_symbols, op->argument)) {
+                        return invalid(builder, "invalid call symbol");
+                    }
+
+                    symbol_name = _UNIT_Vector_GET(&procedure->_symbols, op->argument);
+                } else {
+                    if (!_UNIT_Vector_INDEX_IS_VALID(&procedure->_subprocedures, op->argument)) {
+                        return invalid(builder, "invalid subprocedure");
+                    }
+
+                    UNIT_Procedure *callee = _UNIT_Vector_GET(&procedure->_subprocedures,
+                                                              op->argument);
+                    symbol_name = callee->name;
+                }
+
+                ITEM(symbol, _UNIT_TYPE_CONSTANT, op->argument, symbol_name);
+                POP(arguments);
+                if (arguments->type != _UNIT_TYPE_CALL_ARGS) {
+                    return invalid(builder, "call requires prepared arguments");
+                }
+
+                RESULT(_UNIT_I_CALL_SYMBOL, symbol, arguments);
+                break;
+            }
+            case UNIT_OP_COMPARE_EQUAL:
+            case UNIT_OP_COMPARE_NOT_EQUAL:
+            case UNIT_OP_COMPARE_LESS:
+            case UNIT_OP_COMPARE_LESS_EQUAL:
+            case UNIT_OP_COMPARE_GREATER:
+            case UNIT_OP_COMPARE_GREATER_EQUAL: {
+                POP(right);
+                POP(left);
+                ITEM(comparison, _UNIT_TYPE_COMPARISON, 0, NULL);
+                comparison->comparison.type = op->instruction;
+                comparison->comparison.left = left;
+                comparison->comparison.right = right;
+                CHECK(_UNIT_Vector_Append(stack, comparison));
+                break;
+            }
+            case UNIT_OP_COPY: {
+                UNIT_Size depth = _UNIT_Vector_SIZE(stack);
+                if (op->argument < 0 || op->argument >= depth) {
+                    return invalid(builder, "invalid COPY depth");
+                }
+
+                CHECK(_UNIT_Vector_Append(stack,
+                                          _UNIT_Vector_GET(stack, depth - op->argument - 1)));
+                break;
+            }
+            case UNIT_OP_SWAP: {
+                UNIT_Size top = _UNIT_Vector_SIZE(stack) - 1;
+                if (op->argument <= 0 || op->argument > top) {
+                    return invalid(builder, "invalid SWAP depth");
+                }
+
+                void *saved = stack->items[top];
+                stack->items[top] = stack->items[top - op->argument];
+                stack->items[top - op->argument] = saved;
+                break;
+            }
+            case UNIT_OP_POP: {
+                POP(unused);
+                (void)unused;
+                break;
+            }
+            case UNIT_OP_READ_BYTES:
+            case UNIT_OP_WRITE_BYTES: {
+                if (op->argument != 1 && op->argument != 2 && op->argument != 4 &&
+                    op->argument != 8) {
+                    return invalid(builder, "memory access must use 1, 2, 4 or 8 bytes");
+                }
+
+                ITEM(width, _UNIT_TYPE_CONSTANT, op->argument, NULL);
+                if (op->instruction == UNIT_OP_READ_BYTES) {
+                    POP(address);
+                    RESULT(_UNIT_I_READ_BYTES, address, width);
+                } else {
+                    POP(value);
+                    POP(address);
+                    EMIT(_UNIT_I_WRITE_BYTES,
+                         _UNIT_MachineDestination_FromInput(address),
+                         value,
+                         width);
+                }
+
+                break;
+            }
+            case UNIT_OP_CONVERT: {
+                if (op->argument < UNIT_TYPE_INT8 || op->argument > UNIT_TYPE_UINT64) {
+                    return invalid(builder, "invalid integer conversion type");
+                }
+
+                POP(value);
+                ITEM(type, _UNIT_TYPE_CONSTANT, op->argument, integer_type_name(op->argument));
+                RESULT(_UNIT_I_CONVERT, value, type);
+                break;
+            }
+        }
+    }
+    if (_UNIT_Vector_SIZE(&block->successors) == 0 && _UNIT_Vector_SIZE(stack) != 0) {
+        return invalid(builder, "procedure does not consume entire stack");
+    }
+
+#undef CHECK
+#undef ITEM
+#undef POP
+#undef EMIT
+#undef RESULT
+    return _UNIT_OK;
+}
+
+static void
+replace_item(_UNIT_MachineItem **item, _UNIT_MachineItem *from, _UNIT_MachineItem *to)
+{
+    if (*item == from) {
+        *item = to;
+    } else if (*item != NULL && (*item)->type == _UNIT_TYPE_CALL_ARGS) {
+        _UNIT_Vector *args = (*item)->call_args;
+        for (UNIT_Size index = 0; index < _UNIT_Vector_SIZE(args); ++index) {
+            _UNIT_MachineItem *arg = _UNIT_Vector_GET(args, index);
+            replace_item(&arg, from, to);
+            args->items[index] = arg;
+        }
+    } else if (*item != NULL && (*item)->type == _UNIT_TYPE_PHI_ARGS) {
+        _UNIT_Vector *args = (*item)->phi_args;
+        for (UNIT_Size index = 0; index < _UNIT_Vector_SIZE(args); ++index) {
+            _UNIT_PhiInput *arg = _UNIT_Vector_GET(args, index);
+            replace_item(&arg->value, from, to);
+        }
+    }
+}
+
+static void
+replace_uses(_UNIT_Translation *translation, _UNIT_MachineItem *from, _UNIT_MachineItem *to)
+{
+    for (UNIT_Size index = 0; index < _UNIT_Vector_SIZE(&translation->blocks); ++index) {
+        _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks, index);
+        _UNIT_Vector *vectors[] = {&block->phis, &block->instructions};
+        for (UNIT_Size v = 0; v < 2; ++v) {
+            for (UNIT_Size i = 0; i < _UNIT_Vector_SIZE(vectors[v]); ++i) {
+                _UNIT_MachineOperation *op = _UNIT_Vector_GET(vectors[v], i);
+                replace_item(&op->argument_1, from, to);
+                replace_item(&op->argument_2, from, to);
+                if (_UNIT_MachineDestination_IsInput(op->destination)) {
+                    _UNIT_MachineItem *input = _UNIT_MachineDestination_GetPointer(op->destination);
+                    replace_item(&input, from, to);
+                    op->destination = _UNIT_MachineDestination_FromInput(input);
+                }
+            }
+        }
+    }
+}
+
+static void
+simplify_phis(_UNIT_Translation *translation)
+{
+    int8_t changed;
+    do {
+        changed = 0;
+        for (UNIT_Size b = 0; b < _UNIT_Vector_SIZE(&translation->blocks); ++b) {
+            _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks, b);
+            for (UNIT_Size i = 0; i < _UNIT_Vector_SIZE(&block->phis);) {
+                _UNIT_MachineOperation *phi = _UNIT_Vector_GET(&block->phis, i);
+                _UNIT_MachineItem *destination =
+                    _UNIT_MachineDestination_GetPointer(phi->destination);
+                _UNIT_MachineItem *same = NULL;
+                int8_t trivial = 1;
+                _UNIT_Vector *inputs = phi->argument_1->phi_args;
+                for (UNIT_Size j = 0; j < _UNIT_Vector_SIZE(inputs); ++j) {
+                    _UNIT_PhiInput *input = _UNIT_Vector_GET(inputs, j);
+                    if (input->value == destination) {
+                        continue;
+                    }
+
+                    if (same != NULL && same != input->value
+                        && !(same->type == _UNIT_TYPE_CONSTANT
+                             && input->value->type == _UNIT_TYPE_CONSTANT
+                             && same->value == input->value->value)) {
+                        trivial = 0;
+                        break;
+                    }
+
+                    same = input->value;
+                }
+
+                if (!trivial || same == NULL) {
+                    ++i;
+                    continue;
+                }
+
+                replace_uses(translation, destination, same);
+                _UNIT_Dealloc(translation->context, phi);
+                for (UNIT_Size j = i + 1; j < _UNIT_Vector_SIZE(&block->phis); ++j) {
+                    block->phis.items[j - 1] = block->phis.items[j];
+                }
+
+                --block->phis.length;
+                changed = 1;
+            }
+        }
+    } while (changed);
+}
+
+static UNIT_Status
+translate_cfg(Builder *builder)
+{
+    _UNIT_Vector queue;
+    if (UNIT_FAILED(_UNIT_Vector_Init(&queue,
+                                      builder->translation->context,
+                                      _UNIT_Vector_SIZE(&builder->states),
+                                      NULL))) {
         return _UNIT_FAIL;
     }
 
-    return _UNIT_OK;
-}
-
-LocalState *
-create_new_local(LocalVariables *locals,
-                 int32_t name,
-                 UNIT_Size id)
-{
-    assert(locals != NULL);
-    // Technically the name could be negative so we won't assert here.
-    assert(id >= 0);
-    UNIT_Context *context = locals->context;
-    int32_t *copy = _UNIT_Alloc(context, sizeof(int32_t));
-    if (copy == NULL) {
-        return NULL;
-    }
-
-    *copy = name;
-
-    LocalState *local_state = _UNIT_Alloc(context, sizeof(LocalState));
-    if (local_state == NULL) {
-        _UNIT_Dealloc(context, copy);
-        return NULL;
-    }
-
-    local_state->location_id = id;
-    local_state->stack_slot = -1;
-
-    if (UNIT_FAILED(_UNIT_Map_Set(&locals->locals_map, copy, local_state))) {
-        _UNIT_Dealloc(context, copy);
-        _UNIT_Dealloc(context, local_state);
-        return NULL;
-    }
-
-    return local_state;
-}
-
-LocalState *
-get_local(LocalVariables *locals,
-          int32_t name)
-{
-    assert(locals != NULL);
-    LocalState *local_state = _UNIT_Map_Get(&locals->locals_map, &name);
-    return local_state;
-}
-
-void
-LocalVariables_Clear(LocalVariables *locals)
-{
-    _UNIT_Map_Clear(&locals->locals_map);
-}
-
-typedef struct {
-    UNIT_Size label_id;
-    UNIT_Size index;
-    UNIT_Size location_id;
-    int8_t is_stack;
-} Snapshot;
-
-static UNIT_Status
-snapshot_locals(LocalVariables *locals,
-                _UNIT_Vector *snapshots,
-                UNIT_Size label_id)
-{
-    assert(locals != NULL);
-    assert(snapshots != NULL);
-    _UNIT_Map_ITER(&locals->locals_map, key, value) {
-        assert(key != NULL);
-        assert(value != NULL);
-        int32_t local_index = *(int32_t *)key;
-        assert(local_index >= 0);
-        LocalState *state = (LocalState *)value;
-        Snapshot *snapshot = _UNIT_Alloc(locals->context,
-                                         sizeof(Snapshot));
-        if (snapshot == NULL) {
-            return _UNIT_FAIL;
+    BlockState *entry = _UNIT_Vector_GET(&builder->states, 0);
+    entry->queued = 1;
+    _UNIT_Vector_APPEND(&queue, entry);
+    for (UNIT_Size index = 0; index < _UNIT_Vector_SIZE(&queue); ++index) {
+        BlockState *state = _UNIT_Vector_GET(&queue, index);
+        if (UNIT_FAILED(translate_block(builder, state))) {
+            goto error;
         }
 
-        snapshot->label_id = label_id;
-        snapshot->index = local_index;
-        snapshot->location_id = state->location_id;
-        snapshot->is_stack = 0;
-        if (UNIT_FAILED(_UNIT_Vector_Append(snapshots, snapshot))) {
-            return _UNIT_FAIL;
-        }
-    }
-    _UNIT_Map_END_ITER();
-
-    return _UNIT_OK;
-}
-
-static UNIT_Status
-handle_jump_snapshot(_UNIT_Translation *translation,
-                     LocalVariables *locals,
-                     _UNIT_Vector *stack,
-                     _UNIT_Vector *snapshots,
-                     _UNIT_BasicBlock *current_block,
-                     UNIT_Size label_id,
-                     UNIT_Size *unique_id)
-{
-    int8_t found_snapshot = 0;
-    UNIT_Size snap_count = _UNIT_Vector_SIZE(snapshots);
-    for (UNIT_Size index = 0; index < snap_count; ++index) {
-        Snapshot *snap = _UNIT_Vector_GET(snapshots, index);
-        if (snap->label_id != label_id) {
-            continue;
-        }
-
-        found_snapshot = 1;
-        UNIT_Size current_location;
-        if (snap->is_stack) {
-            if (snap->index >= _UNIT_Vector_SIZE(stack)) {
+        for (UNIT_Size edge = 0; edge < _UNIT_Vector_SIZE(&state->block->successors); ++edge) {
+            _UNIT_BasicBlock *successor = _UNIT_Vector_GET(&state->block->successors, edge);
+            BlockState *next = _UNIT_Vector_GET(&builder->states, successor->id);
+            if (next->queued) {
                 continue;
             }
 
-            _UNIT_MachineItem *item = _UNIT_Vector_GET(stack, snap->index);
-            if (item->type == _UNIT_TYPE_LOCATION) {
-                current_location = item->value;
-            } else {
-                _UNIT_MachineItem *dest = new_machine_item(translation,
-                                                           _UNIT_TYPE_LOCATION,
-                                                           snap->location_id,
-                                                           NULL);
-                if (dest == NULL) {
-                    return _UNIT_FAIL;
+            next->queued = 1;
+            for (UNIT_Size i = 0; i < _UNIT_Vector_SIZE(&state->stack); ++i) {
+                _UNIT_MachineItem *value = make_stack_entry(builder,
+                                                            next,
+                                                            _UNIT_Vector_GET(&state->stack, i));
+                if (value == NULL || UNIT_FAILED(_UNIT_Vector_Append(&next->entry_stack, value))
+                    || UNIT_FAILED(_UNIT_Vector_Append(&next->stack, value))) {
+                    goto error;
                 }
-
-                if (UNIT_FAILED(emit_machine_instruction(translation->context,
-                                                         current_block,
-                                                         _UNIT_I_LOAD,
-                                                         _UNIT_MachineDestination_FromDestination(
-                                                             dest),
-                                                         item,
-                                                         NULL))) {
-                    return _UNIT_FAIL;
-                }
-
-                continue;
-            }
-        } else {
-            LocalState *state = get_local(locals, snap->index);
-            if (state == NULL) {
-                continue;
             }
 
-            current_location = state->location_id;
-        }
-
-        if (current_location == snap->location_id) {
-            continue;
-        }
-
-        _UNIT_MachineItem *dest = new_machine_item(translation,
-                                                   _UNIT_TYPE_LOCATION,
-                                                   snap->location_id,
-                                                   NULL);
-        if (dest == NULL) {
-            return _UNIT_FAIL;
-        }
-
-        _UNIT_MachineItem *src = new_machine_item(translation,
-                                                  _UNIT_TYPE_LOCATION,
-                                                  current_location,
-                                                  NULL);
-        if (src == NULL) {
-            return _UNIT_FAIL;
-        }
-
-        if (UNIT_FAILED(emit_machine_instruction(translation->context,
-                                                 current_block,
-                                                 _UNIT_I_LOAD,
-                                                 _UNIT_MachineDestination_FromDestination(dest),
-                                                 src,
-                                                 NULL))) {
-            return _UNIT_FAIL;
+            _UNIT_Vector_APPEND(&queue, next);
         }
     }
 
-    if (!found_snapshot) {
-        if (UNIT_FAILED(snapshot_locals(locals, snapshots, label_id))) {
-            return _UNIT_FAIL;
-        }
-
-        UNIT_Size depth = _UNIT_Vector_SIZE(stack);
-        for (UNIT_Size index = 0; index < depth; ++index) {
-            _UNIT_MachineItem *item = _UNIT_Vector_GET(stack, index);
-            // We need to turn non-locations into locations so we can move them later
-            if (item->type != _UNIT_TYPE_LOCATION) {
-                ++(*unique_id);
-                _UNIT_MachineItem *dest = create_new_location(translation,
-                                                              current_block,
-                                                              *unique_id);
-                if (dest == NULL) {
-                    return _UNIT_FAIL;
-                }
-
-                if (UNIT_FAILED(emit_machine_instruction(translation->context,
-                                                         current_block,
-                                                         _UNIT_I_LOAD,
-                                                         _UNIT_MachineDestination_FromDestination(
-                                                             dest),
-                                                         item,
-                                                         NULL))) {
-                    return _UNIT_FAIL;
-                }
-
-                _UNIT_Vector_SET(stack, index, dest);
-                item = dest;
+    for (UNIT_Size index = 0; index < _UNIT_Vector_SIZE(&queue); ++index) {
+        BlockState *state = _UNIT_Vector_GET(&queue, index);
+        for (UNIT_Size edge = 0; edge < _UNIT_Vector_SIZE(&state->block->predecessors); ++edge) {
+            _UNIT_BasicBlock *pred = _UNIT_Vector_GET(&state->block->predecessors, edge);
+            BlockState *previous = _UNIT_Vector_GET(&builder->states, pred->id);
+            if (_UNIT_Vector_SIZE(&state->entry_stack) != _UNIT_Vector_SIZE(&previous->stack)) {
+                invalid(builder, "inconsistent stack depth at control-flow merge");
+                goto error;
             }
 
-            assert(item->type == _UNIT_TYPE_LOCATION);
-            Snapshot *snapshot = _UNIT_Alloc(translation->context,
-                                             sizeof(Snapshot));
-            if (snapshot == NULL) {
-                return _UNIT_FAIL;
-            }
-
-            snapshot->label_id = label_id;
-            snapshot->index = index;
-            snapshot->location_id = item->value;
-            snapshot->is_stack = 1;
-            if (UNIT_FAILED(_UNIT_Vector_Append(snapshots, snapshot))) {
-                return _UNIT_FAIL;
+            for (UNIT_Size i = 0; i < _UNIT_Vector_SIZE(&state->entry_stack); ++i) {
+                if (UNIT_FAILED(merge_stack_entry(builder,
+                                                  state,
+                                                  pred,
+                                                  _UNIT_Vector_GET(&state->entry_stack, i),
+                                                  _UNIT_Vector_GET(&previous->stack, i)))) {
+                    goto error;
+                }
             }
         }
     }
 
+    // read_local can append additional pending PHIs. Caching each definition
+    // before visiting predecessors makes this work for cyclic and irreducible CFGs.
+    for (UNIT_Size index = 0; index < _UNIT_Vector_SIZE(&builder->pending_locals); ++index) {
+        PendingLocal *pending = _UNIT_Vector_GET(&builder->pending_locals, index);
+        _UNIT_Vector *predecessors = &pending->state->block->predecessors;
+        for (UNIT_Size edge = 0; edge < _UNIT_Vector_SIZE(predecessors); ++edge) {
+            _UNIT_BasicBlock *pred = _UNIT_Vector_GET(predecessors, edge);
+            BlockState *previous = _UNIT_Vector_GET(&builder->states, pred->id);
+            _UNIT_MachineItem *value = read_local(builder, previous, pending->local);
+            if (value == NULL || UNIT_FAILED(add_phi_input(pending->phi, pred, value))) {
+                goto error;
+            }
+        }
+    }
+
+    _UNIT_Vector_Clear(&queue);
     return _UNIT_OK;
+error:
+    _UNIT_Vector_Clear(&queue);
+    return _UNIT_FAIL;
 }
 
 UNIT_Status
-_UNIT_Translate(_UNIT_Translation *translation,
-                const UNIT_Procedure *procedure)
+_UNIT_Translate(_UNIT_Translation *translation, const UNIT_Procedure *procedure)
 {
-    assert(translation != NULL);
-    assert(procedure != NULL);
     UNIT_Context *context = procedure->context;
-    translation->context = context;
-    translation->item_list_head = NULL;
-
-    _UNIT_Vector stack;
-    if (UNIT_FAILED(_UNIT_Vector_Init(&stack, context, 16, NULL))) {
-        return _UNIT_FAIL;
-    }
-
-    LocalVariables locals;
-    if (UNIT_FAILED(LocalVariables_Init(&locals, context))) {
-        _UNIT_Vector_Clear(&stack);
-        return _UNIT_FAIL;
-    }
-
+    *translation = (_UNIT_Translation) {.context = context};
     if (UNIT_FAILED(_UNIT_Map_Init(&translation->strings,
                                    context,
                                    8,
@@ -881,834 +1354,96 @@ _UNIT_Translate(_UNIT_Translation *translation,
                                    _UNIT_Map_HashDirect,
                                    NULL,
                                    _UNIT_Dealloc))) {
-        _UNIT_Vector_Clear(&stack);
-        LocalVariables_Clear(&locals);
         return _UNIT_FAIL;
     }
 
-    if (UNIT_FAILED(_UNIT_Vector_Init(&translation->blocks,
-                                      context,
-                                      16,
-                                      _UNIT_BasicBlock_Free))) {
-        _UNIT_Vector_Clear(&stack);
+    if (UNIT_FAILED(_UNIT_Vector_Init(&translation->blocks, context, 16, _UNIT_BasicBlock_Free))) {
         _UNIT_Map_Clear(&translation->strings);
-        LocalVariables_Clear(&locals);
         return _UNIT_FAIL;
     }
 
-    _UNIT_SizeSet address_taken_locals;
-    if (UNIT_FAILED(_UNIT_SizeSet_Init(&address_taken_locals, context, 8))) {
-        _UNIT_Vector_Clear(&stack);
-        _UNIT_Map_Clear(&translation->strings);
-        LocalVariables_Clear(&locals);
-        _UNIT_Vector_Clear(&translation->blocks);
-        return _UNIT_FAIL;
+    Builder builder = {.procedure = procedure, .translation = translation};
+    if (UNIT_FAILED(_UNIT_Vector_Init(&builder.states, context, 16, free_block_state))) {
+        goto translation_error;
     }
 
-    _UNIT_Vector locals_snapshots;
-    if (UNIT_FAILED(_UNIT_Vector_Init(&locals_snapshots,
-                                      context,
-                                      16,
-                                      _UNIT_Dealloc))) {
-        _UNIT_Vector_Clear(&stack);
-        _UNIT_Map_Clear(&translation->strings);
-        LocalVariables_Clear(&locals);
-        _UNIT_Vector_Clear(&translation->blocks);
-        _UNIT_SizeSet_Clear(&address_taken_locals);
-        return _UNIT_FAIL;
+    if (UNIT_FAILED(_UNIT_Vector_Init(&builder.pending_locals, context, 16, _UNIT_Dealloc))) {
+        goto states_error;
     }
 
-    _UNIT_Vector jump_labels;
-    if (UNIT_FAILED(_UNIT_Vector_Init(&jump_labels,
-                                      context,
-                                      _UNIT_Vector_SIZE(
-                                          &procedure->_jump_labels),
-                                      _UNIT_JumpLabel_Free))) {
-        _UNIT_Vector_Clear(&stack);
-        _UNIT_Map_Clear(&translation->strings);
-        LocalVariables_Clear(&locals);
-        _UNIT_Vector_Clear(&translation->blocks);
-        _UNIT_SizeSet_Clear(&address_taken_locals);
-        _UNIT_Vector_Clear(&locals_snapshots);
-        return _UNIT_FAIL;
+    if (UNIT_FAILED(_UNIT_SizeMap_Init(&builder.labels, context, 8))) {
+        goto pending_error;
     }
 
-    UNIT_Size size = _UNIT_Vector_SIZE(&procedure->_instructions);
+    if (UNIT_FAILED(_UNIT_SizeMap_Init(&builder.locals, context, 8))) {
+        goto labels_error;
+    }
 
-    // TODO: This is ugly. We should refactor this out into a more generic
-    // analysis/metadata pass.
-    for (UNIT_Size index = 0; index < size; ++index) {
-        _UNIT_Operation *operation =
-            _UNIT_Vector_GET(&procedure->_instructions, index);
-        assert(operation != NULL);
-        if (operation->instruction == UNIT_OP_ADDRESS_OF) {
-            if (UNIT_FAILED(_UNIT_SizeSet_Add(&address_taken_locals,
-                                              operation->argument))) {
-                goto error;
+    UNIT_Status status = build_cfg(&builder);
+    if (!UNIT_FAILED(status)) {
+        status = translate_cfg(&builder);
+    }
+
+    // Preserve source layout for fallthrough edges, while removing unreachable blocks.
+    if (!UNIT_FAILED(status)) {
+        UNIT_Size length = 0;
+        for (UNIT_Size i = 0; i < _UNIT_Vector_SIZE(&builder.states); ++i) {
+            BlockState *state = _UNIT_Vector_GET(&builder.states, i);
+            if (state->reachable) {
+                translation->blocks.items[length++] = state->block;
+            } else {
+                _UNIT_BasicBlock_Free(context, state->block);
             }
         }
+
+        translation->blocks.length = length;
+        simplify_phis(translation);
+        status = _UNIT_Translation_AnalyzeLiveness(translation);
     }
 
-    // We need to eagerly assign blocks for each jump label so we can resolve
-    // successors immediately
-    if (UNIT_FAILED(create_jump_label_blocks(context,
-                                             &procedure->_jump_labels,
-                                             &jump_labels))) {
-        goto error;
+    if (builder.memory_slots != NULL) {
+        _UNIT_Dealloc(context, builder.memory_slots);
     }
 
-    UNIT_Size _block_id = 0;
-    UNIT_Size _location_id = 0;
-    _UNIT_BasicBlock *_block;
-
-    #define UNIQUE_ID() (++_location_id)
-
-    // Technically these two are redundant, but I think it improves readability.
-    // It also makes refactoring easier if we want to change where these are
-    // stored.
-    #define CURRENT_BLOCK() _block
-
-    #define START_NEW_BLOCK()                                 \
-            _block = push_new_block(translation, &_block_id); \
-            if (_block == NULL) {                             \
-                goto error;                                   \
-            }
-
-    #define START_EXISTING_BLOCK(name)                                \
-            _block = name;                                            \
-            if (UNIT_FAILED(_UNIT_Vector_Append(&translation->blocks, \
-                                                name))) {             \
-                goto error;                                           \
-            }
-
-    #define ADD_BLOCK_SUCCESSOR(block, name)                        \
-            if (UNIT_FAILED(_UNIT_Vector_Append(&block->successors, \
-                                                name))) {           \
-                goto error;                                         \
-            }
-
-    #define PUSH_ITEM(item)                                       \
-            if (UNIT_FAILED(_UNIT_Vector_Append(&stack, item))) { \
-                goto error;                                       \
-            }
-
-    #define PUSH_NEW(tp, val)                                       \
-            _UNIT_MachineItem *item = new_machine_item(translation, \
-                                                       tp,          \
-                                                       val,         \
-                                                       NULL);       \
-            if (item == NULL) {                                     \
-                goto error;                                         \
-            }                                                       \
-            PUSH_ITEM(item);
-
-    #define POP_TO_VAR(varname)                                     \
-            _UNIT_MachineItem *varname = stack_pop(CURRENT_BLOCK(), \
-                                                   &stack,          \
-                                                   operation);      \
-            if (varname == NULL) {                                  \
-                goto error;                                         \
-            }
-
-    #define ARGUMENT_TO_ITEM(name, type)                                    \
-            _UNIT_MachineItem *name = new_machine_item(translation,         \
-                                                       type,                \
-                                                       operation->argument, \
-                                                       NULL);               \
-            if (name == NULL) {                                             \
-                goto error;                                                 \
-            }
-
-    #define EMIT_EMPTY(inst)                                                        \
-            if (UNIT_FAILED(emit_machine_instruction(context,                       \
-                                                     CURRENT_BLOCK(),               \
-                                                     inst,                          \
-                                                     _UNIT_MachineDestination_NULL, \
-                                                     NULL,                          \
-                                                     NULL))) {                      \
-                goto error;                                                         \
-            }
-
-    #define EMIT_ONE(inst, arg1)                                                    \
-            if (UNIT_FAILED(emit_machine_instruction(context,                       \
-                                                     CURRENT_BLOCK(),               \
-                                                     inst,                          \
-                                                     _UNIT_MachineDestination_NULL, \
-                                                     arg1,                          \
-                                                     NULL))) {                      \
-                goto error;                                                         \
-            }
-
-    #define EMIT_DEST(inst, dest)                                                                    \
-            if (UNIT_FAILED(emit_machine_instruction(context,                                        \
-                                                     CURRENT_BLOCK(),                                \
-                                                     inst,                                           \
-                                                     _UNIT_MachineDestination_FromDestination(dest), \
-                                                     NULL,                                           \
-                                                     NULL))) {                                       \
-                goto error;                                                                          \
-            }
-
-    #define EMIT_DEST_ONE(inst, dest, arg1)                                                          \
-            if (UNIT_FAILED(emit_machine_instruction(context,                                        \
-                                                     CURRENT_BLOCK(),                                \
-                                                     inst,                                           \
-                                                     _UNIT_MachineDestination_FromDestination(dest), \
-                                                     arg1,                                           \
-                                                     NULL))) {                                       \
-                goto error;                                                                          \
-            }
-
-    #define EMIT_DEST_TWO(inst, dest, arg1, arg2)                                                    \
-            if (UNIT_FAILED(emit_machine_instruction(context,                                        \
-                                                     CURRENT_BLOCK(),                                \
-                                                     inst,                                           \
-                                                     _UNIT_MachineDestination_FromDestination(dest), \
-                                                     arg1,                                           \
-                                                     arg2))) {                                       \
-                goto error;                                                                          \
-            }
-
-    #define EMIT_THREE(inst, arg1, arg2, arg3)                                                 \
-            if (UNIT_FAILED(emit_machine_instruction(context,                                  \
-                                                     CURRENT_BLOCK(),                          \
-                                                     inst,                                     \
-                                                     _UNIT_MachineDestination_FromInput(arg1), \
-                                                     arg2,                                     \
-                                                     arg3))) {                                 \
-                goto error;                                                                    \
-            }
-
-    #define CREATE_DESTINATION(name)                                       \
-            _UNIT_MachineItem *name = create_new_location(translation,     \
-                                                          CURRENT_BLOCK(), \
-                                                          UNIQUE_ID());    \
-            if (name == NULL) {                                            \
-                goto error;                                                \
-            }                                                              \
-            PUSH_ITEM(name);
-
-    #define INST_CHECK(condition, message)                               \
-            if (!(condition)) {                                          \
-                _UNIT_SetErrorFormat(_block->context,                    \
-                                     UNIT_ERROR_INVALID_USAGE,           \
-                                     "error at %s (index %d): " message, \
-                                     UNIT_OperationCode_GetName(         \
-                                         operation->instruction),        \
-                                     index);                             \
-                goto error;                                              \
-            }
-
-    #define INST_CHECK_FMT(condition, message, ...)                      \
-            if (!(condition)) {                                          \
-                _UNIT_SetErrorFormat(_block->context,                    \
-                                     UNIT_ERROR_INVALID_USAGE,           \
-                                     "error at %s (index %d): " message, \
-                                     UNIT_OperationCode_GetName(         \
-                                         operation->instruction),        \
-                                     index,                              \
-                                     __VA_ARGS__);                       \
-                goto error;                                              \
-            }
-
-    #define INST_CHECK_OPARG(condition, message) \
-            INST_CHECK_FMT(condition,            \
-                           message,              \
-                           operation->argument)
-
-    #define TAKE_SNAPSHOT()                                         \
-            if (UNIT_FAILED(handle_jump_snapshot(translation,       \
-                                                 &locals,           \
-                                                 &stack,            \
-                                                 &locals_snapshots, \
-                                                 CURRENT_BLOCK(),   \
-                                                 label->id,         \
-                                                 &_location_id))) { \
-                goto error;                                         \
-            }
-
-    START_NEW_BLOCK();
-
-    for (UNIT_Size index = 0; index < size; ++index) {
-        _UNIT_Operation *operation =
-            _UNIT_Vector_GET(&procedure->_instructions, index);
-        switch (operation->instruction) {
-            /* Constants */
-
-            case UNIT_OP_LOAD_INTEGER: {
-                PUSH_NEW(_UNIT_TYPE_CONSTANT, operation->argument);
-                break;
-            }
-
-            case UNIT_OP_LOAD_STRING: {
-                const char *text =
-                    _UNIT_Vector_GET(&procedure->_global_strings,
-                                     operation->argument);
-                INST_CHECK_OPARG(text != NULL, "%d is not a known string ID");
-                _UNIT_MachineItem *result = new_machine_item(translation,
-                                                             _UNIT_TYPE_CONSTANT,
-                                                             operation->
-                                                             argument,
-                                                             text);
-                if (result == NULL) {
-                    goto error;
-                }
-
-                CREATE_DESTINATION(destination);
-                EMIT_DEST_ONE(_UNIT_I_LOAD_STRING, destination, result);
-                break;
-            }
-
-            /* Variables */
-
-            case _UNIT_OP_STORE_LOCAL_NAME:
-            case UNIT_OP_STORE_LOCAL: {
-                const char *hint = NULL;
-                if (operation->instruction == _UNIT_OP_STORE_LOCAL_NAME) {
-                    hint = _UNIT_Vector_GET(&procedure->_local_variables,
-                                            operation->argument);
-                }
-
-                UNIT_Size location_id = UNIQUE_ID();
-                LocalState *local_state = create_new_local(&locals,
-                                                           operation->argument,
-                                                           location_id);
-                if (local_state == NULL) {
-                    goto error;
-                }
-
-                _UNIT_MachineItem *location = create_new_location(translation,
-                                                                  CURRENT_BLOCK(),
-                                                                  location_id);
-                if (location == NULL) {
-                    goto error;
-                }
-
-                if (hint != NULL) {
-                    location->hint = _UNIT_StrDup(context, hint);
-                    if (location->hint == NULL) {
-                        goto error;
-                    }
-                }
-
-                POP_TO_VAR(item);
-                EMIT_DEST_ONE(_UNIT_I_LOAD, location, item);
-
-                if (_UNIT_SizeSet_Contains(&address_taken_locals,
-                                           operation->argument)) {
-                    local_state->stack_slot = locals.next_stack_slot++;
-                    _UNIT_MachineItem *slot = new_machine_item(translation,
-                                                               _UNIT_TYPE_MEMORY,
-                                                               local_state->
-                                                               stack_slot,
-                                                               hint);
-                    if (slot == NULL) {
-                        if (location->hint != NULL) {
-                            _UNIT_Dealloc(context, location->hint);
-                        }
-
-                        goto error;
-                    }
-
-                    // Sharing machine items is probably not a great idea but it's
-                    // not causing any problems at the moment. We can easily make
-                    // a copy of the location later if we need to.
-                    EMIT_DEST_ONE(_UNIT_I_LOAD, slot, location);
-                }
-
-                break;
-            }
-
-            case _UNIT_OP_LOAD_LOCAL_NAME:
-            case UNIT_OP_LOAD_LOCAL: {
-                LocalState *local_state = get_local(&locals,
-                                                    operation->argument);
-                INST_CHECK_OPARG(local_state != NULL,
-                                 "local variable %d not assigned");
-
-                const char *hint = NULL;
-                if (operation->instruction == _UNIT_OP_LOAD_LOCAL_NAME) {
-                    hint = _UNIT_Vector_GET(&procedure->_local_variables,
-                                            operation->argument);
-                }
-
-                _UNIT_MachineItem *location = new_machine_item(translation,
-                                                               _UNIT_TYPE_LOCATION,
-                                                               local_state->
-                                                               location_id,
-                                                               hint);
-                if (location == NULL) {
-                    goto error;
-                }
-
-                if (local_state->stack_slot != -1) {
-                    _UNIT_MachineItem *slot = new_machine_item(translation,
-                                                               _UNIT_TYPE_MEMORY,
-                                                               local_state->
-                                                               stack_slot,
-                                                               hint);
-                    if (slot == NULL) {
-                        goto error;
-                    }
-
-                    EMIT_DEST_ONE(_UNIT_I_LOAD, location, slot);
-                }
-
-                PUSH_ITEM(location);
-                break;
-            }
-
-                /* Arithmetic */
-
-#define BINARY_OPERATION(opcode, inst)                         \
-        case opcode: {                                         \
-                POP_TO_VAR(right);                             \
-                POP_TO_VAR(left);                              \
-                CREATE_DESTINATION(destination);               \
-                EMIT_DEST_TWO(inst, destination, left, right); \
-                break;                                         \
-        }
-
-                BINARY_OPERATION(UNIT_OP_ADD, _UNIT_I_ADD);
-                BINARY_OPERATION(UNIT_OP_SUBTRACT, _UNIT_I_SUB);
-                BINARY_OPERATION(UNIT_OP_MULTIPLY, _UNIT_I_MUL);
-                BINARY_OPERATION(UNIT_OP_DIVIDE, _UNIT_I_DIV);
-                BINARY_OPERATION(UNIT_OP_MODULO, _UNIT_I_MOD);
-
-#undef BINARY_OPERATION
-
-            /* Jumps */
-
-
-            case _UNIT_OP_JUMP_MARKER: {
-                UNIT_JumpLabel *label;
-                _UNIT_MachineItem *item = get_jump_target_item(translation,
-                                                               &jump_labels,
-                                                               operation->
-                                                               argument,
-                                                               &label);
-                if (item == NULL) {
-                    goto error;
-                }
-
-                _UNIT_BasicBlock *block = label->_block;
-                block->id = _block_id++;
-                block->label_id = label->id;
-
-                // Restore locations from forward-jump snapshot if one exists
-                int8_t found_snapshot = 0;
-                UNIT_Size snap_count = _UNIT_Vector_SIZE(&locals_snapshots);
-                for (UNIT_Size index = 0; index < snap_count; ++index) {
-                    Snapshot *snap = _UNIT_Vector_GET(&locals_snapshots,
-                                                      index);
-                    if (snap->label_id != label->id) {
-                        continue;
-                    }
-
-                    found_snapshot = 1;
-                    if (snap->is_stack) {
-                        if (snap->index < _UNIT_Vector_SIZE(&stack)) {
-                            _UNIT_MachineItem *new_item =
-                                new_machine_item(translation,
-                                                 _UNIT_TYPE_LOCATION,
-                                                 snap->
-                                                 location_id,
-                                                 NULL);
-                            if (new_item == NULL) {
-                                goto error;
-                            }
-
-                            _UNIT_Vector_SET(&stack, snap->index, new_item);
-                        }
-                    } else {
-                        LocalState *state = get_local(&locals, snap->index);
-                        if (state != NULL) {
-                            state->location_id = snap->location_id;
-                        }
-                    }
-                }
-
-                if (!found_snapshot) {
-                    TAKE_SNAPSHOT();
-                }
-
-                // The jump label succeeds the current block because it fell
-                // through.
-                ADD_BLOCK_SUCCESSOR(CURRENT_BLOCK(), block);
-                START_EXISTING_BLOCK(block);
-                EMIT_DEST(_UNIT_I_JUMP_LABEL, item);
-                break;
-            }
-
-            case UNIT_OP_JUMP: {
-                UNIT_JumpLabel *label;
-                _UNIT_MachineItem *item = get_jump_target_item(translation,
-                                                               &jump_labels,
-                                                               operation->
-                                                               argument,
-                                                               &label);
-                if (item == NULL) {
-                    goto error;
-                }
-
-                TAKE_SNAPSHOT();
-                EMIT_ONE(_UNIT_I_JUMP, item);
-                ADD_BLOCK_SUCCESSOR(CURRENT_BLOCK(), label->_block);
-                START_NEW_BLOCK();
-                break;
-            }
-
-            case UNIT_OP_JUMP_IF_TRUE:
-            case UNIT_OP_JUMP_IF_FALSE: {
-                POP_TO_VAR(value);
-                if (value->type != _UNIT_TYPE_COMPARISON) {
-                    _UNIT_SetError(context,
-                                   UNIT_ERROR_INVALID_USAGE,
-                                   "JUMP_IF_FALSE/JUMP_IF_TRUE got non-comparison");
-                    goto error;
-                }
-
-                UNIT_JumpLabel *label;
-                _UNIT_MachineItem *jump_target =
-                    get_jump_target_item(translation,
-                                         &
-                                         jump_labels,
-                                         operation
-                                         ->
-                                         argument,
-                                         &label);
-                if (jump_target == NULL) {
-                    goto error;
-                }
-
-                _UNIT_MachineInstruction fused;
-                int8_t invert = (operation->instruction ==
-                                 UNIT_OP_JUMP_IF_FALSE);
-
-                switch (value->comparison.type) {
-                    case UNIT_OP_COMPARE_EQUAL: {
-                        fused =
-                            invert ? _UNIT_I_JUMP_IF_NOT_EQUAL :
-                            _UNIT_I_JUMP_IF_EQUAL;
-                        break;
-                    }
-                    case UNIT_OP_COMPARE_NOT_EQUAL: {
-                        fused =
-                            invert ? _UNIT_I_JUMP_IF_EQUAL :
-                            _UNIT_I_JUMP_IF_NOT_EQUAL;
-                        break;
-                    }
-                    case UNIT_OP_COMPARE_GREATER: {
-                        fused =
-                            invert ? _UNIT_I_JUMP_IF_LESS_EQUAL :
-                            _UNIT_I_JUMP_IF_GREATER;
-                        break;
-                    }
-                    case UNIT_OP_COMPARE_GREATER_EQUAL: {
-                        fused =
-                            invert ? _UNIT_I_JUMP_IF_LESS :
-                            _UNIT_I_JUMP_IF_GREATER_EQUAL;
-                        break;
-                    }
-                    case UNIT_OP_COMPARE_LESS: {
-                        fused =
-                            invert ? _UNIT_I_JUMP_IF_GREATER_EQUAL :
-                            _UNIT_I_JUMP_IF_LESS;
-                        break;
-                    }
-                    case UNIT_OP_COMPARE_LESS_EQUAL: {
-                        fused =
-                            invert ? _UNIT_I_JUMP_IF_GREATER :
-                            _UNIT_I_JUMP_IF_LESS_EQUAL;
-                        break;
-                    }
-                    default: {
-                        _UNIT_Unreachable();
-                    }
-                }
-
-                TAKE_SNAPSHOT();
-                EMIT_THREE(fused,
-                           jump_target,
-                           value->comparison.left,
-                           value->comparison.right);
-                _UNIT_BasicBlock *saved_block = CURRENT_BLOCK();
-                ADD_BLOCK_SUCCESSOR(saved_block, label->_block);
-                START_NEW_BLOCK();
-                ADD_BLOCK_SUCCESSOR(saved_block, CURRENT_BLOCK());
-                break;
-            }
-
-            /* Functions */
-
-            case UNIT_OP_EXIT: {
-                POP_TO_VAR(exit_code);
-                EMIT_DEST(_UNIT_I_EXIT, exit_code);
-                break;
-            }
-
-            case UNIT_OP_RETURN_VALUE: {
-                POP_TO_VAR(value);
-                EMIT_ONE(_UNIT_I_RETURN_VALUE, value);
-                START_NEW_BLOCK();
-                break;
-            }
-
-            case UNIT_OP_LOAD_ARGUMENT: {
-                ARGUMENT_TO_ITEM(index, _UNIT_TYPE_CONSTANT);
-                CREATE_DESTINATION(destination);
-                EMIT_DEST_ONE(_UNIT_I_LOAD_ARGUMENT, destination, index);
-                break;
-            }
-
-            /* Function calls */
-
-            case UNIT_OP_PREPARE_CALL: {
-                _UNIT_Vector *vector = _UNIT_Vector_New(context,
-                                                        operation->argument,
-                                                        NULL);
-                if (vector == NULL) {
-                    goto error;
-                }
-
-                for (UNIT_Size index = 0; index < operation->argument;
-                     ++index) {
-                    POP_TO_VAR(item);
-                    _UNIT_Vector_APPEND(vector, item);
-                }
-
-                // We want arguments to be consumed from left to right
-                _UNIT_Vector_Reverse(vector);
-
-                _UNIT_MachineItem *args = _UNIT_Alloc(context,
-                                                      sizeof(_UNIT_MachineItem));
-                if (args == NULL) {
-                    _UNIT_Vector_Free(vector);
-                    goto error;
-                }
-
-                args->call_args = vector;
-                args->type = _UNIT_TYPE_CALL_ARGS;
-                args->hint = NULL;
-                attach_item_to_translation(translation, args);
-                PUSH_ITEM(args);
-                break;
-            }
-
-            case UNIT_OP_CALL_NAME: {
-                ARGUMENT_TO_ITEM(symbol, _UNIT_TYPE_CONSTANT);
-                symbol->hint = _UNIT_StrDup(context,
-                                            _UNIT_Vector_GET(&procedure->_symbols,
-                                                             operation->argument));
-                if (symbol->hint == NULL) {
-                    goto error;
-                }
-
-                POP_TO_VAR(args);
-                INST_CHECK(args->type == _UNIT_TYPE_CALL_ARGS,
-                           "got non-args item off stack");
-                CREATE_DESTINATION(destination);
-                EMIT_DEST_TWO(_UNIT_I_CALL_SYMBOL, destination, symbol, args);
-                break;
-            }
-
-            case UNIT_OP_CALL_PROCEDURE: {
-                UNIT_Procedure *subprocedure =
-                    _UNIT_Vector_GET(&procedure->_subprocedures,
-                                     operation->argument);
-                assert(subprocedure != NULL);
-                ARGUMENT_TO_ITEM(procedure_id, _UNIT_TYPE_CONSTANT);
-                procedure_id->hint = _UNIT_StrDup(context, subprocedure->name);
-                if (procedure_id->hint == NULL) {
-                    goto error;
-                }
-
-                // TODO: Inlining
-                // if (should_inline(...)) _UNIT_Translate(translation, subprocedure)
-
-                POP_TO_VAR(args);
-                INST_CHECK(args->type == _UNIT_TYPE_CALL_ARGS,
-                           "got non-args item off stack");
-                CREATE_DESTINATION(destination);
-                EMIT_DEST_TWO(_UNIT_I_CALL_SYMBOL,
-                              destination,
-                              procedure_id,
-                              args);
-                break;
-            }
-
-            /* Comparisons */
-
-            case UNIT_OP_COMPARE_EQUAL:
-            case UNIT_OP_COMPARE_NOT_EQUAL:
-            case UNIT_OP_COMPARE_GREATER:
-            case UNIT_OP_COMPARE_GREATER_EQUAL:
-            case UNIT_OP_COMPARE_LESS:
-            case UNIT_OP_COMPARE_LESS_EQUAL: {
-                POP_TO_VAR(right);
-                POP_TO_VAR(left);
-                CREATE_DESTINATION(destination);
-
-                destination->type = _UNIT_TYPE_COMPARISON;
-                destination->comparison.type = operation->instruction;
-                destination->comparison.left = left;
-                destination->comparison.right = right;
-                // We intentionally don't emit any instructions here to allow
-                // for a jump to fuse it the comparison.
-                break;
-            }
-
-            /* Stack manipulation */
-
-            case UNIT_OP_COPY: {
-                UNIT_Size index = _UNIT_Vector_SIZE(&stack) -
-                                  operation->argument -
-                                  1;
-                assert(index >= 0);
-                assert(index < _UNIT_Vector_SIZE(&stack));
-                _UNIT_MachineItem *item = _UNIT_Vector_GET(&stack, index);
-                CREATE_DESTINATION(destination);
-                EMIT_DEST_ONE(_UNIT_I_LOAD, destination, item);
-                break;
-            }
-
-            case UNIT_OP_SWAP: {
-                UNIT_Size top_index = _UNIT_Vector_SIZE(&stack) - 1;
-                UNIT_Size index = top_index - operation->argument;
-                assert(index != top_index);
-                assert(index >= 0);
-                _UNIT_MachineItem *top = _UNIT_Vector_STEAL(&stack, top_index);
-                _UNIT_MachineItem *to_swap = _UNIT_Vector_STEAL(&stack, index);
-                _UNIT_Vector_SET(&stack, index, top);
-                _UNIT_Vector_SET(&stack, top_index, to_swap);
-                break;
-            }
-
-            case UNIT_OP_POP: {
-                POP_TO_VAR(_unused);
-                break;
-            }
-
-            /* Pointers */
-
-            case UNIT_OP_ADDRESS_OF: {
-                LocalState *local_state = get_local(&locals,
-                                                    operation->argument);
-                INST_CHECK_OPARG(local_state != NULL,
-                                 "local variable %d not assigned");
-                assert(local_state->stack_slot != -1);
-
-                _UNIT_MachineItem *value;
-                if (local_state->stack_slot == -1) {
-                    value = new_machine_item(translation,
-                                             _UNIT_TYPE_LOCATION,
-                                             local_state->location_id,
-                                             NULL);
-                } else {
-                    value = new_machine_item(translation,
-                                             _UNIT_TYPE_MEMORY,
-                                             local_state->stack_slot,
-                                             NULL);
-                }
-
-                if (value == NULL) {
-                    goto error;
-                }
-
-                CREATE_DESTINATION(destination);
-                EMIT_DEST_ONE(_UNIT_I_ADDRESS_OF, destination, value);
-                break;
-            }
-
-            case UNIT_OP_READ_BYTES: {
-                INST_CHECK_OPARG(operation->argument > 0,
-                                 "must read at least 1 byte (got %d)");
-                ARGUMENT_TO_ITEM(bytes, _UNIT_TYPE_CONSTANT);
-                POP_TO_VAR(address);
-                CREATE_DESTINATION(destination);
-                EMIT_DEST_TWO(_UNIT_I_READ_BYTES, destination, address, bytes);
-                break;
-            }
-
-            case UNIT_OP_WRITE_BYTES: {
-                INST_CHECK_OPARG(operation->argument > 0,
-                                 "must write at least 1 byte (got %d)");
-                ARGUMENT_TO_ITEM(bytes, _UNIT_TYPE_CONSTANT);
-                POP_TO_VAR(value);
-                POP_TO_VAR(address);
-                if (UNIT_FAILED(mark_last_use(CURRENT_BLOCK(), address))) {
-                    goto error;
-                }
-
-                EMIT_THREE(_UNIT_I_WRITE_BYTES, address, value, bytes);
-                break;
-            }
-
-            case UNIT_OP_CONVERT: {
-                POP_TO_VAR(value);
-                _UNIT_MachineItem *type_item = new_machine_item(translation,
-                                                                _UNIT_TYPE_CONSTANT,
-                                                                operation->
-                                                                argument,
-                                                                integer_type_name(
-                                                                    operation->
-                                                                    argument));
-                if (type_item == NULL) {
-                    goto error;
-                }
-
-                CREATE_DESTINATION(destination);
-                EMIT_DEST_TWO(_UNIT_I_CONVERT, destination, value, type_item);
-                break;
-            }
-        }
+    _UNIT_SizeMap_Clear(&builder.locals);
+    _UNIT_SizeMap_Clear(&builder.labels);
+    _UNIT_Vector_Clear(&builder.pending_locals);
+    _UNIT_Vector_Clear(&builder.states);
+    if (UNIT_FAILED(status)) {
+        _UNIT_Translation_Clear(translation);
     }
 
-    if (_UNIT_Vector_SIZE(&stack) != 0) {
-        _UNIT_SetError(context,
-                       UNIT_ERROR_INVALID_USAGE,
-                       "procedure does not consume entire stack");
-        goto error;
-    }
-
-    _UNIT_Vector_Clear(&stack);
-    LocalVariables_Clear(&locals);
-    _UNIT_SizeSet_Clear(&address_taken_locals);
-    _UNIT_Vector_Clear(&locals_snapshots);
-    _UNIT_Vector_Clear(&jump_labels);
-    // This is so we can determine the size of the frame later
-    translation->num_memory_slots = locals.next_stack_slot;
-    return analyze_liveness(translation);
-error:
-    _UNIT_Vector_Clear(&stack);
-    LocalVariables_Clear(&locals);
-    _UNIT_Map_Clear(&translation->strings);
-    _UNIT_Vector_Clear(&translation->blocks);
-    _UNIT_SizeSet_Clear(&address_taken_locals);
-    _UNIT_Vector_Clear(&locals_snapshots);
-    _UNIT_Vector_Clear(&jump_labels);
+    return status;
+labels_error:
+    _UNIT_SizeMap_Clear(&builder.labels);
+pending_error:
+    _UNIT_Vector_Clear(&builder.pending_locals);
+states_error:
+    _UNIT_Vector_Clear(&builder.states);
+translation_error:
+    _UNIT_Translation_Clear(translation);
     return _UNIT_FAIL;
 }
 
 void
 _UNIT_Translation_Clear(_UNIT_Translation *translation)
 {
-    assert(translation != NULL);
     _UNIT_Map_Clear(&translation->strings);
     _UNIT_Vector_Clear(&translation->blocks);
-
-    _UNIT_MachineItem *head = translation->item_list_head;
-    while (head != NULL) {
-        _UNIT_MachineItem *next = head->next;
-        if (head->type == _UNIT_TYPE_CALL_ARGS) {
-            _UNIT_Vector_Free(head->call_args);
+    _UNIT_MachineItem *item = translation->item_list_head;
+    while (item != NULL) {
+        _UNIT_MachineItem *next = item->next;
+        if (item->type == _UNIT_TYPE_CALL_ARGS) {
+            _UNIT_Vector_Free(item->call_args);
+        } else if (item->type == _UNIT_TYPE_PHI_ARGS) {
+            _UNIT_Vector_Free(item->phi_args);
         }
 
-        if (head->hint != NULL) {
-            _UNIT_Dealloc(translation->context, head->hint);
+        if (item->hint != NULL) {
+            _UNIT_Dealloc(translation->context, item->hint);
         }
 
-        _UNIT_Dealloc(translation->context, head);
-        head = next;
+        _UNIT_Dealloc(translation->context, item);
+        item = next;
     }
 }

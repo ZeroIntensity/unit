@@ -94,19 +94,29 @@ _UNIT_BasicBlock_New(UNIT_Context *context,
         return NULL;
     }
 
-    if (UNIT_FAILED(_UNIT_Vector_Init(&block->successors,
-                                      context,
-                                      4,
-                                      NULL))) {
+    if (UNIT_FAILED(_UNIT_Vector_Init(&block->phis, context, 4, _UNIT_Dealloc))) {
         _UNIT_Dealloc(context, block);
-        _UNIT_Vector_Clear(&block->instructions);
+        return NULL;
+    }
+
+    if (UNIT_FAILED(_UNIT_Vector_Init(&block->successors, context, 2, NULL))) {
+        _UNIT_Vector_Clear(&block->phis);
+        _UNIT_Dealloc(context, block);
+        return NULL;
+    }
+
+    if (UNIT_FAILED(_UNIT_Vector_Init(&block->predecessors, context, 2, NULL))) {
+        _UNIT_Vector_Clear(&block->phis);
+        _UNIT_Vector_Clear(&block->successors);
+        _UNIT_Dealloc(context, block);
         return NULL;
     }
 
     if (UNIT_FAILED(_UNIT_LivenessInfo_Init(&block->liveness, context))) {
-        _UNIT_Dealloc(context, block);
-        _UNIT_Vector_Clear(&block->instructions);
+        _UNIT_Vector_Clear(&block->phis);
         _UNIT_Vector_Clear(&block->successors);
+        _UNIT_Vector_Clear(&block->predecessors);
+        _UNIT_Dealloc(context, block);
         return NULL;
     }
 
@@ -123,68 +133,177 @@ _UNIT_BasicBlock_Free(UNIT_Context *context,
     _UNIT_BasicBlock *block = (_UNIT_BasicBlock *)ptr;
     _UNIT_Vector_Clear(&block->instructions);
     _UNIT_Vector_Clear(&block->successors);
+    _UNIT_Vector_Clear(&block->predecessors);
+    _UNIT_Vector_Clear(&block->phis);
     _UNIT_LivenessInfo_Clear(&block->liveness);
-    _UNIT_Dealloc(block->context, block);
+    _UNIT_Dealloc(context, block);
 }
 
-static UNIT_Status
-populate_liveness_info(_UNIT_Vector *successors,
-                       _UNIT_LivenessInfo *liveness,
-                       int8_t *changed)
+UNIT_Status
+_UNIT_BasicBlock_AddSuccessor(_UNIT_BasicBlock *block, _UNIT_BasicBlock *successor)
 {
-    assert(successors != NULL);
-    assert(liveness != NULL);
-    assert(changed != NULL);
+    for (UNIT_Size index = 0; index < _UNIT_Vector_SIZE(&block->successors); ++index) {
+        if (_UNIT_Vector_GET(&block->successors, index) == successor) {
+            return _UNIT_OK;
+        }
+    }
 
-    // alive_at_end = union of alive_at_start of all successors
-    UNIT_Size size = _UNIT_Vector_SIZE(successors);
-    for (UNIT_Size index = 0; index < size; ++index) {
-        _UNIT_BasicBlock *successor = _UNIT_Vector_GET(successors, index);
+    if (UNIT_FAILED(_UNIT_Vector_Append(&block->successors, successor))) {
+        return _UNIT_FAIL;
+    }
+
+    return _UNIT_Vector_Append(&successor->predecessors, block);
+}
+
+UNIT_Status
+_UNIT_BasicBlock_PopulateLivenessStep(_UNIT_BasicBlock *block, int8_t *changed)
+{
+    _UNIT_LivenessInfo *liveness = &block->liveness;
+    for (UNIT_Size index = 0; index < _UNIT_Vector_SIZE(&block->successors); ++index) {
+        _UNIT_BasicBlock *successor = _UNIT_Vector_GET(&block->successors, index);
         _UNIT_SizeSet_ITER(&successor->liveness.alive_at_start, location) {
-            if (UNIT_FAILED(set_add_and_track(&liveness->alive_at_end,
-                                              location,
-                                              changed))) {
+            if (UNIT_FAILED(set_add_and_track(&liveness->alive_at_end, location, changed))) {
                 return _UNIT_FAIL;
             }
         }
-        _UNIT_SizeSet_END_ITER()
+        _UNIT_SizeSet_END_ITER();
+        // PHI operands are uses on a particular edge, not uses in the successor.
+        for (UNIT_Size p = 0; p < _UNIT_Vector_SIZE(&successor->phis); ++p) {
+            _UNIT_MachineOperation *phi = _UNIT_Vector_GET(&successor->phis, p);
+            _UNIT_Vector *inputs = phi->argument_1->phi_args;
+            for (UNIT_Size i = 0; i < _UNIT_Vector_SIZE(inputs); ++i) {
+                _UNIT_PhiInput *input = _UNIT_Vector_GET(inputs, i);
+                if (input->predecessor == block && input->value->type == _UNIT_TYPE_LOCATION) {
+                    if (UNIT_FAILED(set_add_and_track(&liveness->alive_at_end,
+                                                      input->value->value,
+                                                      changed))
+                        || UNIT_FAILED(_UNIT_SizeMap_Set(&liveness->last_uses,
+                                                         input->value->value,
+                                                         _UNIT_Vector_SIZE(
+                                                             &block->instructions)))) {
+                        return _UNIT_FAIL;
+                    }
+                }
+            }
+        }
     }
 
-    // alive_at_start = used_locations + (alive_at_end - created_locations)
-
-    // Everything this block uses must be alive at its start
     _UNIT_SizeSet_ITER(&liveness->used_locations, location) {
-        if (UNIT_FAILED(set_add_and_track(&liveness->alive_at_start,
-                                          location,
-                                          changed))) {
+        if (UNIT_FAILED(set_add_and_track(&liveness->alive_at_start, location, changed))) {
             return _UNIT_FAIL;
         }
     }
     _UNIT_SizeSet_END_ITER();
-
-    // Everything alive at the end that this block didn't create
-    // must also be alive at the start
     _UNIT_SizeSet_ITER(&liveness->alive_at_end, location) {
-        if (!_UNIT_SizeSet_Contains(&liveness->created_locations, location)) {
-            if (UNIT_FAILED(set_add_and_track(&liveness->alive_at_start,
-                                              location,
-                                              changed))) {
-                return _UNIT_FAIL;
-            }
+        if (!_UNIT_SizeSet_Contains(&liveness->created_locations, location)
+            && UNIT_FAILED(set_add_and_track(&liveness->alive_at_start, location, changed))) {
+            return _UNIT_FAIL;
         }
     }
     _UNIT_SizeSet_END_ITER();
+    return _UNIT_OK;
+}
+
+static UNIT_Status
+record_use(_UNIT_LivenessInfo *liveness, _UNIT_MachineItem *item, UNIT_Size index)
+{
+    if (item == NULL) {
+        return _UNIT_OK;
+    }
+
+    if (item->type == _UNIT_TYPE_CALL_ARGS) {
+        for (UNIT_Size i = 0; i < _UNIT_Vector_SIZE(item->call_args); ++i) {
+            if (UNIT_FAILED(record_use(liveness, _UNIT_Vector_GET(item->call_args, i), index))) {
+                return _UNIT_FAIL;
+            }
+        }
+    } else if (item->type == _UNIT_TYPE_LOCATION) {
+        if (!_UNIT_SizeSet_Contains(&liveness->created_locations, item->value)
+            && UNIT_FAILED(_UNIT_SizeSet_Add(&liveness->used_locations, item->value))) {
+            return _UNIT_FAIL;
+        }
+
+        return _UNIT_SizeMap_Set(&liveness->last_uses, item->value, index);
+    }
+
+    return _UNIT_OK;
+}
+
+static UNIT_Status
+record_definition(_UNIT_LivenessInfo *liveness, _UNIT_MachineDestination dest, UNIT_Size index)
+{
+    if (_UNIT_MachineDestination_IsNull(dest) || _UNIT_MachineDestination_IsInput(dest)) {
+        return _UNIT_OK;
+    }
+
+    _UNIT_MachineItem *item = _UNIT_MachineDestination_GetPointer(dest);
+    if (item->type == _UNIT_TYPE_LOCATION) {
+        if (UNIT_FAILED(_UNIT_SizeSet_Add(&liveness->created_locations, item->value))) {
+            return _UNIT_FAIL;
+        }
+
+        return _UNIT_SizeMap_Set(&liveness->last_uses, item->value, index);
+    }
 
     return _UNIT_OK;
 }
 
 UNIT_Status
-_UNIT_BasicBlock_PopulateLivenessStep(_UNIT_BasicBlock *block,
-                                      int8_t *changed)
+_UNIT_Translation_AnalyzeLiveness(_UNIT_Translation *translation)
 {
-    assert(block != NULL);
-    assert(changed != NULL);
-    return populate_liveness_info(&block->successors,
-                                  &block->liveness,
-                                  changed);
+    UNIT_Size count = _UNIT_Vector_SIZE(&translation->blocks);
+    for (UNIT_Size index = 0; index < count; ++index) {
+        _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks, index);
+        _UNIT_LivenessInfo *liveness = &block->liveness;
+        // Recompute after any IR changes; stale uses otherwise inflate live ranges.
+        _UNIT_SizeSet *sets[] = {&liveness->created_locations, &liveness->used_locations,
+                                 &liveness->alive_at_start, &liveness->alive_at_end};
+        for (UNIT_Size s = 0; s < 4; ++s) {
+            for (UNIT_Size i = 0; i < sets[s]->capacity; ++i) {
+                sets[s]->items[i].is_populated = 0;
+            }
+
+            sets[s]->len = 0;
+        }
+
+        for (UNIT_Size i = 0; i < liveness->last_uses.capacity; ++i) {
+            liveness->last_uses.items[i].is_populated = 0;
+        }
+
+        liveness->last_uses.len = 0;
+        for (UNIT_Size i = 0; i < _UNIT_Vector_SIZE(&block->phis); ++i) {
+            _UNIT_MachineOperation *phi = _UNIT_Vector_GET(&block->phis, i);
+            if (UNIT_FAILED(record_definition(liveness, phi->destination, 0))) {
+                return _UNIT_FAIL;
+            }
+        }
+
+        for (UNIT_Size i = 0; i < _UNIT_Vector_SIZE(&block->instructions); ++i) {
+            _UNIT_MachineOperation *op = _UNIT_Vector_GET(&block->instructions, i);
+            if (_UNIT_MachineDestination_IsInput(op->destination)
+                && UNIT_FAILED(record_use(liveness,
+                                          _UNIT_MachineDestination_GetPointer(op->destination),
+                                          i))) {
+                return _UNIT_FAIL;
+            }
+
+            if (UNIT_FAILED(record_use(liveness, op->argument_1, i))
+                || UNIT_FAILED(record_use(liveness, op->argument_2, i))
+                || UNIT_FAILED(record_definition(liveness, op->destination, i))) {
+                return _UNIT_FAIL;
+            }
+        }
+    }
+
+    int8_t changed;
+    do {
+        changed = 0;
+        for (UNIT_Size index = count; index > 0; --index) {
+            _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks, index - 1);
+            if (UNIT_FAILED(_UNIT_BasicBlock_PopulateLivenessStep(block, &changed))) {
+                return _UNIT_FAIL;
+            }
+        }
+    } while (changed);
+    return _UNIT_OK;
 }

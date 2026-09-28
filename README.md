@@ -142,8 +142,6 @@ UNIT is missing support for the following features:
 
 - Compiling to AArch64 and Mach-O files.
 - Floating point operations.
-- SSA (this is currently partial; locations are assigned once per block, but
-  not once per procedure).
 
 These will be added in the future.
 

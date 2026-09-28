@@ -380,5 +380,17 @@ class Procedure:
                 int(visualize_stack_effect), int(ignore_errors)
             )
 
-    def print_instructions(self, *, visualize_stack_effect: bool = True, ignore_errors: bool = True, file: IO[str] = sys.stdout) -> None:
-        print(self.instructions_text(visualize_stack_effect=visualize_stack_effect, ignore_errors=ignore_errors), file=file)
+    def print_instructions(
+        self,
+        *,
+        visualize_stack_effect: bool = True,
+        ignore_errors: bool = True,
+        file: IO[str] = sys.stdout,
+    ) -> None:
+        print(
+            self.instructions_text(
+                visualize_stack_effect=visualize_stack_effect,
+                ignore_errors=ignore_errors,
+            ),
+            file=file,
+        )
