@@ -13,7 +13,6 @@ Currently, it supports:
 - Compiling to x86-64.
 - Writing ELF and COFF object files.
 - Some very simple optimization passes.
-- SSA translation with PHI nodes for branches and loops.
 
 UNIT is in the early stages of development; see below for UNIT's limitations.
 

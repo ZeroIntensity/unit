@@ -98,14 +98,13 @@ item_dead_in_block_recursive(_UNIT_BasicBlock *block,
     }
 
     for (UNIT_Size index = start; index < end; ++index) {
-        _UNIT_MachineOperation *operation = instructions->items[index];
+        _UNIT_MachineOperation *operation = _UNIT_Vector_GET(instructions, index);
         if (operation == NULL) {
             continue;
         }
 
         _UNIT_MachineItem *destination =
-            _UNIT_MachineDestination_GetPointerNullable(
-                operation->destination);
+            _UNIT_MachineDestination_GetPointerNullable(operation->destination);
         if (item_matches_or_contains(destination, item)
             || item_matches_or_contains(operation->argument_1, item)
             || item_matches_or_contains(operation->argument_2, item)) {

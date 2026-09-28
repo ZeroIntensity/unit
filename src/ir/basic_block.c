@@ -95,41 +95,40 @@ _UNIT_BasicBlock_New(UNIT_Context *context,
     }
 
     if (UNIT_FAILED(_UNIT_Vector_Init(&block->phis, context, 4, _UNIT_Dealloc))) {
-        goto instructions_error;
+        _UNIT_Dealloc(context, block);
+        return NULL;
     }
 
     if (UNIT_FAILED(_UNIT_Vector_Init(&block->successors, context, 2, NULL))) {
-        goto phis_error;
+        _UNIT_Vector_Clear(&block->phis);
+        _UNIT_Dealloc(context, block);
+        return NULL;
     }
 
     if (UNIT_FAILED(_UNIT_Vector_Init(&block->predecessors, context, 2, NULL))) {
-        goto successors_error;
+        _UNIT_Vector_Clear(&block->phis);
+        _UNIT_Vector_Clear(&block->successors);
+        _UNIT_Dealloc(context, block);
+        return NULL;
     }
 
     if (UNIT_FAILED(_UNIT_LivenessInfo_Init(&block->liveness, context))) {
-        goto predecessors_error;
+        _UNIT_Vector_Clear(&block->phis);
+        _UNIT_Vector_Clear(&block->successors);
+        _UNIT_Vector_Clear(&block->predecessors);
+        _UNIT_Dealloc(context, block);
+        return NULL;
     }
 
     block->id = id;
     block->label_id = _UNIT_BasicBlock_NO_LABEL; // Can be set later
     return block;
-predecessors_error:
-    _UNIT_Vector_Clear(&block->predecessors);
-successors_error:
-    _UNIT_Vector_Clear(&block->successors);
-phis_error:
-    _UNIT_Vector_Clear(&block->phis);
-instructions_error:
-    _UNIT_Vector_Clear(&block->instructions);
-    _UNIT_Dealloc(context, block);
-    return NULL;
 }
 
 void
 _UNIT_BasicBlock_Free(UNIT_Context *context,
                       void *ptr)
 {
-    (void)context;
     assert(ptr != NULL);
     _UNIT_BasicBlock *block = (_UNIT_BasicBlock *)ptr;
     _UNIT_Vector_Clear(&block->instructions);
@@ -137,7 +136,7 @@ _UNIT_BasicBlock_Free(UNIT_Context *context,
     _UNIT_Vector_Clear(&block->predecessors);
     _UNIT_Vector_Clear(&block->phis);
     _UNIT_LivenessInfo_Clear(&block->liveness);
-    _UNIT_Dealloc(block->context, block);
+    _UNIT_Dealloc(context, block);
 }
 
 UNIT_Status

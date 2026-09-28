@@ -118,8 +118,8 @@ Control flow and SSA
 
 Before translating values, UNIT divides the procedure into basic blocks and
 records each block's predecessors and successors. Every virtual location is
-assigned exactly once in the entire procedure. This is called static single
-assignment (SSA) form.
+assigned exactly once in the entire procedure. This is called "static single
+assignment" (SSA) form.
 
 When different paths supply different values for a local variable or an operand
 stack entry, the receiving block defines a new location with a ``PHI`` node:
@@ -151,10 +151,6 @@ PHI operands are live on their incoming edges. After register allocation, UNIT
 replaces PHIs with copies in edge blocks, so each copy runs only on its intended
 path. These copies execute as a parallel assignment: cycles such as swapping two
 values use a temporary slot to preserve the original values.
-
-The ``UNIT_FLAG_PRINT_TRANSLATION_PREOP`` flag displays the SSA representation,
-including PHIs. Compiled translation dumps show allocated registers, stack slots,
-and the copies that implement those PHIs.
 
 
 Register allocation
