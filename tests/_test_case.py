@@ -1,6 +1,7 @@
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from collections.abc import Iterable
@@ -34,6 +35,9 @@ def get_link_command(obj_path: str, out_path: str) -> list[str]:
 BUILD_DIR = os.environ.get("BUILD_DIR", "./build")
 
 
+@unittest.skipIf(
+    sys.platform == "darwin", "Mach-O object file output is not supported yet"
+)
 class ExampleTestRunner(unittest.TestCase):
     executable_name: str
 

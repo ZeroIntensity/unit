@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import ctypes
+import sys
 from dataclasses import dataclass
-from typing import Any, Generic, Literal, TypeAlias, TypeVar
+from typing import Any, Generic, Literal, TypeAlias, TypeVar, IO
 
 from unit import _core
 from unit.context import Context
@@ -98,6 +99,9 @@ class CompiledProcedure:
     def translation_text(self) -> str:
         with Error.capture_internal_errors():
             return self._compiled.print_translation()
+
+    def print_translation(self, *, file: IO[str] = sys.stdout) -> None:
+        print(self.translation_text(), file=file)
 
 
 Architecture: TypeAlias = Literal["amd64", "aarch64"]
@@ -375,3 +379,6 @@ class Procedure:
             return self._procedure.print_instructions(
                 int(visualize_stack_effect), int(ignore_errors)
             )
+
+    def print_instructions(self, *, visualize_stack_effect: bool = True, ignore_errors: bool = True, file: IO[str] = sys.stdout) -> None:
+        print(self.instructions_text(visualize_stack_effect=visualize_stack_effect, ignore_errors=ignore_errors), file=file)
