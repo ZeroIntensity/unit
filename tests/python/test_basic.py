@@ -789,5 +789,6 @@ class BasicTests(unittest.TestCase):
         compiled.print_translation(file=buffer)
         self.assertIn("42", buffer.getvalue())
 
+
 if __name__ == "__main__":
     unittest.main()
