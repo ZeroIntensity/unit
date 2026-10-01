@@ -1,9 +1,11 @@
 #include <stdio.h>
 
-#include <unit/internal/errors.h>
-#include <unit/internal/ir/procedure.h>
-
 #include <unit/internal/allocation.h>
+#include <unit/internal/utils.h>
+
+#include <unit/internal/errors.h>
+
+#include <unit/internal/ir/procedure.h>
 #include <unit/internal/ir/basic_block.h>
 #include <unit/internal/ir/translation.h>
 
@@ -158,7 +160,11 @@ print_machine_item(FILE *stream,
     }
 
     if (item->hint != NULL) {
-        PRINT(" (%s)", item->hint);
+        PRINT(" (");
+        PRINT("\"");
+        _UNIT_PrintString(context, item->hint, stream);
+        PRINT("\"");
+        PRINT(")");
     }
 
 #undef PRINT
