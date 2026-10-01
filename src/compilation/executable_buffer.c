@@ -171,6 +171,32 @@ resolve_symbol(const UNIT_SymbolMap *symbol_map,
     return JIT_RESOLVE_SYMBOL(name);
 }
 
+// A call by name (e.g. a recursive call) refers to an undefined symbol, even
+// when a procedure with that name is defined elsewhere in the symbol table.
+static const _UNIT_Symbol *
+find_definition(const _UNIT_SymbolTable *symbol_table,
+                const _UNIT_Symbol *symbol)
+{
+    assert(symbol_table != NULL);
+    assert(symbol != NULL);
+
+    if (symbol->is_defined) {
+        return symbol;
+    }
+
+    UNIT_Size size = _UNIT_Vector_SIZE(&symbol_table->symbols);
+    for (UNIT_Size index = 0; index < size; ++index) {
+        const _UNIT_Symbol *found = _UNIT_Vector_GET(&symbol_table->symbols,
+                                                     index);
+        assert(found != NULL);
+        if (found->is_defined && strcmp(found->name, symbol->name) == 0) {
+            return found;
+        }
+    }
+
+    return NULL;
+}
+
 static UNIT_Status
 init_executable_buffer(const UNIT_CompiledProcedure *compiled,
                        UNIT_ExecutableBuffer *buffer,
@@ -198,7 +224,8 @@ init_executable_buffer(const UNIT_CompiledProcedure *compiled,
             const _UNIT_Symbol *symbol =
                 _UNIT_Vector_GET(&compile_context->symbol_table.symbols,
                                  relocation->symbol_index);
-            if (!symbol->is_defined) {
+            if (find_definition(&compile_context->symbol_table,
+                                symbol) == NULL) {
                 ++num_trampolines;
             }
         }
@@ -260,9 +287,12 @@ init_executable_buffer(const UNIT_CompiledProcedure *compiled,
                                  relocation->symbol_index);
             assert(symbol != NULL);
 
+            const _UNIT_Symbol *definition =
+                find_definition(&compile_context->symbol_table, symbol);
+
             void *target;
-            if (symbol->is_defined) {
-                target = (char *)code + symbol->text_offset;
+            if (definition != NULL) {
+                target = (char *)code + definition->text_offset;
             } else {
                 target = resolve_symbol(symbol_map, symbol->name);
                 if (target == NULL) {
