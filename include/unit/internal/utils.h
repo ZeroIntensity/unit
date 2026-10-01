@@ -27,4 +27,10 @@ _UNIT_File_WriteI64(UNIT_Context *context, FILE *file, int64_t value);
 UNIT_Status
 _UNIT_File_WriteBytes(UNIT_Context *context, FILE *file, const void *data, size_t num_bytes);
 
+/* Print a string with newlines represented as a "\n" */
+UNIT_Status
+_UNIT_PrintString(UNIT_Context *context,
+                  const char *string,
+                  FILE *stream);
+
 #endif

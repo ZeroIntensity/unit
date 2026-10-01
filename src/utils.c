@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 
 #include <unit/internal/context.h>
 #include <unit/internal/errors.h>
@@ -64,4 +65,35 @@ _UNIT_File_WriteBytes(UNIT_Context *context, FILE *file, const void *data, size_
     }
 
     return _UNIT_OK;
+}
+
+UNIT_Status
+_UNIT_PrintString(UNIT_Context *context,
+                  const char *string,
+                  FILE *stream)
+{
+    assert(context != NULL);
+    assert(string != NULL);
+    assert(stream != NULL);
+
+    UNIT_Size length = strlen(string);
+    for (UNIT_Size index = 0; index < length; ++index) {
+        char character = string[index];
+        if (character == '\n') {
+            if (fputs("\\n", stream) == EOF) {
+                goto error;
+            }
+
+            continue;
+        }
+
+        if (fputc(character, stream) == EOF) {
+            goto error;
+        }
+    }
+
+    return _UNIT_OK;
+error:
+    _UNIT_SetOSError(context, "printing string");
+    return _UNIT_FAIL;
 }

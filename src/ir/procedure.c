@@ -1,9 +1,9 @@
 #include <stdbool.h>
 #include <string.h>
 
+#include <unit/internal/utils.h>
 #include <unit/internal/errors.h>
 #include <unit/internal/ir/procedure.h>
-
 #include <unit/internal/allocation.h>
 
 void
@@ -419,38 +419,6 @@ typedef struct {
     };
 } DebugStackItem;
 
-/* Print a string with newlines represented as a "\n" */
-static UNIT_Status
-print_string(UNIT_Context *context,
-             const char *string,
-             FILE *stream)
-{
-    assert(context != NULL);
-    assert(string != NULL);
-    assert(stream != NULL);
-
-    UNIT_Size length = strlen(string);
-    for (UNIT_Size index = 0; index < length; ++index) {
-        char character = string[index];
-        if (character == '\n') {
-            if (fputs("\\n", stream) == EOF) {
-                goto error;
-            }
-
-            continue;
-        }
-
-        if (fputc(character, stream) == EOF) {
-            goto error;
-        }
-    }
-
-    return _UNIT_OK;
-error:
-    _UNIT_SetOSError(context, "printing string");
-    return _UNIT_FAIL;
-}
-
 static UNIT_Status
 print_debug_item(UNIT_Context *context,
                  DebugStackItem *item,
@@ -474,7 +442,7 @@ print_debug_item(UNIT_Context *context,
 
         case DEBUG_TYPE_STRING: {
             PRINT("\"");
-            print_string(context, item->string, stream);
+            _UNIT_PrintString(context, item->string, stream);
             PRINT("\"");
             break;
         }
@@ -927,7 +895,7 @@ UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure,
                                      operation->argument);
                 assert(text != NULL);
                 PRINT(" (");
-                print_string(procedure->context, text, stream);
+                _UNIT_PrintString(procedure->context, text, stream);
                 PRINT(")");
                 break;
             }
