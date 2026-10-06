@@ -464,6 +464,32 @@ optimize_block_folds(_UNIT_BasicBlock *block,
     return _UNIT_OK;
 }
 
+static void
+optimize_jumps(_UNIT_Translation *translation)
+{
+    UNIT_Size block_count = _UNIT_Vector_SIZE(&translation->blocks);
+    for (UNIT_Size index = 0; index + 1 < block_count; ++index) {
+        _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks, index);
+        UNIT_Size size = _UNIT_Vector_SIZE(&block->instructions);
+        if (size == 0) {
+            continue;
+        }
+
+        _UNIT_MachineOperation *last = _UNIT_Vector_GET(&block->instructions, size - 1);
+        if (last->instruction != _UNIT_I_JUMP) {
+            continue;
+        }
+
+        assert(last->argument_1 != NULL);
+        assert(last->argument_1->type == _UNIT_TYPE_CONSTANT);
+        _UNIT_BasicBlock *next = _UNIT_Vector_GET(&translation->blocks, index + 1);
+        if (last->argument_1->value == next->label_id) {
+            // The edge remains in the CFG; only its explicit jump is redundant.
+            _UNIT_Dealloc(block->context, _UNIT_Vector_Pop(&block->instructions));
+        }
+    }
+}
+
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 UNIT_Status
@@ -499,5 +525,6 @@ _UNIT_Translation_Optimize(_UNIT_Translation *translation,
         } while (any_did_change);
     }
 
+    optimize_jumps(translation);
     return _UNIT_OK;
 }
