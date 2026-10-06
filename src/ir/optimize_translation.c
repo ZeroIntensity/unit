@@ -464,6 +464,224 @@ optimize_block_folds(_UNIT_BasicBlock *block,
     return _UNIT_OK;
 }
 
+static _UNIT_MachineItem *
+jump_target(_UNIT_MachineOperation *operation)
+{
+    if (operation->instruction == _UNIT_I_JUMP) {
+        return operation->argument_1;
+    }
+
+    if (operation->instruction >= _UNIT_I_JUMP_IF_EQUAL
+        && operation->instruction <= _UNIT_I_JUMP_IF_LESS_EQUAL) {
+        return _UNIT_MachineDestination_GetPointer(operation->destination);
+    }
+
+    return NULL;
+}
+
+static UNIT_Status
+make_fallthroughs_explicit(_UNIT_Translation *translation)
+{
+    UNIT_Size count = _UNIT_Vector_SIZE(&translation->blocks);
+    for (UNIT_Size index = 0; index + 1 < count; ++index) {
+        _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks, index);
+        UNIT_Size size = _UNIT_Vector_SIZE(&block->instructions);
+        if (size > 0) {
+            _UNIT_MachineOperation *last = _UNIT_Vector_GET(&block->instructions, size - 1);
+            if (last->instruction == _UNIT_I_JUMP || last->instruction == _UNIT_I_RETURN_VALUE
+                || last->instruction == _UNIT_I_EXIT) {
+                continue;
+            }
+        }
+
+        _UNIT_BasicBlock *next = _UNIT_Vector_GET(&translation->blocks, index + 1);
+        _UNIT_MachineItem *target = _UNIT_Translation_NewItem(translation,
+                                                              _UNIT_TYPE_CONSTANT,
+                                                              next->label_id,
+                                                              NULL);
+        if (target == NULL
+            || UNIT_FAILED(_UNIT_Translation_Emit(block,
+                                                  _UNIT_I_JUMP,
+                                                  _UNIT_MachineDestination_NULL,
+                                                  target,
+                                                  NULL))
+            || UNIT_FAILED(_UNIT_BasicBlock_AddSuccessor(block, next))) {
+            return _UNIT_FAIL;
+        }
+    }
+
+    return _UNIT_OK;
+}
+
+static _UNIT_MachineItem *
+forwarding_target(_UNIT_BasicBlock *block)
+{
+    if (_UNIT_Vector_SIZE(&block->phis) != 0) {
+        return NULL;
+    }
+
+    UNIT_Size size = _UNIT_Vector_SIZE(&block->instructions);
+    UNIT_Size first = 0;
+    if (size > 0) {
+        _UNIT_MachineOperation *label = _UNIT_Vector_GET(&block->instructions, 0);
+        first = label->instruction == _UNIT_I_JUMP_LABEL;
+    }
+
+    if (first == size) {
+        return NULL;
+    }
+
+    _UNIT_MachineOperation *jump = _UNIT_Vector_GET(&block->instructions, first);
+    _UNIT_MachineItem *target = jump_target(jump);
+    if (target == NULL) {
+        return NULL;
+    }
+
+    if (jump->instruction == _UNIT_I_JUMP) {
+        return size == first + 1 ? target : NULL;
+    }
+
+    // A conditional jump is redundant only when its false path has the same target.
+    if (size == first + 2) {
+        _UNIT_MachineOperation *fallthrough = _UNIT_Vector_GET(&block->instructions, first + 1);
+        if (fallthrough->instruction == _UNIT_I_JUMP
+            && fallthrough->argument_1->value == target->value) {
+            return target;
+        }
+    }
+
+    return NULL;
+}
+
+static void
+replace_block_reference(_UNIT_Vector *blocks,
+                        _UNIT_BasicBlock *block,
+                        _UNIT_BasicBlock *replacement)
+{
+    UNIT_Size length = 0;
+    int8_t has_replacement = 0;
+    for (UNIT_Size index = 0; index < _UNIT_Vector_SIZE(blocks); ++index) {
+        _UNIT_BasicBlock *item = _UNIT_Vector_GET(blocks, index);
+        if (item == block) {
+            item = replacement;
+        }
+
+        if (item == NULL || (item == replacement && has_replacement)) {
+            continue;
+        }
+
+        if (item == replacement) {
+            has_replacement = 1;
+        }
+
+        blocks->items[length++] = item;
+    }
+
+    blocks->length = length;
+}
+
+static UNIT_Status
+optimize_jump_blocks(_UNIT_Translation *translation)
+{
+    // Block removal, including moving a new entry block, must not change fallthroughs.
+    if (UNIT_FAILED(make_fallthroughs_explicit(translation))) {
+        return _UNIT_FAIL;
+    }
+
+    int8_t did_change;
+    do {
+        did_change = 0;
+        for (UNIT_Size index = 0; index < _UNIT_Vector_SIZE(&translation->blocks);) {
+            _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks, index);
+            _UNIT_MachineItem *label = forwarding_target(block);
+            _UNIT_BasicBlock *target = NULL;
+            if (label != NULL) {
+                for (UNIT_Size s = 0; s < _UNIT_Vector_SIZE(&block->successors); ++s) {
+                    _UNIT_BasicBlock *successor = _UNIT_Vector_GET(&block->successors, s);
+                    if (successor->label_id == label->value) {
+                        target = successor;
+                        break;
+                    }
+                }
+            }
+
+            // Keep self-loops, including those formed by collapsing a jump cycle.
+            if (target == NULL || target == block || _UNIT_Vector_SIZE(&target->phis) != 0) {
+                ++index;
+                continue;
+            }
+
+            for (UNIT_Size p = 0; p < _UNIT_Vector_SIZE(&block->predecessors); ++p) {
+                _UNIT_BasicBlock *predecessor = _UNIT_Vector_GET(&block->predecessors, p);
+                if (UNIT_FAILED(_UNIT_BasicBlock_AddSuccessor(predecessor, target))) {
+                    return _UNIT_FAIL;
+                }
+
+                for (UNIT_Size i = 0; i < _UNIT_Vector_SIZE(&predecessor->instructions); ++i) {
+                    _UNIT_MachineOperation *operation = _UNIT_Vector_GET(&predecessor->instructions,
+                                                                         i);
+                    _UNIT_MachineItem *old_target = jump_target(operation);
+                    if (old_target == NULL || old_target->value != block->label_id) {
+                        continue;
+                    }
+
+                    if (operation->instruction == _UNIT_I_JUMP) {
+                        operation->argument_1 = label;
+                    } else {
+                        operation->destination = _UNIT_MachineDestination_FromInput(label);
+                    }
+                }
+
+                replace_block_reference(&predecessor->successors, block, target);
+            }
+
+            replace_block_reference(&target->predecessors, block, NULL);
+            if (index == 0) {
+                // Enter the forwarded destination even when it is not next in layout.
+                for (UNIT_Size i = 1; i < _UNIT_Vector_SIZE(&translation->blocks); ++i) {
+                    if (_UNIT_Vector_GET(&translation->blocks, i) == target) {
+                        translation->blocks.items[0] = target;
+                        translation->blocks.items[i] = block;
+                        break;
+                    }
+                }
+            }
+
+            replace_block_reference(&translation->blocks, block, NULL);
+            _UNIT_BasicBlock_Free(translation->context, block);
+            did_change = 1;
+        }
+    } while (did_change);
+
+    return _UNIT_OK;
+}
+
+static void
+optimize_jumps(_UNIT_Translation *translation)
+{
+    UNIT_Size block_count = _UNIT_Vector_SIZE(&translation->blocks);
+    for (UNIT_Size index = 0; index + 1 < block_count; ++index) {
+        _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks, index);
+        UNIT_Size size = _UNIT_Vector_SIZE(&block->instructions);
+        if (size == 0) {
+            continue;
+        }
+
+        _UNIT_MachineOperation *last = _UNIT_Vector_GET(&block->instructions, size - 1);
+        if (last->instruction != _UNIT_I_JUMP) {
+            continue;
+        }
+
+        assert(last->argument_1 != NULL);
+        assert(last->argument_1->type == _UNIT_TYPE_CONSTANT);
+        _UNIT_BasicBlock *next = _UNIT_Vector_GET(&translation->blocks, index + 1);
+        if (last->argument_1->value == next->label_id) {
+            // The edge remains in the CFG; only its explicit jump is redundant.
+            _UNIT_Dealloc(block->context, _UNIT_Vector_Pop(&block->instructions));
+        }
+    }
+}
+
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 UNIT_Status
@@ -499,5 +717,10 @@ _UNIT_Translation_Optimize(_UNIT_Translation *translation,
         } while (any_did_change);
     }
 
+    if (UNIT_FAILED(optimize_jump_blocks(translation))) {
+        return _UNIT_FAIL;
+    }
+
+    optimize_jumps(translation);
     return _UNIT_OK;
 }
