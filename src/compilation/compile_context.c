@@ -321,6 +321,7 @@ _UNIT_CompileContext_Init(_UNIT_CompileContext *compile_context,
 
     init_stack_frame(&compile_context->stack_frame,
                      translation->num_memory_slots);
+    _UNIT_RegisterAllocator_Init(&compile_context->register_allocator, context);
     return _UNIT_OK;
 }
 
@@ -332,4 +333,5 @@ _UNIT_CompileContext_Clear(_UNIT_CompileContext *context)
     _UNIT_StringData_Clear(&context->string_data);
     _UNIT_SymbolTable_Clear(&context->symbol_table);
     _UNIT_JumpTable_Clear(&context->jump_table);
+    _UNIT_RegisterAllocator_Clear(&context->register_allocator);
 }
