@@ -8,6 +8,7 @@
 #include <unit/internal/compilation/code_buffer.h>
 #include <unit/internal/collections/size_map.h>
 #include <unit/internal/ir/translation.h>
+#include <unit/internal/ir/register_allocation.h>
 #include <unit/internal/collections/vector.h>
 
 #ifdef __cplusplus
@@ -131,6 +132,7 @@ typedef struct _UNIT_CompileContext {
     _UNIT_JumpTable jump_table;
     _UNIT_StringData string_data;
     _UNIT_StackFrame stack_frame;
+    _UNIT_RegisterAllocator register_allocator;
     UNIT_Platform target;
 } _UNIT_CompileContext;
 

@@ -190,6 +190,8 @@ compare_items(_UNIT_CompileContext *context,
 
 static UNIT_Status
 lower_operation(_UNIT_CompileContext *compile_context,
+                const _UNIT_BasicBlock *block,
+                UNIT_Size instruction_index,
                 _UNIT_MachineOperation *operation,
                 _UNIT_SizeVector *epilogue_patches,
                 AMD64_StackSlot *argument_slots)
@@ -235,14 +237,21 @@ lower_operation(_UNIT_CompileContext *compile_context,
                 get_argument_registers(compile_context->target);
             UNIT_Size num_registers = abi == UNIT_ABI_WIN64 ? 6 : 8;
             AMD64_StackSlot saved[8];
-            // Save every source before arranging arguments, including the result register.
+            int8_t saved_registers[8] = {0};
+            _UNIT_RegisterAllocator *allocator = &compile_context->register_allocator;
+            // Save live locals and all register arguments before arranging them.
+            // An argument may occupy the result register or another argument's target.
             for (UNIT_Size index = 0; index < num_registers; ++index) {
-                EMIT(save_register(compile_context, register_map[index], &saved[index]));
+                if (_UNIT_RegisterAllocator_IsLive(allocator, block, instruction_index, index)) {
+                    EMIT(save_register(compile_context, register_map[index], &saved[index]));
+                    saved_registers[index] = 1;
+                }
             }
 
             for (UNIT_Size index = 0; index < num_arguments; ++index) {
                 _UNIT_MachineItem *argument = _UNIT_Vector_GET(arguments, index);
                 if (argument->type == _UNIT_TYPE_REGISTER) {
+                    assert(saved_registers[argument->value]);
                     EMIT(AMD64_Move_RegStack(buffer,
                                              argument_registers[index],
                                              saved[argument->value]));
@@ -269,8 +278,13 @@ lower_operation(_UNIT_CompileContext *compile_context,
             }
 
             for (UNIT_Size index = 0; index < num_registers; ++index) {
-                if (destination != NULL && destination->type == _UNIT_TYPE_REGISTER
-                    && item_register(compile_context, destination) == register_map[index]) {
+                if (!saved_registers[index]) {
+                    continue;
+                }
+
+                if (!_UNIT_RegisterAllocator_IsLive(allocator, block, instruction_index + 1, index)
+                    || (destination != NULL && destination->type == _UNIT_TYPE_REGISTER
+                        && destination->value == index)) {
                     _UNIT_StackFrame_FreeSlot(&compile_context->stack_frame, saved[index].offset);
                 } else {
                     EMIT(restore_register(compile_context, register_map[index], saved[index]));
@@ -515,6 +529,10 @@ UNIT_Status
 _UNIT_AMD64_Compile(_UNIT_Translation *translation,
                     _UNIT_CompileContext *compile_context)
 {
+    // PHI lowering and optimization can change both instruction positions and uses.
+    EMIT(_UNIT_RegisterAllocator_AnalyzeLiveness(&compile_context->register_allocator,
+                                                 translation));
+
     // Reserve space for the prologue (sub rsp, imm32 = 7 bytes).
     // We'll patch it once we know the final frame size.
     UNIT_Size prologue_offset =
@@ -532,6 +550,7 @@ _UNIT_AMD64_Compile(_UNIT_Translation *translation,
     UNIT_Size blocks_size = _UNIT_Vector_SIZE(&translation->blocks);
     AMD64_StackSlot argument_slots[6];
     int8_t saved_arguments[6] = {0};
+    int8_t has_calls = 0;
     UNIT_Size argument_count = UNIT_Platform_GET_ABI(compile_context->target) ==
                                UNIT_ABI_WIN64 ? 4 : 6;
     const AMD64_Register *argument_registers = get_argument_registers(compile_context->target);
@@ -540,6 +559,10 @@ _UNIT_AMD64_Compile(_UNIT_Translation *translation,
         _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks, b);
         for (UNIT_Size i = 0; i < _UNIT_Vector_SIZE(&block->instructions); ++i) {
             _UNIT_MachineOperation *op = _UNIT_Vector_GET(&block->instructions, i);
+            if (op->instruction == _UNIT_I_CALL_SYMBOL) {
+                has_calls = 1;
+            }
+
             if (op->instruction != _UNIT_I_LOAD_ARGUMENT) {
                 continue;
             }
@@ -579,6 +602,8 @@ _UNIT_AMD64_Compile(_UNIT_Translation *translation,
                                  index);
             assert(operation != NULL);
             if (UNIT_FAILED(lower_operation(compile_context,
+                                            block,
+                                            index,
                                             operation,
                                             &epilogue_patches,
                                             argument_slots))) {
@@ -590,6 +615,11 @@ _UNIT_AMD64_Compile(_UNIT_Translation *translation,
 
     UNIT_Size frame_size =
         _UNIT_StackFrame_ComputeSize(&compile_context->stack_frame);
+    // A call still needs an aligned stack when no registers require saving.
+    if (has_calls && frame_size == 0) {
+        frame_size = 8;
+    }
+
     AMD64_PatchPrologue(compile_context, prologue_offset, frame_size);
     patch_epilogues(compile_context, &epilogue_patches, frame_size);
     AMD64_PatchJumps(compile_context);
