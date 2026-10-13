@@ -600,6 +600,21 @@ class BasicTests(unittest.TestCase):
 
         self.compile_and_run(proc, 5)
 
+    def test_call_procedure(self):
+        target = unit.Procedure("increment")
+        target.load_argument(0)
+        target.load_integer(1)
+        target.add()
+        target.return_value()
+
+        proc = self.make_procedure()
+        proc.load_integer(41)
+        proc.call_procedure(target, 1)
+        proc.return_value()
+        del target
+
+        self.compile_and_run(proc, 42)
+
     def test_load_integer_rejects_string(self):
         proc = self.make_procedure()
         with self.assertRaises(TypeError):
