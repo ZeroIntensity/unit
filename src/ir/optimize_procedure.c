@@ -1,5 +1,6 @@
 #include <unit/internal/errors.h>
 #include <unit/internal/ir/procedure.h>
+#include <unit/internal/collections/size_set.h>
 
 static UNIT_Status
 create_artificial_instruction(_UNIT_Vector *instructions,
@@ -22,6 +23,51 @@ create_artificial_instruction(_UNIT_Vector *instructions,
     }
 
     return _UNIT_OK;
+}
+
+static int8_t
+optimize_unused_labels(UNIT_Procedure *procedure)
+{
+    if (_UNIT_Vector_SIZE(&procedure->_jump_labels) == 0) {
+        return 0;
+    }
+
+    _UNIT_SizeSet targets;
+    if (UNIT_FAILED(_UNIT_SizeSet_Init(&targets, procedure->context, 8))) {
+        return -1;
+    }
+
+    _UNIT_Vector *instructions = &procedure->_instructions;
+    UNIT_Size size = _UNIT_Vector_SIZE(instructions);
+    for (UNIT_Size index = 0; index < size; ++index) {
+        _UNIT_Operation *op = _UNIT_Vector_GET(instructions, index);
+        if (op->instruction == UNIT_OP_JUMP || op->instruction == UNIT_OP_JUMP_IF_TRUE
+            || op->instruction == UNIT_OP_JUMP_IF_FALSE) {
+            if (UNIT_FAILED(_UNIT_SizeSet_Add(&targets, op->argument))) {
+                _UNIT_SizeSet_Clear(&targets);
+                return -1;
+            }
+        }
+    }
+
+    int8_t did_change = 0;
+    UNIT_Size length = 0;
+    for (UNIT_Size index = 0; index < size; ++index) {
+        _UNIT_Operation *op = _UNIT_Vector_GET(instructions, index);
+        if (op->instruction == _UNIT_OP_JUMP_MARKER
+            && !_UNIT_SizeSet_Contains(&targets, op->argument)) {
+            _UNIT_Dealloc(procedure->context, op);
+            did_change = 1;
+        } else {
+            instructions->items[length++] = op;
+        }
+    }
+
+    instructions->length = length;
+
+    // Preserve the label table and IDs: callers may still hold label handles.
+    _UNIT_SizeSet_Clear(&targets);
+    return did_change;
 }
 
 int8_t
@@ -997,6 +1043,16 @@ UNIT_Procedure_Optimize(UNIT_Procedure *procedure)
     do {
         any_did_change = 0;
         int8_t did_change = UNIT_Procedure_OptimizeInline(procedure);
+        if (did_change < 0) {
+            return _UNIT_FAIL;
+        }
+
+        any_did_change = MAX(any_did_change, did_change);
+
+        // Remove unused boundaries before locals and folding so they no longer
+        // interrupt patterns or reset the stack's known values. Repeat after
+        // folding, since removing a jump can make its label unused.
+        did_change = optimize_unused_labels(procedure);
         if (did_change < 0) {
             return _UNIT_FAIL;
         }

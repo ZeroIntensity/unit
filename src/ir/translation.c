@@ -314,11 +314,11 @@ _UNIT_Translation_PrintInstructions(const _UNIT_Translation *translation,
             _UNIT_MachineOperation *first = _UNIT_Vector_GET(&block->instructions, 0);
             if (first->instruction == _UNIT_I_JUMP_LABEL) {
                 _UNIT_MachineItem *label = _UNIT_MachineDestination_GetPointer(first->destination);
-                PRINT(", label %s (%lld):", label->hint, (long long)label->value);
+                PRINT(", label %s (%lld)", label->hint, (long long)label->value);
             }
         }
 
-        PRINT("%s\n", _UNIT_COLOR(colorize, FOREGROUND));
+        PRINT(":%s\n", _UNIT_COLOR(colorize, FOREGROUND));
         if (UNIT_FAILED(print_instruction_stream(stream, &block->phis, colorize))) {
             return _UNIT_FAIL;
         }

@@ -1,3 +1,5 @@
+#include <string.h>
+
 #include <unit/internal/ir/basic_block.h>
 #include <unit/internal/ir/translation.h>
 
@@ -64,9 +66,159 @@ item_matches_or_contains(_UNIT_MachineItem *haystack,
                 return 1;
             }
         }
+    } else if (haystack->type == _UNIT_TYPE_PHI_ARGS) {
+        for (UNIT_Size index = 0; index < _UNIT_Vector_SIZE(haystack->phi_args); ++index) {
+            _UNIT_PhiInput *input = _UNIT_Vector_GET(haystack->phi_args, index);
+            if (item_matches_or_contains(input->value, needle)) {
+                return 1;
+            }
+        }
+    } else if (haystack->type == _UNIT_TYPE_COMPARISON) {
+        return item_matches_or_contains(haystack->comparison.left, needle)
+               || item_matches_or_contains(haystack->comparison.right, needle);
     }
 
     return 0;
+}
+
+static int8_t
+operation_references_item(_UNIT_MachineOperation *op, _UNIT_MachineItem *item)
+{
+    return item_matches_or_contains(op->argument_1, item)
+           || item_matches_or_contains(op->argument_2, item)
+           || item_matches_or_contains(
+        _UNIT_MachineDestination_GetPointerNullable(op->destination),
+        item);
+}
+
+static int8_t
+is_control_flow(_UNIT_MachineInstruction instruction)
+{
+    return instruction == _UNIT_I_EXIT || instruction == _UNIT_I_RETURN_VALUE
+           || (instruction >= _UNIT_I_JUMP_LABEL && instruction <= _UNIT_I_JUMP_IF_LESS_EQUAL);
+}
+
+UNIT_Status
+_UNIT_Translation_SinkConstants(_UNIT_Translation *translation)
+{
+    assert(translation != NULL);
+    int8_t moved_locations = 0;
+    UNIT_Size block_count = _UNIT_Vector_SIZE(&translation->blocks);
+    for (UNIT_Size b = 0; b < block_count; ++b) {
+        _UNIT_BasicBlock *origin = _UNIT_Vector_GET(&translation->blocks, b);
+        for (UNIT_Size i = _UNIT_Vector_SIZE(&origin->instructions); i > 0; --i) {
+            _UNIT_MachineOperation *op = _UNIT_Vector_GET(&origin->instructions, i - 1);
+            _UNIT_MachineItem *destination =
+                _UNIT_MachineDestination_GetPointerNullable(op->destination);
+            if ((op->instruction != _UNIT_I_LOAD && op->instruction != _UNIT_I_LOAD_STRING)
+                || op->argument_1 == NULL
+                || op->argument_1->type != _UNIT_TYPE_CONSTANT || destination == NULL
+                || _UNIT_MachineDestination_IsInput(op->destination)
+                || (destination->type != _UNIT_TYPE_LOCATION
+                    && destination->type != _UNIT_TYPE_REGISTER)) {
+                continue;
+            }
+
+            _UNIT_BasicBlock *block = origin;
+            UNIT_Size position = i - 1;
+            for (UNIT_Size hops = 0; hops < block_count; ++hops) {
+                _UNIT_Vector *instructions = &block->instructions;
+                UNIT_Size end = position + 1;
+                while (end < _UNIT_Vector_SIZE(instructions)) {
+                    _UNIT_MachineOperation *next = _UNIT_Vector_GET(instructions, end);
+                    if (is_control_flow(next->instruction)
+                        || operation_references_item(next, destination)) {
+                        break;
+                    }
+
+                    ++end;
+                }
+
+                // A constant has no input dependencies, but cannot cross a read
+                // or overwrite of its destination, including call arguments.
+                if (end > position + 1) {
+                    memmove(&instructions->items[position],
+                            &instructions->items[position + 1],
+                            (end - position - 1) * sizeof(*instructions->items));
+                    position = end - 1;
+                    instructions->items[position] = op;
+                    moved_locations |= destination->type == _UNIT_TYPE_LOCATION;
+                }
+
+                if (end < _UNIT_Vector_SIZE(instructions)) {
+                    _UNIT_MachineOperation *next = _UNIT_Vector_GET(instructions, end);
+                    if (next->instruction != _UNIT_I_JUMP
+                        || end + 1 != _UNIT_Vector_SIZE(instructions)) {
+                        break;
+                    }
+                }
+
+                // Only cross an edge executed exactly once on entry to its
+                // successor. In particular, never sink initialization into a
+                // loop header with other incoming paths.
+                if (_UNIT_Vector_SIZE(&block->successors) != 1) {
+                    break;
+                }
+
+                _UNIT_BasicBlock *successor = _UNIT_Vector_GET(&block->successors, 0);
+                if (successor == origin || successor == block
+                    || _UNIT_Vector_SIZE(&successor->predecessors) != 1
+                    || _UNIT_Vector_GET(&successor->predecessors, 0) != block) {
+                    break;
+                }
+
+                int8_t used_by_phi = 0;
+                for (UNIT_Size p = 0; p < _UNIT_Vector_SIZE(&successor->phis); ++p) {
+                    _UNIT_MachineOperation *phi = _UNIT_Vector_GET(&successor->phis, p);
+                    if (operation_references_item(phi, destination)) {
+                        used_by_phi = 1;
+                        break;
+                    }
+                }
+
+                if (used_by_phi) {
+                    break;
+                }
+
+                _UNIT_Vector *target = &successor->instructions;
+                if (target->length == target->capacity) {
+                    UNIT_Size capacity = target->capacity * 2;
+                    void **items = _UNIT_Realloc(translation->context,
+                                                 target->items,
+                                                 capacity * sizeof(*items));
+                    if (items == NULL) {
+                        return _UNIT_FAIL;
+                    }
+
+                    target->items = items;
+                    target->capacity = capacity;
+                }
+
+                UNIT_Size insertion = 0;
+                if (target->length > 0) {
+                    _UNIT_MachineOperation *first = _UNIT_Vector_GET(target, 0);
+                    insertion = first->instruction == _UNIT_I_JUMP_LABEL;
+                }
+
+                memmove(&target->items[insertion + 1],
+                        &target->items[insertion],
+                        (target->length - insertion) * sizeof(*target->items));
+                target->items[insertion] = op;
+                ++target->length;
+
+                memmove(&instructions->items[position],
+                        &instructions->items[position + 1],
+                        (instructions->length - position - 1) * sizeof(*instructions->items));
+                instructions->items[--instructions->length] = NULL;
+                moved_locations |= destination->type == _UNIT_TYPE_LOCATION;
+                block = successor;
+                position = insertion;
+            }
+        }
+    }
+
+    // Shorter SSA live ranges must reach the allocator's interference graph.
+    return moved_locations ? _UNIT_Translation_AnalyzeLiveness(translation) : _UNIT_OK;
 }
 
 static int8_t
@@ -909,6 +1061,84 @@ optimize_jumps(_UNIT_Translation *translation)
     }
 }
 
+static UNIT_Status
+merge_fallthrough_blocks(_UNIT_Translation *translation, int8_t *did_change)
+{
+    *did_change = 0;
+    for (UNIT_Size index = 0; index + 1 < _UNIT_Vector_SIZE(&translation->blocks);) {
+        _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks, index);
+        _UNIT_BasicBlock *next = _UNIT_Vector_GET(&translation->blocks, index + 1);
+        UNIT_Size size = _UNIT_Vector_SIZE(&block->instructions);
+        _UNIT_MachineOperation *last = size > 0
+                                      ? _UNIT_Vector_GET(&block->instructions, size - 1) : NULL;
+        if (_UNIT_Vector_SIZE(&block->phis) != 0 || _UNIT_Vector_SIZE(&next->phis) != 0
+            || _UNIT_Vector_SIZE(&block->successors) != 1
+            || _UNIT_Vector_GET(&block->successors, 0) != next
+            || _UNIT_Vector_SIZE(&next->predecessors) != 1
+            || _UNIT_Vector_GET(&next->predecessors, 0) != block
+            || (last != NULL && last->instruction != _UNIT_I_JUMP_LABEL
+                && is_control_flow(last->instruction))) {
+            ++index;
+            continue;
+        }
+
+        // There is no branch into next: its only entry is this fallthrough.
+        // Keep both instruction streams in one block so folding retains facts.
+        UNIT_Size first = 0;
+        if (_UNIT_Vector_SIZE(&next->instructions) > 0) {
+            _UNIT_MachineOperation *label = _UNIT_Vector_GET(&next->instructions, 0);
+            first = label->instruction == _UNIT_I_JUMP_LABEL;
+        }
+
+        UNIT_Size required = size + _UNIT_Vector_SIZE(&next->instructions) - first;
+        if (required > block->instructions.capacity) {
+            UNIT_Size capacity = block->instructions.capacity * 2;
+            if (capacity < required) {
+                capacity = required;
+            }
+
+            void **items = _UNIT_Realloc(translation->context,
+                                         block->instructions.items,
+                                         capacity * sizeof(*items));
+            if (items == NULL) {
+                return _UNIT_FAIL;
+            }
+
+            block->instructions.items = items;
+            block->instructions.capacity = capacity;
+        }
+
+        for (UNIT_Size i = first; i < _UNIT_Vector_SIZE(&next->instructions); ++i) {
+            _UNIT_Vector_APPEND(&block->instructions, _UNIT_Vector_GET(&next->instructions, i));
+        }
+
+        if (first) {
+            _UNIT_Dealloc(translation->context, _UNIT_Vector_GET(&next->instructions, 0));
+        }
+
+        next->instructions.length = 0;
+
+        _UNIT_Vector old_successors = block->successors;
+        block->successors = next->successors;
+        next->successors = old_successors;
+        next->successors.length = 0;
+        for (UNIT_Size s = 0; s < _UNIT_Vector_SIZE(&block->successors); ++s) {
+            _UNIT_BasicBlock *successor = _UNIT_Vector_GET(&block->successors, s);
+            replace_block_reference(&successor->predecessors, next, block);
+        }
+
+        memmove(&translation->blocks.items[index + 1],
+                &translation->blocks.items[index + 2],
+                (_UNIT_Vector_SIZE(&translation->blocks) - index - 2)
+                * sizeof(*translation->blocks.items));
+        translation->blocks.items[--translation->blocks.length] = NULL;
+        _UNIT_BasicBlock_Free(translation->context, next);
+        *did_change = 1;
+    }
+
+    return _UNIT_OK;
+}
+
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 UNIT_Status
@@ -916,45 +1146,49 @@ _UNIT_Translation_Optimize(_UNIT_Translation *translation,
                            int8_t num_registers)
 {
     assert(translation != NULL);
-    // Folding branches must not turn a fallthrough into a different layout edge.
-    if (UNIT_FAILED(make_fallthroughs_explicit(translation))) {
+    int8_t merged;
+    do {
+        // Keep layout edges explicit while changing the CFG.
+        if (UNIT_FAILED(make_fallthroughs_explicit(translation))) {
+            return _UNIT_FAIL;
+        }
+
+        UNIT_Size block_count = _UNIT_Vector_SIZE(&translation->blocks);
+        for (UNIT_Size i = 0; i < block_count; ++i) {
+            int8_t any_did_change;
+            do {
+                any_did_change = 0;
+                _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks, i);
+                int8_t did_change;
+                if (UNIT_FAILED(optimize_block_loads(block, &did_change))) {
+                    return _UNIT_FAIL;
+                }
+
+                any_did_change = MAX(did_change, any_did_change);
+
+                if (UNIT_FAILED(optimize_block_folds(block, num_registers, &did_change))) {
+                    return _UNIT_FAIL;
+                }
+
+                any_did_change = MAX(did_change, any_did_change);
+            } while (any_did_change);
+        }
+
+        prune_successors(translation);
+        if (UNIT_FAILED(remove_unreachable_blocks(translation))
+            || UNIT_FAILED(optimize_jump_blocks(translation))) {
+            return _UNIT_FAIL;
+        }
+
+        optimize_jumps(translation);
+        if (UNIT_FAILED(merge_fallthrough_blocks(translation, &merged))) {
+            return _UNIT_FAIL;
+        }
+    } while (merged);
+
+    if (UNIT_FAILED(_UNIT_Translation_SinkConstants(translation))) {
         return _UNIT_FAIL;
     }
 
-    UNIT_Size block_count = _UNIT_Vector_SIZE(&translation->blocks);
-
-    for (UNIT_Size i = 0; i < block_count; ++i) {
-        int8_t any_did_change = 0;
-
-        do {
-            any_did_change = 0;
-
-            _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks,
-                                                       i);
-            assert(block != NULL);
-            int8_t did_change;
-            if (UNIT_FAILED(optimize_block_loads(block, &did_change))) {
-                return _UNIT_FAIL;
-            }
-
-            any_did_change = MAX(did_change, any_did_change);
-
-            if (UNIT_FAILED(optimize_block_folds(block,
-                                                 num_registers,
-                                                 &did_change))) {
-                return _UNIT_FAIL;
-            }
-
-            any_did_change = MAX(did_change, any_did_change);
-        } while (any_did_change);
-    }
-
-    prune_successors(translation);
-    if (UNIT_FAILED(remove_unreachable_blocks(translation))
-        || UNIT_FAILED(optimize_jump_blocks(translation))) {
-        return _UNIT_FAIL;
-    }
-
-    optimize_jumps(translation);
     return _UNIT_OK;
 }
