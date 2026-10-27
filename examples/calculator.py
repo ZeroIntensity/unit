@@ -56,7 +56,7 @@ def process_line() -> None:
 
     procedure.return_value()
     compiled = procedure.compile()
-    print(compiled.translation_text())
+    print(compiled.translation_text(colorize=True))
     executable = compiled.jit()
     print(executable())
 

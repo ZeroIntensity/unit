@@ -243,9 +243,9 @@ write_object_file(const std::string &path, ExecutableFormat format)
 }
 
 void
-print_translated(FILE *stream = stdout)
+print_translated(FILE *stream = stdout, bool colorize = false)
 {
-    UNIT_CompiledProcedure_PrintTranslatedIR(compiled, stream);
+    UNIT_CompiledProcedure_PrintTranslatedIR(compiled, stream, colorize);
 }
 
 friend class Procedure;
@@ -779,9 +779,9 @@ compile(Platform platform)
 }
 
 void
-print_instructions(FILE *stream = stdout)
+print_instructions(FILE *stream = stdout, bool colorize = false)
 {
-    if (UNIT_FAILED(UNIT_Procedure_PrintInstructions(&procedure, stream, 1))) {
+    if (UNIT_FAILED(UNIT_Procedure_PrintInstructions(&procedure, stream, 1, colorize))) {
         throw error(procedure.context);
     }
 }

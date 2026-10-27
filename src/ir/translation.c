@@ -71,7 +71,8 @@ integer_type_name(UNIT_IntegerType type)
 UNIT_Status
 print_machine_item(FILE *stream,
                    _UNIT_MachineItem *item,
-                   UNIT_Context *context)
+                   UNIT_Context *context,
+                   int8_t colorize)
 {
 #define PRINT(...)                                              \
         if (fprintf(stream, __VA_ARGS__) < 0) {                 \
@@ -84,11 +85,15 @@ print_machine_item(FILE *stream,
         if (UNIT_FAILED(_UNIT_IntegerType_Print(context,
                                                 stream,
                                                 item->integer_type,
-                                                item->value))) {
+                                                item->value,
+                                                colorize))) {
             return _UNIT_FAIL;
         }
     } else if (item->type == _UNIT_TYPE_LOCATION) {
-        PRINT("location_%lld", (long long)item->value);
+        PRINT("%slocation_%lld%s",
+              _UNIT_COLOR(colorize, RESULT),
+              (long long)item->value,
+              _UNIT_COLOR(colorize, FOREGROUND));
     } else if (item->type == _UNIT_TYPE_CALL_ARGS) {
         PRINT("[");
         UNIT_Size size = _UNIT_Vector_SIZE(item->call_args);
@@ -96,7 +101,7 @@ print_machine_item(FILE *stream,
             _UNIT_MachineItem *arg_item = _UNIT_Vector_GET(item->call_args,
                                                            index);
             assert(arg_item != NULL);
-            if (UNIT_FAILED(print_machine_item(stream, arg_item, context))) {
+            if (UNIT_FAILED(print_machine_item(stream, arg_item, context, colorize))) {
                 return _UNIT_FAIL;
             }
 
@@ -109,8 +114,12 @@ print_machine_item(FILE *stream,
     } else if (item->type == _UNIT_TYPE_PHI_ARGS) {
         for (UNIT_Size index = 0; index < _UNIT_Vector_SIZE(item->phi_args); ++index) {
             _UNIT_PhiInput *input = _UNIT_Vector_GET(item->phi_args, index);
-            PRINT("%s[block %lld: ", index ? ", " : "", (long long)input->predecessor->id);
-            if (UNIT_FAILED(print_machine_item(stream, input->value, context))) {
+            PRINT("%s[%sblock %lld%s: ",
+                  index ? ", " : "",
+                  _UNIT_COLOR(colorize, LABEL),
+                  (long long)input->predecessor->id,
+                  _UNIT_COLOR(colorize, FOREGROUND));
+            if (UNIT_FAILED(print_machine_item(stream, input->value, context, colorize))) {
                 return _UNIT_FAIL;
             }
 
@@ -119,7 +128,8 @@ print_machine_item(FILE *stream,
     } else if (item->type == _UNIT_TYPE_COMPARISON) {
         if (UNIT_FAILED(print_machine_item(stream,
                                            item->comparison.left,
-                                           context))) {
+                                           context,
+                                           colorize))) {
             return _UNIT_FAIL;
         }
 
@@ -154,21 +164,31 @@ print_machine_item(FILE *stream,
         }
         if (UNIT_FAILED(print_machine_item(stream,
                                            item->comparison.right,
-                                           context))) {
+                                           context,
+                                           colorize))) {
             return _UNIT_FAIL;
         }
     } else if (item->type == _UNIT_TYPE_MEMORY) {
-        PRINT("stack_slot_%lld", (long long)item->value);
+        PRINT("%sstack_slot_%lld%s",
+              _UNIT_COLOR(colorize, RESULT),
+              (long long)item->value,
+              _UNIT_COLOR(colorize, FOREGROUND));
     } else {
         assert(item->type == _UNIT_TYPE_REGISTER);
-        PRINT("register_%lld", (long long)item->value);
+        PRINT("%sregister_%lld%s",
+              _UNIT_COLOR(colorize, RESULT),
+              (long long)item->value,
+              _UNIT_COLOR(colorize, FOREGROUND));
     }
 
     if (item->hint != NULL) {
         PRINT(" (");
-        PRINT("\"");
-        _UNIT_PrintString(context, item->hint, stream);
-        PRINT("\"");
+        PRINT("%s\"", _UNIT_COLOR(colorize, STRING));
+        if (UNIT_FAILED(_UNIT_PrintString(context, item->hint, stream))) {
+            return _UNIT_FAIL;
+        }
+
+        PRINT("\"%s", _UNIT_COLOR(colorize, FOREGROUND));
         PRINT(")");
     }
 
@@ -179,7 +199,8 @@ print_machine_item(FILE *stream,
 
 static UNIT_Status
 print_instruction_stream(FILE *stream,
-                         _UNIT_Vector *instructions)
+                         _UNIT_Vector *instructions,
+                         int8_t colorize)
 {
 #define PRINT(...)                                           \
         if (fprintf(stream, __VA_ARGS__) < 0) {              \
@@ -199,7 +220,7 @@ print_instruction_stream(FILE *stream,
         }
 
         assert(operation != NULL);
-        PRINT("        ");
+        PRINT("%s        ", _UNIT_COLOR(colorize, BACKGROUND));
         _UNIT_MachineItem *destination =
             _UNIT_MachineDestination_GetPointerNullable(
                 operation->destination);
@@ -208,14 +229,18 @@ print_instruction_stream(FILE *stream,
         if (destination != NULL && !is_input) {
             if (UNIT_FAILED(print_machine_item(stream,
                                                destination,
-                                               instructions->context))) {
+                                               instructions->context,
+                                               colorize))) {
                 return _UNIT_FAIL;
             }
 
             PRINT(" = ");
         }
 
-        PRINT("%s(", machine_instruction_name(operation->instruction));
+        PRINT("%s%s%s(",
+              _UNIT_COLOR(colorize, INSTRUCTION),
+              machine_instruction_name(operation->instruction),
+              _UNIT_COLOR(colorize, FOREGROUND));
         if (destination != NULL && is_input) {
             // There's no reason to use the destination as an input if one of
             // the other two arguments are free.
@@ -223,7 +248,8 @@ print_instruction_stream(FILE *stream,
             assert(operation->argument_2 != NULL);
             if (UNIT_FAILED(print_machine_item(stream,
                                                destination,
-                                               instructions->context))) {
+                                               instructions->context,
+                                               colorize))) {
                 return _UNIT_FAIL;
             }
 
@@ -233,7 +259,8 @@ print_instruction_stream(FILE *stream,
         if (operation->argument_1 != NULL) {
             if (UNIT_FAILED(print_machine_item(stream,
                                                operation->argument_1,
-                                               instructions->context))) {
+                                               instructions->context,
+                                               colorize))) {
                 return _UNIT_FAIL;
             }
         }
@@ -244,12 +271,13 @@ print_instruction_stream(FILE *stream,
             PRINT(", ");
             if (UNIT_FAILED(print_machine_item(stream,
                                                operation->argument_2,
-                                               instructions->context))) {
+                                               instructions->context,
+                                               colorize))) {
                 return _UNIT_FAIL;
             }
         }
 
-        PRINT(")\n");
+        PRINT(")%s\n", _UNIT_COLOR(colorize, RESET));
     }
 
 #undef PRINT
@@ -260,7 +288,8 @@ print_instruction_stream(FILE *stream,
 UNIT_Status
 _UNIT_Translation_PrintInstructions(const _UNIT_Translation *translation,
                                     const char *name,
-                                    FILE *stream)
+                                    FILE *stream,
+                                    int8_t colorize)
 {
 #define PRINT(...)                                                          \
         if (fprintf(stream, __VA_ARGS__) < 0) {                             \
@@ -271,13 +300,16 @@ _UNIT_Translation_PrintInstructions(const _UNIT_Translation *translation,
     assert(translation != NULL);
     assert(name != NULL);
 
-    PRINT("translation for \"%s\":\n", name);
+    PRINT("translation for \"%s%s%s\":\n",
+          _UNIT_COLOR(colorize, LABEL),
+          name,
+          _UNIT_COLOR(colorize, FOREGROUND));
     UNIT_Size size = _UNIT_Vector_SIZE(&translation->blocks);
     for (UNIT_Size index = 0; index < size; ++index) {
         _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks,
                                                    index);
         assert(block != NULL);
-        PRINT("    block %lld", (long long)block->id);
+        PRINT("    %sblock %lld", _UNIT_COLOR(colorize, LABEL), (long long)block->id);
         if (_UNIT_Vector_SIZE(&block->instructions) > 0) {
             _UNIT_MachineOperation *first = _UNIT_Vector_GET(&block->instructions, 0);
             if (first->instruction == _UNIT_I_JUMP_LABEL) {
@@ -286,13 +318,14 @@ _UNIT_Translation_PrintInstructions(const _UNIT_Translation *translation,
             }
         }
 
-        PRINT("\n");
-        if (UNIT_FAILED(print_instruction_stream(stream, &block->phis))) {
+        PRINT("%s\n", _UNIT_COLOR(colorize, FOREGROUND));
+        if (UNIT_FAILED(print_instruction_stream(stream, &block->phis, colorize))) {
             return _UNIT_FAIL;
         }
 
         if (UNIT_FAILED(print_instruction_stream(stream,
-                                                 &block->instructions))) {
+                                                 &block->instructions,
+                                                 colorize))) {
             return _UNIT_FAIL;
         }
     }

@@ -63,11 +63,11 @@ main(int argc, char **argv)
     factorial.optimize();
     procedure.optimize();
 
-    factorial.print_instructions();
-    procedure.print_instructions();
+    factorial.print_instructions(stdout, true);
+    procedure.print_instructions(stdout, true);
 
     auto compiled = procedure.compile(unit::Platform::host());
-    compiled.print_translated();
+    compiled.print_translated(stdout, true);
     compiled.write_object_file("test.o", unit::host_format);
     return 0;
 }

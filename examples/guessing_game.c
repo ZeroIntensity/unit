@@ -212,7 +212,7 @@ main(void)
         goto error;
     }
 
-    if (UNIT_FAILED(UNIT_Procedure_PrintInstructions(&procedure, stdout, 1))) {
+    if (UNIT_FAILED(UNIT_Procedure_PrintInstructions(&procedure, stdout, 1, 1))) {
         goto error;
     }
 

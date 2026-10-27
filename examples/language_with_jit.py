@@ -275,7 +275,7 @@ class Function:
         compiled = procedure.compile()
 
         print(f"SPECIALIZED {self.name}{arguments}:", file=sys.stderr)
-        print(compiled.translation_text(), file=sys.stderr)
+        print(compiled.translation_text(colorize=True), file=sys.stderr)
 
         trampoline_addresses: dict[str, int] = {}
         for name, trampoline in self.trampolines.items():

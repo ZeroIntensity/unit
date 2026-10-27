@@ -96,12 +96,14 @@ class CompiledProcedure:
         with Error.capture_internal_errors():
             return ExecutableBuffer(self._compiled.jit(symbols))
 
-    def translation_text(self) -> str:
+    def translation_text(self, *, colorize: bool = False) -> str:
         with Error.capture_internal_errors():
-            return self._compiled.print_translation()
+            return self._compiled.print_translation(colorize)
 
-    def print_translation(self, *, file: IO[str] = sys.stdout) -> None:
-        print(self.translation_text(), file=file)
+    def print_translation(
+        self, *, colorize: bool = False, file: IO[str] = sys.stdout
+    ) -> None:
+        print(self.translation_text(colorize=colorize), file=file)
 
 
 Architecture: TypeAlias = Literal["amd64", "aarch64"]
@@ -394,11 +396,15 @@ class Procedure:
             self._procedure.optimize()
 
     def instructions_text(
-        self, *, visualize_stack_effect: bool = True, ignore_errors: bool = True
-    ) -> None:
+        self,
+        *,
+        visualize_stack_effect: bool = True,
+        ignore_errors: bool = True,
+        colorize: bool = False,
+    ) -> str:
         with Error.capture_internal_errors():
             return self._procedure.print_instructions(
-                int(visualize_stack_effect), int(ignore_errors)
+                int(visualize_stack_effect), int(ignore_errors), colorize
             )
 
     def print_instructions(
@@ -406,12 +412,14 @@ class Procedure:
         *,
         visualize_stack_effect: bool = True,
         ignore_errors: bool = True,
+        colorize: bool = False,
         file: IO[str] = sys.stdout,
     ) -> None:
         print(
             self.instructions_text(
                 visualize_stack_effect=visualize_stack_effect,
                 ignore_errors=ignore_errors,
+                colorize=colorize,
             ),
             file=file,
         )

@@ -381,10 +381,15 @@ CompiledProcedureObject_jit(PyObject *op, PyObject *raw_symbols)
 }
 
 static PyObject *
-CompiledProcedureObject_print_translation(PyObject *op, PyObject *unused)
+CompiledProcedureObject_print_translation(PyObject *op, PyObject *args)
 {
     assert(op != NULL);
     CompiledProcedureObject *self = CompiledProcedureObject_CAST(op);
+
+    int colorize = 0;
+    if (!PyArg_ParseTuple(args, "|p", &colorize)) {
+        return NULL;
+    }
 
     FILE *stream = tmpfile();
     if (stream == NULL) {
@@ -394,7 +399,9 @@ CompiledProcedureObject_print_translation(PyObject *op, PyObject *unused)
 
     if (UNIT_FAILED(UNIT_CompiledProcedure_PrintTranslatedIR(
                         self->compiled_procedure,
-                        stream))) {
+                        stream,
+                        colorize))) {
+        fclose(stream);
         set_py_error_from_context(get_state_from_object(op),
                                   self->compiled_procedure->context);
         return NULL;
@@ -429,7 +436,7 @@ static PyMethodDef CompiledProcedureObject_methods[] = {
      METH_VARARGS, NULL},
     {"jit", CompiledProcedureObject_jit, METH_O, NULL},
     {"print_translation", CompiledProcedureObject_print_translation,
-     METH_NOARGS, NULL},
+     METH_VARARGS, NULL},
     {NULL},
 };
 
@@ -826,11 +833,13 @@ ProcedureObject_print_instructions(PyObject *op, PyObject *args)
 
     int visualize_stack_effect;
     int ignore_errors;
+    int colorize = 0;
 
     if (!PyArg_ParseTuple(args,
-                          "ii",
+                          "ii|p",
                           &visualize_stack_effect,
-                          &ignore_errors)) {
+                          &ignore_errors,
+                          &colorize)) {
         return NULL;
     }
 
@@ -842,7 +851,8 @@ ProcedureObject_print_instructions(PyObject *op, PyObject *args)
 
     if (UNIT_FAILED(UNIT_Procedure_PrintInstructions(&self->procedure,
                                                      stream,
-                                                     visualize_stack_effect))
+                                                     visualize_stack_effect,
+                                                     colorize))
         && !ignore_errors) {
         fclose(stream);
         set_py_error_from_context(get_state_from_object(op),

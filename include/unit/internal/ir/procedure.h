@@ -128,7 +128,8 @@ UNIT_Status
 _UNIT_IntegerType_Print(UNIT_Context *context,
                         FILE *stream,
                         UNIT_IntegerType type,
-                        int64_t value);
+                        int64_t value,
+                        int8_t colorize);
 
 typedef uint32_t UNIT_Flags;
 
@@ -208,7 +209,8 @@ UNIT_OperationCode_GetName(UNIT_OperationCode instruction);
 UNIT_Status
 UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure,
                                  FILE *stream,
-                                 int8_t visualize_stack_effect);
+                                 int8_t visualize_stack_effect,
+                                 int8_t colorize);
 
 #define UNIT_FLAG_NONE 0
 #define UNIT_FLAG_NO_OPTIMIZE_TRANSLATION (1 << 0)

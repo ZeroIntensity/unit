@@ -202,7 +202,8 @@ _UNIT_Translation_Clear(_UNIT_Translation *translation);
 UNIT_Status
 _UNIT_Translation_PrintInstructions(const _UNIT_Translation *translation,
                                     const char *name,
-                                    FILE *stream);
+                                    FILE *stream,
+                                    int8_t colorize);
 
 UNIT_Status
 _UNIT_Translation_Optimize(_UNIT_Translation *translation,
