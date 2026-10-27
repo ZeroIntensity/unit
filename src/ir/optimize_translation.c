@@ -109,9 +109,19 @@ item_dead_in_block_recursive(_UNIT_BasicBlock *block,
 
         _UNIT_MachineItem *destination =
             _UNIT_MachineDestination_GetPointerNullable(operation->destination);
-        if (item_matches_or_contains(destination, item)
-            || item_matches_or_contains(operation->argument_1, item)
+        // Inputs are read before the destination is overwritten. In particular,
+        // a call can take its result register as one of its arguments.
+        if (item_matches_or_contains(operation->argument_1, item)
             || item_matches_or_contains(operation->argument_2, item)) {
+            return 0;
+        }
+
+        if (item_matches_or_contains(destination, item)) {
+            if (item->type == _UNIT_TYPE_REGISTER
+                && !_UNIT_MachineDestination_IsInput(operation->destination)) {
+                return 1;
+            }
+
             return 0;
         }
     }
@@ -159,6 +169,28 @@ item_dead_in_block(_UNIT_BasicBlock *block,
     return result;
 }
 
+static int8_t
+has_discardable_result(_UNIT_MachineInstruction instruction)
+{
+    switch (instruction) {
+        case _UNIT_I_LOAD:
+        case _UNIT_I_LOAD_STRING:
+        case _UNIT_I_LOAD_ARGUMENT:
+        case _UNIT_I_ADD:
+        case _UNIT_I_SUB:
+        case _UNIT_I_MUL:
+        case _UNIT_I_CONVERT:
+        case _UNIT_I_ADDRESS_OF: {
+            return 1;
+        }
+        default: {
+            // Calls, pointer accesses, and potentially trapping arithmetic
+            // must still execute when their destination is dead.
+            return 0;
+        }
+    }
+}
+
 static UNIT_Status
 optimize_block_loads(_UNIT_BasicBlock *block,
                      int8_t *did_change)
@@ -186,6 +218,24 @@ optimize_block_loads(_UNIT_BasicBlock *block,
         _UNIT_MachineOperation *op = _UNIT_Vector_STEAL(instrs, index);
         assert(op != NULL);
 
+        _UNIT_MachineItem *destination =
+            _UNIT_MachineDestination_GetPointerNullable(op->destination);
+        if (destination != NULL && destination->type == _UNIT_TYPE_REGISTER
+            && !_UNIT_MachineDestination_IsInput(op->destination)
+            && has_discardable_result(op->instruction)) {
+            int8_t destination_never_used = item_dead_in_block(block,
+                                                               index + 1,
+                                                               size,
+                                                               destination);
+            if (destination_never_used == -1) {
+                goto error;
+            }
+
+            if (destination_never_used) {
+                CONTINUE_AND_DISCARD(op);
+            }
+        }
+
         if (op->instruction != _UNIT_I_LOAD) {
             APPEND(op);
             continue;
@@ -194,8 +244,6 @@ optimize_block_loads(_UNIT_BasicBlock *block,
         assert(!_UNIT_MachineDestination_IsNull(op->destination));
         assert(!_UNIT_MachineDestination_IsInput(op->destination));
 
-        _UNIT_MachineItem *destination =
-            _UNIT_MachineDestination_GetPointer(op->destination);
         _UNIT_MachineItem *source = op->argument_1;
         assert(op->argument_2 == NULL);
 
@@ -207,18 +255,6 @@ optimize_block_loads(_UNIT_BasicBlock *block,
 
         if (compare_items(destination, source)) {
             // Self-load
-            CONTINUE_AND_DISCARD(op);
-        }
-
-        int8_t destination_never_used = item_dead_in_block(block,
-                                                           index + 1,
-                                                           size,
-                                                           destination);
-        if (destination_never_used == -1) {
-            goto error;
-        }
-
-        if (destination_never_used) {
             CONTINUE_AND_DISCARD(op);
         }
 
