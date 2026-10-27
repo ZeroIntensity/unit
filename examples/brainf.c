@@ -58,8 +58,8 @@ codegen_prelude(UNIT_Procedure *procedure)
     NEW_JUMP_LABEL(fail);
     NEW_JUMP_LABEL(body);
 
-    ADDOP_INT(UNIT_OP_LOAD_INTEGER, 30000);
-    ADDOP_INT(UNIT_OP_LOAD_INTEGER, 1);
+    ADDOP_INT(UNIT_OP_LOAD_INT64, 30000);
+    ADDOP_INT(UNIT_OP_LOAD_INT64, 1);
     ADDOP_CALL("calloc", 2);
     // [ptr]
 
@@ -69,7 +69,7 @@ codegen_prelude(UNIT_Procedure *procedure)
     ADDOP_INT(UNIT_OP_STORE_LOCAL, 0);
     // [ptr]
 
-    ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
+    ADDOP_INT(UNIT_OP_LOAD_INT64, 0);
     // [ptr, 0]
 
     ADDOP(UNIT_OP_COMPARE_EQUAL);
@@ -78,7 +78,7 @@ codegen_prelude(UNIT_Procedure *procedure)
     ADDOP_STR("brainfuck");
     ADDOP_CALL("perror", 1);
     ADDOP(UNIT_OP_POP);
-    ADDOP_INT(UNIT_OP_LOAD_INTEGER, 1);
+    ADDOP_INT(UNIT_OP_LOAD_INT64, 1);
     ADDOP(UNIT_OP_EXIT);
 
     USE_LABEL(body);
@@ -90,7 +90,7 @@ static int8_t
 codegen_right(UNIT_Procedure *procedure)
 {
     ADDOP_INT(UNIT_OP_LOAD_LOCAL, 0);
-    ADDOP_INT(UNIT_OP_LOAD_INTEGER, 1);
+    ADDOP_INT(UNIT_OP_LOAD_INT64, 1);
     // [ptr, 1]
     ADDOP(UNIT_OP_ADD);
     ADDOP_INT(UNIT_OP_STORE_LOCAL, 0);
@@ -101,7 +101,7 @@ static int8_t
 codegen_left(UNIT_Procedure *procedure)
 {
     ADDOP_INT(UNIT_OP_LOAD_LOCAL, 0);
-    ADDOP_INT(UNIT_OP_LOAD_INTEGER, 1);
+    ADDOP_INT(UNIT_OP_LOAD_INT64, 1);
     // [ptr, 1]
     ADDOP(UNIT_OP_SUBTRACT);
     ADDOP_INT(UNIT_OP_STORE_LOCAL, 0);
@@ -116,7 +116,7 @@ codegen_add(UNIT_Procedure *procedure)
 
     ADDOP_INT(UNIT_OP_READ_BYTES, 1);
     // [ptr, *ptr]
-    ADDOP_INT(UNIT_OP_LOAD_INTEGER, 1);
+    ADDOP_INT(UNIT_OP_LOAD_INT64, 1);
     ADDOP(UNIT_OP_ADD);
     // [ptr, *ptr + 1]
 
@@ -132,7 +132,7 @@ codegen_sub(UNIT_Procedure *procedure)
 
     ADDOP_INT(UNIT_OP_READ_BYTES, 1);
     // [ptr, *ptr]
-    ADDOP_INT(UNIT_OP_LOAD_INTEGER, 1);
+    ADDOP_INT(UNIT_OP_LOAD_INT64, 1);
     ADDOP(UNIT_OP_SUBTRACT);
     // [ptr, *ptr - 1]
 
@@ -170,7 +170,7 @@ codegen_input(UNIT_Procedure *procedure)
 static int8_t
 codegen_final(UNIT_Procedure *procedure)
 {
-    ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
+    ADDOP_INT(UNIT_OP_LOAD_INT64, 0);
     ADDOP(UNIT_OP_RETURN_VALUE);
 
     return 0;
@@ -186,7 +186,7 @@ codegen_loop_start(UNIT_Procedure *procedure)
 
     ADDOP_INT(UNIT_OP_LOAD_LOCAL, 0);
     ADDOP_INT(UNIT_OP_READ_BYTES, 1);
-    ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
+    ADDOP_INT(UNIT_OP_LOAD_INT64, 0);
     // [*ptr, 0]
     ADDOP(UNIT_OP_COMPARE_EQUAL);
 
@@ -236,7 +236,7 @@ codegen_body(UNIT_Procedure *procedure, FILE *file, int8_t in_loop)
 
                 ADDOP_INT(UNIT_OP_LOAD_LOCAL, 0);
                 ADDOP_INT(UNIT_OP_READ_BYTES, 1);
-                ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
+                ADDOP_INT(UNIT_OP_LOAD_INT64, 0);
                 // [*ptr, 0]
                 ADDOP(UNIT_OP_COMPARE_EQUAL);
 

@@ -14,6 +14,10 @@ compare_items(_UNIT_MachineItem *left,
         return 0;
     }
 
+    if (left->type == _UNIT_TYPE_CONSTANT && left->integer_type != right->integer_type) {
+        return 0;
+    }
+
     if (left->type == _UNIT_TYPE_CALL_ARGS) {
         assert(right->type == _UNIT_TYPE_CALL_ARGS);
         UNIT_Size size = _UNIT_Vector_SIZE(left->call_args);
@@ -286,6 +290,7 @@ error:
 typedef struct {
     int64_t value;
     int8_t is_known;
+    UNIT_IntegerType integer_type;
 } RegisterValue;
 
 static int8_t
@@ -300,6 +305,7 @@ fold_register_value(RegisterValue *register_values,
     if (operand->type == _UNIT_TYPE_REGISTER
         && register_values[operand->value].is_known) {
         operand->type = _UNIT_TYPE_CONSTANT;
+        operand->integer_type = register_values[operand->value].integer_type;
         operand->value = register_values[operand->value].value;
         return 1;
     }
@@ -410,6 +416,7 @@ optimize_block_folds(_UNIT_BasicBlock *block,
                     register_values[destination->value].value =
                         op->argument_1->value;
                     register_values[destination->value].is_known = 1;
+                    register_values[destination->value].integer_type = op->argument_1->integer_type;
                     // Keep a materialized value for uses in successor blocks.
                     APPEND(op);
                     continue;
@@ -431,9 +438,11 @@ optimize_block_folds(_UNIT_BasicBlock *block,
                                    op->argument_1->value,
                                    op->argument_2->value,
                                    &value)) {
-                    register_values[destination->value] = (RegisterValue) {value, 1};
+                    register_values[destination->value] = (RegisterValue) {value, 1,
+                                                                           UNIT_TYPE_INT64};
                     op->instruction = _UNIT_I_LOAD;
                     op->argument_1->value = value;
+                    op->argument_1->integer_type = UNIT_TYPE_INT64;
                     op->argument_2 = NULL;
                     *did_change = 1;
                     APPEND(op);

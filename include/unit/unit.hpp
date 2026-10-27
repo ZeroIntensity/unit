@@ -254,7 +254,14 @@ friend class Procedure;
 enum class OpCode
 {
     LOAD_STRING = UNIT_OP_LOAD_STRING,
-    LOAD_INTEGER = UNIT_OP_LOAD_INTEGER,
+    LOAD_INT8 = UNIT_OP_LOAD_INT8,
+    LOAD_INT16 = UNIT_OP_LOAD_INT16,
+    LOAD_INT32 = UNIT_OP_LOAD_INT32,
+    LOAD_INT64 = UNIT_OP_LOAD_INT64,
+    LOAD_UINT8 = UNIT_OP_LOAD_UINT8,
+    LOAD_UINT16 = UNIT_OP_LOAD_UINT16,
+    LOAD_UINT32 = UNIT_OP_LOAD_UINT32,
+    LOAD_UINT64 = UNIT_OP_LOAD_UINT64,
 
     LOAD_LOCAL = UNIT_OP_LOAD_LOCAL,
     STORE_LOCAL = UNIT_OP_STORE_LOCAL,
@@ -507,9 +514,51 @@ load_local(int64_t index)
 }
 
 void
-load_integer(std::int64_t value)
+load_int8(std::int8_t value)
 {
-    add_op_int(OpCode::LOAD_INTEGER, value);
+    add_op_int(OpCode::LOAD_INT8, value);
+}
+
+void
+load_int16(std::int16_t value)
+{
+    add_op_int(OpCode::LOAD_INT16, value);
+}
+
+void
+load_int32(std::int32_t value)
+{
+    add_op_int(OpCode::LOAD_INT32, value);
+}
+
+void
+load_int64(std::int64_t value)
+{
+    add_op_int(OpCode::LOAD_INT64, value);
+}
+
+void
+load_uint8(std::uint8_t value)
+{
+    add_op_int(OpCode::LOAD_UINT8, value);
+}
+
+void
+load_uint16(std::uint16_t value)
+{
+    add_op_int(OpCode::LOAD_UINT16, value);
+}
+
+void
+load_uint32(std::uint32_t value)
+{
+    add_op_int(OpCode::LOAD_UINT32, value);
+}
+
+void
+load_uint64(std::uint64_t value)
+{
+    add_op_int(OpCode::LOAD_UINT64, static_cast<std::int64_t>(value));
 }
 
 void

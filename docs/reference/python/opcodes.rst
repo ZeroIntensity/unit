@@ -17,17 +17,53 @@ Operation codes
       :caption: :iconify:`akar-icons:python-fill` Example
 
       # Preferred: use Procedure methods
-      proc.load_integer(42)
+      proc.load_int64(42)
       proc.add()
 
       # Advanced: use OpCode enum directly
-      proc._add_op_int(OpCode.LOAD_INTEGER, 42)
+      proc._add_op_int(OpCode.LOAD_INT64, 42)
 
    **Constants**
 
-   .. py:attribute:: LOAD_INTEGER
+   .. py:attribute:: LOAD_INT8
 
-      Push an integer constant. See :c:macro:`UNIT_OP_LOAD_INTEGER`.
+      Push a signed 8-bit integer constant.
+      See :c:enumerator:`UNIT_OP_LOAD_INT8`.
+
+   .. py:attribute:: LOAD_INT16
+
+      Push a signed 16-bit integer constant.
+      See :c:enumerator:`UNIT_OP_LOAD_INT16`.
+
+   .. py:attribute:: LOAD_INT32
+
+      Push a signed 32-bit integer constant.
+      See :c:enumerator:`UNIT_OP_LOAD_INT32`.
+
+   .. py:attribute:: LOAD_INT64
+
+      Push a signed 64-bit integer constant.
+      See :c:enumerator:`UNIT_OP_LOAD_INT64`.
+
+   .. py:attribute:: LOAD_UINT8
+
+      Push an unsigned 8-bit integer constant.
+      See :c:enumerator:`UNIT_OP_LOAD_UINT8`.
+
+   .. py:attribute:: LOAD_UINT16
+
+      Push an unsigned 16-bit integer constant.
+      See :c:enumerator:`UNIT_OP_LOAD_UINT16`.
+
+   .. py:attribute:: LOAD_UINT32
+
+      Push an unsigned 32-bit integer constant.
+      See :c:enumerator:`UNIT_OP_LOAD_UINT32`.
+
+   .. py:attribute:: LOAD_UINT64
+
+      Push an unsigned 64-bit integer constant.
+      See :c:enumerator:`UNIT_OP_LOAD_UINT64`.
 
    .. py:attribute:: LOAD_STRING
 

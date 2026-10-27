@@ -81,7 +81,12 @@ print_machine_item(FILE *stream,
 
     assert(item != NULL);
     if (item->type == _UNIT_TYPE_CONSTANT) {
-        PRINT("%lld", (long long)item->value);
+        if (UNIT_FAILED(_UNIT_IntegerType_Print(context,
+                                                stream,
+                                                item->integer_type,
+                                                item->value))) {
+            return _UNIT_FAIL;
+        }
     } else if (item->type == _UNIT_TYPE_LOCATION) {
         PRINT("location_%lld", (long long)item->value);
     } else if (item->type == _UNIT_TYPE_CALL_ARGS) {
@@ -308,6 +313,7 @@ _UNIT_Translation_NewItem(_UNIT_Translation *translation,
     }
 
     item->type = type;
+    item->integer_type = UNIT_TYPE_INT64;
     item->value = value;
     if (hint != NULL) {
         item->hint = _UNIT_StrDup(translation->context, hint);
@@ -883,8 +889,20 @@ translate_block(Builder *builder, BlockState *state)
             case _UNIT_OP_JUMP_MARKER: {
                 break;
             }
-            case UNIT_OP_LOAD_INTEGER: {
-                ITEM(value, _UNIT_TYPE_CONSTANT, op->argument, NULL);
+            case UNIT_OP_LOAD_INT8:
+            case UNIT_OP_LOAD_INT16:
+            case UNIT_OP_LOAD_INT32:
+            case UNIT_OP_LOAD_INT64:
+            case UNIT_OP_LOAD_UINT8:
+            case UNIT_OP_LOAD_UINT16:
+            case UNIT_OP_LOAD_UINT32:
+            case UNIT_OP_LOAD_UINT64: {
+                UNIT_IntegerType type = _UNIT_OperationCode_GetIntegerType(op->instruction);
+                ITEM(value,
+                     _UNIT_TYPE_CONSTANT,
+                     _UNIT_IntegerType_Convert(type, op->argument),
+                     NULL);
+                value->integer_type = type;
                 CHECK(_UNIT_Vector_Append(stack, value));
                 break;
             }
@@ -1236,6 +1254,7 @@ simplify_phis(_UNIT_Translation *translation)
                     if (same != NULL && same != input->value
                         && !(same->type == _UNIT_TYPE_CONSTANT
                              && input->value->type == _UNIT_TYPE_CONSTANT
+                             && same->integer_type == input->value->integer_type
                              && same->value == input->value->value)) {
                         trivial = 0;
                         break;

@@ -79,19 +79,19 @@ main(void)
     NEW_JUMP_LABEL(start_game);
 
     ADDOP_INT(UNIT_OP_LOAD_ARGUMENT, 0);
-    ADDOP_INT(UNIT_OP_LOAD_INTEGER, 1);
+    ADDOP_INT(UNIT_OP_LOAD_INT64, 1);
     ADDOP(UNIT_OP_COMPARE_LESS_EQUAL);
     ADDOP_JUMP(UNIT_OP_JUMP_IF_TRUE, set_seed_from_time);
 
     ADDOP_INT(UNIT_OP_LOAD_ARGUMENT, 1); // argv
-    ADDOP_INT(UNIT_OP_LOAD_INTEGER, sizeof(char *));
+    ADDOP_INT(UNIT_OP_LOAD_INT64, sizeof(char *));
     ADDOP(UNIT_OP_ADD);
     // [argv + 8 (&argv[1])]
     ADDOP_INT(UNIT_OP_READ_BYTES, 8);
     // [argv[1]]
 
     NEW_NAME(seed);
-    ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
+    ADDOP_INT(UNIT_OP_LOAD_INT64, 0);
     ADDOP_STORE_NAME(seed);
 
     ADDOP_STR("%d");
@@ -100,7 +100,7 @@ main(void)
     ADDOP_CALL("sscanf", 3);
     // [result]
 
-    ADDOP_INT(UNIT_OP_LOAD_INTEGER, 1);
+    ADDOP_INT(UNIT_OP_LOAD_INT64, 1);
     ADDOP(UNIT_OP_COMPARE_NOT_EQUAL);
     ADDOP_JUMP(UNIT_OP_JUMP_IF_TRUE, invalid_seed);
 
@@ -113,11 +113,11 @@ main(void)
     ADDOP_STR("Not a valid seed");
     ADDOP_CALL("puts", 1);
     ADDOP(UNIT_OP_POP);
-    ADDOP_INT(UNIT_OP_LOAD_INTEGER, 1);
+    ADDOP_INT(UNIT_OP_LOAD_INT64, 1);
     ADDOP(UNIT_OP_RETURN_VALUE);
 
     USE_LABEL(set_seed_from_time);
-    ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0); // NULL
+    ADDOP_INT(UNIT_OP_LOAD_INT64, 0); // NULL
     ADDOP_CALL("time", 1);
     ADDOP_CALL("srand", 1);
     ADDOP(UNIT_OP_POP);
@@ -129,9 +129,9 @@ main(void)
     ADDOP(UNIT_OP_POP);
 
     ADDOP_CALL("rand", 0);
-    ADDOP_INT(UNIT_OP_LOAD_INTEGER, 100);
+    ADDOP_INT(UNIT_OP_LOAD_INT64, 100);
     ADDOP(UNIT_OP_MODULO);
-    ADDOP_INT(UNIT_OP_LOAD_INTEGER, 1);
+    ADDOP_INT(UNIT_OP_LOAD_INT64, 1);
     ADDOP(UNIT_OP_ADD);
     NEW_NAME(number);
     ADDOP_STORE_NAME(number);
@@ -150,7 +150,7 @@ main(void)
     ADDOP_CALL("scanf", 1);
     ADDOP(UNIT_OP_POP);
 
-    ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
+    ADDOP_INT(UNIT_OP_LOAD_INT64, 0);
     NEW_NAME(guess);
     ADDOP_STORE_NAME(guess);
     ADDOP_STR("Not a valid number");
@@ -162,7 +162,7 @@ main(void)
     ADDOP_STR("%d");
     ADDOP_INT(UNIT_OP_ADDRESS_OF, guess.id);
     ADDOP_CALL("scanf", 2);
-    ADDOP_INT(UNIT_OP_LOAD_INTEGER, 1);
+    ADDOP_INT(UNIT_OP_LOAD_INT64, 1);
     ADDOP(UNIT_OP_COMPARE_NOT_EQUAL);
     ADDOP_JUMP(UNIT_OP_JUMP_IF_TRUE, invalid);
 
@@ -201,7 +201,7 @@ main(void)
     ADDOP_CALL("puts", 1);
     ADDOP(UNIT_OP_POP);
 
-    ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
+    ADDOP_INT(UNIT_OP_LOAD_INT64, 0);
     ADDOP(UNIT_OP_RETURN_VALUE);
 
 #ifndef UNIT_HOST_PLATFORM

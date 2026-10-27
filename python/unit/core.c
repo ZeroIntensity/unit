@@ -601,8 +601,19 @@ ProcedureObject_add_operation(PyObject *op, PyObject *args)
     ProcedureObject *self = ProcedureObject_CAST(op);
     UNIT_OperationCode instruction;
     int64_t oparg;
+    PyObject *argument;
 
-    if (!PyArg_ParseTuple(args, "iL", &instruction, &oparg)) {
+    if (!PyArg_ParseTuple(args, "iO", &instruction, &argument)) {
+        return NULL;
+    }
+
+    if (instruction >= UNIT_OP_LOAD_UINT8 && instruction <= UNIT_OP_LOAD_UINT64) {
+        oparg = (int64_t)PyLong_AsUnsignedLongLong(argument);
+    } else {
+        oparg = PyLong_AsLongLong(argument);
+    }
+
+    if (oparg == -1 && PyErr_Occurred()) {
         return NULL;
     }
 
@@ -946,7 +957,14 @@ _unit_modexec(PyObject *module)
         }
 
     EXPORT_CONST(UNIT_OP_LOAD_STRING);
-    EXPORT_CONST(UNIT_OP_LOAD_INTEGER);
+    EXPORT_CONST(UNIT_OP_LOAD_INT8);
+    EXPORT_CONST(UNIT_OP_LOAD_INT16);
+    EXPORT_CONST(UNIT_OP_LOAD_INT32);
+    EXPORT_CONST(UNIT_OP_LOAD_INT64);
+    EXPORT_CONST(UNIT_OP_LOAD_UINT8);
+    EXPORT_CONST(UNIT_OP_LOAD_UINT16);
+    EXPORT_CONST(UNIT_OP_LOAD_UINT32);
+    EXPORT_CONST(UNIT_OP_LOAD_UINT64);
 
     EXPORT_CONST(UNIT_OP_LOAD_LOCAL);
     EXPORT_CONST(UNIT_OP_STORE_LOCAL);

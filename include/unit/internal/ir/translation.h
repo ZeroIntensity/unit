@@ -26,6 +26,7 @@ typedef enum {
 
 typedef struct _UNIT_MachineItem {
     _UNIT_MachineItem_Type type;
+    UNIT_IntegerType integer_type; // Width and signedness of a constant
     union {
         int64_t value;
         _UNIT_Vector *call_args;

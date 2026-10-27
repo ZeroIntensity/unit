@@ -178,15 +178,21 @@ namespace, but for now, let's focus on :c:func:`UNIT_Procedure_AddOperation`,
 which takes an opcode and oparg as an integer. If we wanted to make a program
 that simply did ``return 0``, we need two instructions:
 
-1. :c:enum:`UNIT_OP_LOAD_INTEGER`, which pushes a constant integer onto the
+1. :c:enum:`UNIT_OP_LOAD_INT64`, which pushes a constant integer onto the
    operand stack.
 2. :c:enum:`UNIT_OP_RETURN_VALUE`, which pops a value off the operand
    stack and returns it to the caller.
 
-For ``LOAD_INTEGER``, we need an oparg. This is the value that will be pushed
+For ``LOAD_INT64``, we need an oparg. This is the value that will be pushed
 onto the stack. In our case, this will be ``0``. For ``RETURN_VALUE``, we don't
 need an oparg, so we can put any value we want for the oparg. We'll just stay
 simple and pass ``0``.
+
+Integer constants have dedicated load instructions: ``LOAD_INT8``,
+``LOAD_INT16``, ``LOAD_INT32``, ``LOAD_INT64``, and the corresponding
+``LOAD_UINT8`` through ``LOAD_UINT64`` instructions for unsigned values.
+They truncate to the selected width and extend to a 64-bit stack value.
+Debug IR shows the load type, such as ``i64(0)``. See :ref:`c-opcodes`.
 
 Now, if we apply this to our code:
 
@@ -211,7 +217,7 @@ Now, if we apply this to our code:
             return 1;
         }
 
-        if (UNIT_FAILED(UNIT_Procedure_AddOperation(&procedure, UNIT_OP_LOAD_INTEGER, 0))) {
+        if (UNIT_FAILED(UNIT_Procedure_AddOperation(&procedure, UNIT_OP_LOAD_INT64, 0))) {
             UNIT_PrintError(&context, stderr);
             UNIT_Procedure_Clear(&procedure);
             UNIT_Context_Clear(&context);
@@ -267,7 +273,7 @@ We can clean this up by adding some macros tailored to our function, like so:
 
         #define ADDOP(op) ADDOP_INT(op, 0)
 
-        ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
+        ADDOP_INT(UNIT_OP_LOAD_INT64, 0);
         ADDOP(UNIT_OP_RETURN_VALUE);
 
         #undef ADDOP_INT
@@ -299,7 +305,7 @@ we add more instructions.
         int main(void)
         {
             /* ... */
-            if (UNIT_FAILED(UNIT_Procedure_AddOperation(&operation, UNIT_OP_LOAD_INTEGER, 42))) {
+            if (UNIT_FAILED(UNIT_Procedure_AddOperation(&operation, UNIT_OP_LOAD_INT64, 42))) {
                 goto error;
             }
             /* ... */
@@ -343,7 +349,7 @@ our code is running:
 
         #define ADDOP(op) ADDOP_INT(op, 0)
 
-        ADDOP_INT(UNIT_OP_LOAD_INTEGER, 1);
+        ADDOP_INT(UNIT_OP_LOAD_INT64, 1);
         ADDOP(UNIT_OP_RETURN_VALUE);
 
         #undef ADDOP_INT

@@ -94,7 +94,7 @@ Emitting instructions
       :caption: :iconify:`streamline-logos:c-language-logo-solid` Example
 
       // return 42
-      UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INTEGER, 42);
+      UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INT64, 42);
       UNIT_Procedure_AddOperation(&proc, UNIT_OP_RETURN_VALUE, 0);
 
 
@@ -131,7 +131,7 @@ Emitting instructions
 
       // printf("%d\n", 42)
       UNIT_Procedure_AddStringLoad(&proc, "%d\n");
-      UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INTEGER, 42);
+      UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INT64, 42);
       UNIT_Procedure_AddCallName(&proc, "printf", 2);
       UNIT_Procedure_AddOperation(&proc, UNIT_OP_POP, 0);
 
@@ -148,7 +148,7 @@ Emitting instructions
    .. code-block:: c
       :caption: :iconify:`streamline-logos:c-language-logo-solid` Example
 
-      UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INTEGER, 5);
+      UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INT64, 5);
       UNIT_Procedure_AddCallProcedure(&main_proc, &factorial_proc, 1);
 
 
@@ -171,7 +171,7 @@ Local Variables
       UNIT_Local x;
       UNIT_Procedure_CreateLocal(&proc, "x", &x);
 
-      UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INTEGER, 42);
+      UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INT64, 42);
       UNIT_Procedure_AddStoreName(&proc, x);
       UNIT_Procedure_AddLoadName(&proc, x);
 
@@ -254,7 +254,7 @@ Jump Labels
 
       UNIT_JumpLabel *end = UNIT_Procedure_CreateJumpLabel(&proc, "end");
 
-      UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INTEGER, 0);
+      UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INT64, 0);
       UNIT_Procedure_AddOperation(&proc, UNIT_OP_COMPARE_EQUAL, 0);
       UNIT_Procedure_AddJump(&proc, UNIT_OP_JUMP_IF_TRUE, end);
 
@@ -361,7 +361,7 @@ Debugging
 
 .. c:function:: const char *UNIT_OperationCode_GetName(UNIT_OperationCode instruction)
 
-   Return the name of an opcode as a string (e.g. ``"LOAD_INTEGER"``).
+   Return the name of an opcode as a string (e.g. ``"LOAD_INT64"``).
 
    :param instruction: The opcode.
    :return: A static string. Must not be freed.

@@ -71,7 +71,7 @@ class Constant[T](Expression):
 
     def codegen_unit(self, procedure: unit.Procedure) -> None:
         if isinstance(self.value, int):
-            procedure.load_integer(self.value)
+            procedure.load_int64(self.value)
         else:
             assert isinstance(self.value, str)
             procedure.load_string(self.value)

@@ -41,11 +41,11 @@ Each local is identified by an integer index. You store a value with
    // Local 0 = answer, Local 1 = guess
 
    // answer (index 0) = 42
-   ADDOP_INT(UNIT_OP_LOAD_INTEGER, 42);
+   ADDOP_INT(UNIT_OP_LOAD_INT64, 42);
    ADDOP_INT(UNIT_OP_STORE_LOCAL, 0);
 
    // guess (index 1) = 50
-   ADDOP_INT(UNIT_OP_LOAD_INTEGER, 50);
+   ADDOP_INT(UNIT_OP_LOAD_INT64, 50);
    ADDOP_INT(UNIT_OP_STORE_LOCAL, 1);
 
 .. hint::
@@ -56,7 +56,7 @@ Each local is identified by an integer index. You store a value with
     .. code-block:: c
 
         // variables[0] = 42
-        ADDOP_INT(UNIT_OP_LOAD_INTEGER, 42);
+        ADDOP_INT(UNIT_OP_LOAD_INT64, 42);
         ADDOP_INT(UNIT_OP_STORE_LOCAL, 0);
 
 ``STORE_LOCAL`` pops the top of the stack into the local at the given index.
@@ -68,7 +68,7 @@ is perfectly valid and does not use exorbitant amounts of memory:
 
 .. code-block:: c
 
-   ADDOP_INT(UNIT_OP_LOAD_INTEGER, 42);
+   ADDOP_INT(UNIT_OP_LOAD_INT64, 42);
    ADDOP_INT(UNIT_OP_STORE_LOCAL, 100000000);
 
 UNIT maintains a mapping of your local variable IDs to real ones used during
@@ -98,11 +98,11 @@ that you pass to :c:func:`UNIT_Procedure_AddStoreName` and
    NEW_LOCAL(guess);
 
    // answer = 42
-   ADDOP_INT(UNIT_OP_LOAD_INTEGER, 42);
+   ADDOP_INT(UNIT_OP_LOAD_INT64, 42);
    STORE_NAME(answer);
 
    // guess = 50
-   ADDOP_INT(UNIT_OP_LOAD_INTEGER, 50);
+   ADDOP_INT(UNIT_OP_LOAD_INT64, 50);
    STORE_NAME(guess);
 
 This is equivalent to the raw index version, but the names make the code
@@ -140,7 +140,7 @@ which takes a format string and the value to print. Use
     CALL_NAME("printf", 2);
     ADDOP(UNIT_OP_POP); // discard printf's return value
 
-    ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
+    ADDOP_INT(UNIT_OP_LOAD_INT64, 0);
     ADDOP(UNIT_OP_RETURN_VALUE);
 
 The :c:enumerator:`UNIT_OP_POP` after the call discards ``printf``'s return
@@ -207,11 +207,11 @@ Here's the full program again:
         NEW_LOCAL(guess);
 
         // answer = 42
-        ADDOP_INT(UNIT_OP_LOAD_INTEGER, 42);
+        ADDOP_INT(UNIT_OP_LOAD_INT64, 42);
         STORE_NAME(answer);
 
         // guess = 50
-        ADDOP_INT(UNIT_OP_LOAD_INTEGER, 50);
+        ADDOP_INT(UNIT_OP_LOAD_INT64, 50);
         STORE_NAME(guess);
 
         // printf("You guessed: %d\n", guess)
@@ -220,7 +220,7 @@ Here's the full program again:
         CALL_NAME("printf", 2);
         ADDOP(UNIT_OP_POP);
 
-        ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
+        ADDOP_INT(UNIT_OP_LOAD_INT64, 0);
         ADDOP(UNIT_OP_RETURN_VALUE);
 
         if (UNIT_FAILED(UNIT_Procedure_Optimize(&procedure))) {
@@ -427,7 +427,7 @@ We'll follow the same practice as before:
    ADDOP(UNIT_OP_POP);
 
    // return 0
-   ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
+   ADDOP_INT(UNIT_OP_LOAD_INT64, 0);
    ADDOP(UNIT_OP_RETURN_VALUE);
 
    USE_LABEL(end);
@@ -457,7 +457,7 @@ Replace the hardcoded answer with:
 .. code-block:: c
 
    // srand(time(NULL)) -- NULL is just 0
-   ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
+   ADDOP_INT(UNIT_OP_LOAD_INT64, 0);
    CALL_NAME("time", 1);
    // [time_result]
 
@@ -466,11 +466,11 @@ Replace the hardcoded answer with:
 
    // answer = (rand() % 100) + 1
    CALL_NAME("rand", 0);
-   ADDOP_INT(UNIT_OP_LOAD_INTEGER, 100);
+   ADDOP_INT(UNIT_OP_LOAD_INT64, 100);
    ADDOP(UNIT_OP_MODULO);
    // [rand() % 100]
 
-   ADDOP_INT(UNIT_OP_LOAD_INTEGER, 1);
+   ADDOP_INT(UNIT_OP_LOAD_INT64, 1);
    ADDOP(UNIT_OP_ADD);
    // [(rand() % 100) + 1]
 
@@ -589,7 +589,7 @@ Here's the full program again:
         NEW_LOCAL(guess);
 
         // srand(time(NULL)) -- NULL is just 0
-        ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
+        ADDOP_INT(UNIT_OP_LOAD_INT64, 0);
         CALL_NAME("time", 1);
         // [time_result]
 
@@ -598,11 +598,11 @@ Here's the full program again:
 
         // answer = (rand() % 100) + 1
         CALL_NAME("rand", 0);
-        ADDOP_INT(UNIT_OP_LOAD_INTEGER, 100);
+        ADDOP_INT(UNIT_OP_LOAD_INT64, 100);
         ADDOP(UNIT_OP_MODULO);
         // [rand() % 100]
 
-        ADDOP_INT(UNIT_OP_LOAD_INTEGER, 1);
+        ADDOP_INT(UNIT_OP_LOAD_INT64, 1);
         ADDOP(UNIT_OP_ADD);
         // [(rand() % 100) + 1]
 
@@ -653,12 +653,12 @@ Here's the full program again:
         ADDOP(UNIT_OP_POP);
 
         // return 0
-        ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
+        ADDOP_INT(UNIT_OP_LOAD_INT64, 0);
         ADDOP(RETURN_VALUE);
 
         USE_LABEL(end);
 
-        ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
+        ADDOP_INT(UNIT_OP_LOAD_INT64, 0);
         ADDOP(UNIT_OP_RETURN_VALUE);
 
         if (UNIT_FAILED(UNIT_Procedure_Optimize(&procedure))) {
@@ -829,7 +829,7 @@ that you can compile and run:
         NEW_LOCAL(guess);
 
         // srand(time(NULL)) -- NULL is just 0
-        ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
+        ADDOP_INT(UNIT_OP_LOAD_INT64, 0);
         CALL_NAME("time", 1);
         // [time_result]
 
@@ -838,11 +838,11 @@ that you can compile and run:
 
         // answer = (rand() % 100) + 1
         CALL_NAME("rand", 0);
-        ADDOP_INT(UNIT_OP_LOAD_INTEGER, 100);
+        ADDOP_INT(UNIT_OP_LOAD_INT64, 100);
         ADDOP(UNIT_OP_MODULO);
         // [rand() % 100]
 
-        ADDOP_INT(UNIT_OP_LOAD_INTEGER, 1);
+        ADDOP_INT(UNIT_OP_LOAD_INT64, 1);
         ADDOP(UNIT_OP_ADD);
         // [(rand() % 100) + 1]
 
@@ -895,7 +895,7 @@ that you can compile and run:
         ADDOP(UNIT_OP_POP);
 
         // return 0
-        ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
+        ADDOP_INT(UNIT_OP_LOAD_INT64, 0);
         ADDOP(UNIT_OP_RETURN_VALUE);
 
         USE_LABEL(end);

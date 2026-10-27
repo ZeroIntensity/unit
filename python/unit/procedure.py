@@ -256,8 +256,29 @@ class Procedure:
         with Error.capture_internal_errors():
             return JumpLabel(self._procedure.create_jump_label(name))
 
-    def load_integer(self, value: int, /) -> None:
-        self._add_op_int(OpCode.LOAD_INTEGER, value)
+    def load_int8(self, value: int, /) -> None:
+        self._add_op_int(OpCode.LOAD_INT8, value)
+
+    def load_int16(self, value: int, /) -> None:
+        self._add_op_int(OpCode.LOAD_INT16, value)
+
+    def load_int32(self, value: int, /) -> None:
+        self._add_op_int(OpCode.LOAD_INT32, value)
+
+    def load_int64(self, value: int, /) -> None:
+        self._add_op_int(OpCode.LOAD_INT64, value)
+
+    def load_uint8(self, value: int, /) -> None:
+        self._add_op_int(OpCode.LOAD_UINT8, value)
+
+    def load_uint16(self, value: int, /) -> None:
+        self._add_op_int(OpCode.LOAD_UINT16, value)
+
+    def load_uint32(self, value: int, /) -> None:
+        self._add_op_int(OpCode.LOAD_UINT32, value)
+
+    def load_uint64(self, value: int, /) -> None:
+        self._add_op_int(OpCode.LOAD_UINT64, value)
 
     def load_string(self, value: str, /) -> None:
         if __debug__ and not isinstance(value, str):

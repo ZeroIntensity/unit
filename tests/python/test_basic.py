@@ -30,7 +30,7 @@ class BasicTests(unittest.TestCase):
     def test_return_constant(self):
         proc = self.make_procedure()
 
-        proc.load_integer(42)
+        proc.load_int8(42)
         proc.return_value()
 
         self.compile_and_run(proc, 42)
@@ -38,22 +38,22 @@ class BasicTests(unittest.TestCase):
     def test_return_negative(self):
         proc = self.make_procedure()
 
-        proc.load_integer(-1)
+        proc.load_int16(-1)
         proc.return_value()
 
         self.compile_and_run(proc, -1)
 
     def test_return_large(self):
         proc = self.make_procedure()
-        proc.load_integer(2**40)
+        proc.load_uint64(2**40)
         proc.return_value()
         self.compile_and_run(proc, 2**40)
 
     def test_add(self):
         proc = self.make_procedure()
 
-        proc.load_integer(10)
-        proc.load_integer(20)
+        proc.load_int32(10)
+        proc.load_uint8(20)
         proc.add()
         proc.return_value()
 
@@ -62,8 +62,8 @@ class BasicTests(unittest.TestCase):
     def test_add_negative(self):
         proc = self.make_procedure()
 
-        proc.load_integer(-5)
-        proc.load_integer(3)
+        proc.load_int64(-5)
+        proc.load_uint16(3)
         proc.add()
         proc.return_value()
 
@@ -72,8 +72,8 @@ class BasicTests(unittest.TestCase):
     def test_subtract(self):
         proc = self.make_procedure()
 
-        proc.load_integer(10)
-        proc.load_integer(20)
+        proc.load_uint32(10)
+        proc.load_int64(20)
         proc.add()
         proc.return_value()
 
@@ -82,8 +82,8 @@ class BasicTests(unittest.TestCase):
     def test_subtract_negative_result(self):
         proc = self.make_procedure()
 
-        proc.load_integer(5)
-        proc.load_integer(10)
+        proc.load_int64(5)
+        proc.load_int64(10)
         proc.subtract()
         proc.return_value()
 
@@ -92,8 +92,8 @@ class BasicTests(unittest.TestCase):
     def test_mul(self):
         proc = self.make_procedure()
 
-        proc.load_integer(5)
-        proc.load_integer(10)
+        proc.load_int64(5)
+        proc.load_int64(10)
         proc.multiply()
         proc.return_value()
 
@@ -102,8 +102,8 @@ class BasicTests(unittest.TestCase):
     def test_multiply_by_zero(self):
         proc = self.make_procedure()
 
-        proc.load_integer(100)
-        proc.load_integer(0)
+        proc.load_int64(100)
+        proc.load_int64(0)
         proc.multiply()
         proc.return_value()
 
@@ -112,8 +112,8 @@ class BasicTests(unittest.TestCase):
     def test_multiply_negatives(self):
         proc = self.make_procedure()
 
-        proc.load_integer(-3)
-        proc.load_integer(-4)
+        proc.load_int64(-3)
+        proc.load_int64(-4)
         proc.multiply()
         proc.return_value()
 
@@ -122,8 +122,8 @@ class BasicTests(unittest.TestCase):
     def test_divide(self):
         proc = self.make_procedure()
 
-        proc.load_integer(20)
-        proc.load_integer(10)
+        proc.load_int64(20)
+        proc.load_int64(10)
         proc.divide()
         proc.return_value()
 
@@ -132,8 +132,8 @@ class BasicTests(unittest.TestCase):
     def test_divide_truncates(self):
         proc = self.make_procedure()
 
-        proc.load_integer(7)
-        proc.load_integer(2)
+        proc.load_int64(7)
+        proc.load_int64(2)
         proc.divide()
         proc.return_value()
 
@@ -142,8 +142,8 @@ class BasicTests(unittest.TestCase):
     def test_modulo(self):
         proc = self.make_procedure()
 
-        proc.load_integer(5)
-        proc.load_integer(2)
+        proc.load_int64(5)
+        proc.load_int64(2)
         proc.modulo()
         proc.return_value()
 
@@ -153,10 +153,10 @@ class BasicTests(unittest.TestCase):
         # (2 + 3) * 4 = 20
         proc = self.make_procedure()
 
-        proc.load_integer(2)
-        proc.load_integer(3)
+        proc.load_int64(2)
+        proc.load_int64(3)
         proc.add()
-        proc.load_integer(4)
+        proc.load_int64(4)
         proc.multiply()
         proc.return_value()
 
@@ -166,11 +166,11 @@ class BasicTests(unittest.TestCase):
         # (10 - 3) * (4 + 2) = 42
         proc = self.make_procedure()
 
-        proc.load_integer(10)
-        proc.load_integer(3)
+        proc.load_int64(10)
+        proc.load_int64(3)
         proc.subtract()
-        proc.load_integer(4)
-        proc.load_integer(2)
+        proc.load_int64(4)
+        proc.load_int64(2)
         proc.add()
         proc.multiply()
         proc.return_value()
@@ -180,8 +180,8 @@ class BasicTests(unittest.TestCase):
     def test_pop(self):
         proc = self.make_procedure()
 
-        proc.load_integer(99)
-        proc.load_integer(42)
+        proc.load_int64(99)
+        proc.load_int64(42)
         proc.pop()
         proc.return_value()
 
@@ -190,7 +190,7 @@ class BasicTests(unittest.TestCase):
     def test_copy_0(self):
         proc = self.make_procedure()
 
-        proc.load_integer(5)
+        proc.load_int64(5)
         proc.copy(0)
         proc.add()
         proc.return_value()
@@ -200,8 +200,8 @@ class BasicTests(unittest.TestCase):
     def test_copy_1(self):
         proc = self.make_procedure()
 
-        proc.load_integer(10)
-        proc.load_integer(20)
+        proc.load_int64(10)
+        proc.load_int64(20)
         # [10, 20]
 
         proc.copy(1)
@@ -216,8 +216,8 @@ class BasicTests(unittest.TestCase):
     def test_swap(self):
         proc = self.make_procedure()
 
-        proc.load_integer(20)
-        proc.load_integer(10)
+        proc.load_int64(20)
+        proc.load_int64(10)
         # [20, 10]
 
         proc.swap(1)
@@ -231,10 +231,10 @@ class BasicTests(unittest.TestCase):
     def test_locals(self):
         proc = self.make_procedure()
 
-        proc.load_integer(42)
+        proc.load_int64(42)
         proc.store_local(0)
 
-        proc.load_integer(24)
+        proc.load_int64(24)
         proc.store_local(0)
 
         proc.load_local(0)
@@ -274,7 +274,7 @@ class BasicTests(unittest.TestCase):
         proc = self.make_procedure()
 
         proc.load_argument(0)  # 2
-        proc.load_integer(5)
+        proc.load_int64(5)
         proc.multiply()  # 10
 
         proc.load_argument(1)  # 3
@@ -288,16 +288,16 @@ class BasicTests(unittest.TestCase):
         proc = self.make_procedure()
         end = proc.create_jump_label("end")
 
-        proc.load_integer(5)
-        proc.load_integer(5)
+        proc.load_int64(5)
+        proc.load_int64(5)
         proc.compare_equal()
         proc.jump_if_true(end)
 
-        proc.load_integer(0)
+        proc.load_int64(0)
         proc.return_value()
 
         proc.use_label(end)
-        proc.load_integer(1)
+        proc.load_int64(1)
         proc.return_value()
 
         self.compile_and_run(proc, 1)
@@ -306,16 +306,16 @@ class BasicTests(unittest.TestCase):
         proc = self.make_procedure()
         end = proc.create_jump_label("end")
 
-        proc.load_integer(5)
-        proc.load_integer(6)
+        proc.load_int64(5)
+        proc.load_int64(6)
         proc.compare_equal()
         proc.jump_if_true(end)
 
-        proc.load_integer(0)
+        proc.load_int64(0)
         proc.return_value()
 
         proc.use_label(end)
-        proc.load_integer(1)
+        proc.load_int64(1)
         proc.return_value()
 
         self.compile_and_run(proc, 0)
@@ -324,16 +324,16 @@ class BasicTests(unittest.TestCase):
         proc = self.make_procedure()
         end = proc.create_jump_label("end")
 
-        proc.load_integer(5)
-        proc.load_integer(6)
+        proc.load_int64(5)
+        proc.load_int64(6)
         proc.compare_not_equal()
         proc.jump_if_true(end)
 
-        proc.load_integer(0)
+        proc.load_int64(0)
         proc.return_value()
 
         proc.use_label(end)
-        proc.load_integer(1)
+        proc.load_int64(1)
         proc.return_value()
 
         self.compile_and_run(proc, 1)
@@ -342,16 +342,16 @@ class BasicTests(unittest.TestCase):
         proc = self.make_procedure()
         end = proc.create_jump_label("end")
 
-        proc.load_integer(3)
-        proc.load_integer(5)
+        proc.load_int64(3)
+        proc.load_int64(5)
         proc.compare_less()
         proc.jump_if_true(end)
 
-        proc.load_integer(0)
+        proc.load_int64(0)
         proc.return_value()
 
         proc.use_label(end)
-        proc.load_integer(1)
+        proc.load_int64(1)
         proc.return_value()
 
         self.compile_and_run(proc, 1)
@@ -360,16 +360,16 @@ class BasicTests(unittest.TestCase):
         proc = self.make_procedure()
         end = proc.create_jump_label("end")
 
-        proc.load_integer(5)
-        proc.load_integer(5)
+        proc.load_int64(5)
+        proc.load_int64(5)
         proc.compare_less_equal()
         proc.jump_if_true(end)
 
-        proc.load_integer(0)
+        proc.load_int64(0)
         proc.return_value()
 
         proc.use_label(end)
-        proc.load_integer(1)
+        proc.load_int64(1)
         proc.return_value()
 
         self.compile_and_run(proc, 1)
@@ -378,16 +378,16 @@ class BasicTests(unittest.TestCase):
         proc = self.make_procedure()
         end = proc.create_jump_label("end")
 
-        proc.load_integer(10)
-        proc.load_integer(5)
+        proc.load_int64(10)
+        proc.load_int64(5)
         proc.compare_greater()
         proc.jump_if_true(end)
 
-        proc.load_integer(0)
+        proc.load_int64(0)
         proc.return_value()
 
         proc.use_label(end)
-        proc.load_integer(1)
+        proc.load_int64(1)
         proc.return_value()
 
         self.compile_and_run(proc, 1)
@@ -396,16 +396,16 @@ class BasicTests(unittest.TestCase):
         proc = self.make_procedure()
         end = proc.create_jump_label("end")
 
-        proc.load_integer(5)
-        proc.load_integer(5)
+        proc.load_int64(5)
+        proc.load_int64(5)
         proc.compare_greater_equal()
         proc.jump_if_true(end)
 
-        proc.load_integer(0)
+        proc.load_int64(0)
         proc.return_value()
 
         proc.use_label(end)
-        proc.load_integer(1)
+        proc.load_int64(1)
         proc.return_value()
 
         self.compile_and_run(proc, 1)
@@ -414,16 +414,16 @@ class BasicTests(unittest.TestCase):
         proc = self.make_procedure()
         end = proc.create_jump_label("end")
 
-        proc.load_integer(5)
-        proc.load_integer(6)
+        proc.load_int64(5)
+        proc.load_int64(6)
         proc.compare_equal()
         proc.jump_if_false(end)
 
-        proc.load_integer(99)
+        proc.load_int64(99)
         proc.return_value()
 
         proc.use_label(end)
-        proc.load_integer(42)
+        proc.load_int64(42)
         proc.return_value()
 
         self.compile_and_run(proc, 42)
@@ -432,11 +432,11 @@ class BasicTests(unittest.TestCase):
         proc = self.make_procedure()
         skip = proc.create_jump_label("skip")
         proc.jump(skip)
-        proc.load_integer(99)
+        proc.load_int64(99)
         proc.return_value()
 
         proc.use_label(skip)
-        proc.load_integer(42)
+        proc.load_int64(42)
         proc.return_value()
 
         self.compile_and_run(proc, 42)
@@ -447,14 +447,14 @@ class BasicTests(unittest.TestCase):
         loop = proc.create_jump_label("loop")
         end = proc.create_jump_label("end")
 
-        proc.load_integer(0)
+        proc.load_int64(0)
         proc.store_local(0)
-        proc.load_integer(5)
+        proc.load_int64(5)
         proc.store_local(1)
 
         proc.use_label(loop)
         proc.load_local(1)
-        proc.load_integer(0)
+        proc.load_int64(0)
         proc.compare_equal()
         proc.jump_if_true(end)
 
@@ -464,7 +464,7 @@ class BasicTests(unittest.TestCase):
         proc.store_local(0)
 
         proc.load_local(1)
-        proc.load_integer(1)
+        proc.load_int64(1)
         proc.subtract()
         proc.store_local(1)
 
@@ -484,33 +484,33 @@ class BasicTests(unittest.TestCase):
         end_inner = proc.create_jump_label("end_inner")
         end_outer = proc.create_jump_label("end_outer")
 
-        proc.load_integer(0)
+        proc.load_int64(0)
         proc.store_local(2)
-        proc.load_integer(3)
+        proc.load_int64(3)
         proc.store_local(0)
 
         proc.use_label(outer)
         proc.load_local(0)
-        proc.load_integer(0)
+        proc.load_int64(0)
         proc.compare_equal()
         proc.jump_if_true(end_outer)
 
-        proc.load_integer(4)
+        proc.load_int64(4)
         proc.store_local(1)
 
         proc.use_label(inner)
         proc.load_local(1)
-        proc.load_integer(0)
+        proc.load_int64(0)
         proc.compare_equal()
         proc.jump_if_true(end_inner)
 
         proc.load_local(2)
-        proc.load_integer(1)
+        proc.load_int64(1)
         proc.add()
         proc.store_local(2)
 
         proc.load_local(1)
-        proc.load_integer(1)
+        proc.load_int64(1)
         proc.subtract()
         proc.store_local(1)
 
@@ -518,7 +518,7 @@ class BasicTests(unittest.TestCase):
 
         proc.use_label(end_inner)
         proc.load_local(0)
-        proc.load_integer(1)
+        proc.load_int64(1)
         proc.subtract()
         proc.store_local(0)
 
@@ -535,17 +535,17 @@ class BasicTests(unittest.TestCase):
         loop = proc.create_jump_label("loop")
         end = proc.create_jump_label("end")
 
-        proc.load_integer(10)
+        proc.load_int64(10)
         proc.store_local(0)
 
         proc.use_label(loop)
         proc.load_local(0)
-        proc.load_integer(0)
+        proc.load_int64(0)
         proc.compare_equal()
         proc.jump_if_true(end)
 
         proc.load_local(0)
-        proc.load_integer(1)
+        proc.load_int64(1)
         proc.subtract()
         proc.store_local(0)
 
@@ -564,16 +564,16 @@ class BasicTests(unittest.TestCase):
         end = proc.create_jump_label("end")
 
         proc.load_argument(0)
-        proc.load_integer(0)
+        proc.load_int64(0)
         proc.compare_equal()
         proc.jump_if_false(else_label)
 
-        proc.load_integer(10)
+        proc.load_int64(10)
         proc.store_local(0)
         proc.jump(end)
 
         proc.use_label(else_label)
-        proc.load_integer(20)
+        proc.load_int64(20)
         proc.store_local(0)
 
         proc.use_label(end)
@@ -586,7 +586,7 @@ class BasicTests(unittest.TestCase):
     def test_call_name(self):
         # abs(-42) = 42
         proc = self.make_procedure()
-        proc.load_integer(-42)
+        proc.load_int64(-42)
         proc.call_name("abs", 1)
         proc.return_value()
         self.compile_and_run(proc, 42)
@@ -600,20 +600,20 @@ class BasicTests(unittest.TestCase):
 
         self.compile_and_run(proc, 5)
 
-    def test_load_integer_rejects_string(self):
+    def test_load_int64_rejects_string(self):
         proc = self.make_procedure()
         with self.assertRaises(TypeError):
-            proc.load_integer("hello")  # type: ignore
+            proc.load_int64("hello")  # type: ignore
 
-    def test_load_integer_rejects_float(self):
+    def test_load_int64_rejects_float(self):
         proc = self.make_procedure()
         with self.assertRaises(TypeError):
-            proc.load_integer(3.14)  # type: ignore
+            proc.load_int64(3.14)  # type: ignore
 
-    def test_load_integer_rejects_none(self):
+    def test_load_int64_rejects_none(self):
         proc = self.make_procedure()
         with self.assertRaises(TypeError):
-            proc.load_integer(None)  # type: ignore
+            proc.load_int64(None)  # type: ignore
 
     def test_call_name_rejects_int_name(self):
         proc = self.make_procedure()
@@ -654,10 +654,10 @@ class BasicTests(unittest.TestCase):
         proc = self.make_procedure()
         n = 200
         for i in range(n):
-            proc.load_integer(i)
+            proc.load_int64(i)
             proc.store_local(i)
 
-        proc.load_integer(0)
+        proc.load_int64(0)
         for i in range(n):
             proc.load_local(i)
             proc.add()
@@ -668,7 +668,7 @@ class BasicTests(unittest.TestCase):
         proc = self.make_procedure()
         # Push 10 values, add them all
         for i in range(1, 11):
-            proc.load_integer(i)
+            proc.load_int64(i)
         for _ in range(9):
             proc.add()
         proc.return_value()
@@ -679,7 +679,7 @@ class BasicTests(unittest.TestCase):
         early = proc.create_jump_label("early")
 
         proc.load_argument(0)
-        proc.load_integer(0)
+        proc.load_int64(0)
         proc.compare_less()
         proc.jump_if_true(early)
 
@@ -687,7 +687,7 @@ class BasicTests(unittest.TestCase):
         proc.return_value()
 
         proc.use_label(early)
-        proc.load_integer(-1)
+        proc.load_int64(-1)
         proc.return_value()
 
         self.compile_and_run(proc, 5, 5)
@@ -698,11 +698,11 @@ class BasicTests(unittest.TestCase):
         positive = proc.create_jump_label("positive")
 
         proc.load_argument(0)
-        proc.load_integer(0)
+        proc.load_int64(0)
         proc.compare_greater_equal()
         proc.jump_if_true(positive)
 
-        proc.load_integer(0)
+        proc.load_int64(0)
         proc.load_argument(0)
         proc.subtract()
         proc.return_value()
@@ -720,24 +720,24 @@ class BasicTests(unittest.TestCase):
         loop = proc.create_jump_label("loop")
         end = proc.create_jump_label("end")
 
-        proc.load_integer(1)
+        proc.load_int64(1)
         proc.store_local(0)
         proc.load_argument(0)
         proc.store_local(1)
 
         proc.use_label(loop)
         proc.load_local(1)
-        proc.load_integer(0)
+        proc.load_int64(0)
         proc.compare_equal()
         proc.jump_if_true(end)
 
         proc.load_local(0)
-        proc.load_integer(2)
+        proc.load_int64(2)
         proc.multiply()
         proc.store_local(0)
 
         proc.load_local(1)
-        proc.load_integer(1)
+        proc.load_int64(1)
         proc.subtract()
         proc.store_local(1)
 
@@ -772,8 +772,8 @@ class BasicTests(unittest.TestCase):
         proc = self.make_procedure()
 
         proc.load_string("%d")
-        proc.load_integer(40)
-        proc.load_integer(2)
+        proc.load_int64(40)
+        proc.load_int64(2)
         proc.add()
         proc.call_name("printf", 2)
         proc.pop()
@@ -782,12 +782,12 @@ class BasicTests(unittest.TestCase):
 
         buffer = io.StringIO()
         proc.print_instructions(file=buffer)
-        self.assertIn("42", buffer.getvalue())
+        self.assertIn("i64(42)", buffer.getvalue())
 
         buffer = io.StringIO()
         compiled = proc.compile()
         compiled.print_translation(file=buffer)
-        self.assertIn("42", buffer.getvalue())
+        self.assertIn("i64(42)", buffer.getvalue())
 
 
 if __name__ == "__main__":

@@ -27,6 +27,9 @@ emit_copy(_UNIT_Translation *translation,
         return _UNIT_FAIL;
     }
 
+    dst->integer_type = destination->integer_type;
+    src->integer_type = source->integer_type;
+
     return _UNIT_Translation_Emit(block,
                                   _UNIT_I_LOAD,
                                   _UNIT_MachineDestination_FromDestination(dst),

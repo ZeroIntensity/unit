@@ -30,7 +30,7 @@ main(int argc, char **argv)
     auto is_even = procedure.create_jump_label("is_even");
     auto finished = procedure.create_jump_label("finished");
 
-    procedure.load_integer(number);
+    procedure.load_int64(number);
 
     procedure.use_label(loop);
     procedure.copy(0);
@@ -44,26 +44,26 @@ main(int argc, char **argv)
 
     // [number, number]
     procedure.copy(0);
-    procedure.load_integer(1);
+    procedure.load_int64(1);
     // [number, number, number, 1]
     procedure.compare_equal();
     procedure.jump_if_true(finished);
 
     // [number, number]
-    procedure.load_integer(2);
+    procedure.load_int64(2);
     procedure.modulo();
     // [number, number % 2]
 
-    procedure.load_integer(0);
+    procedure.load_int64(0);
     procedure.compare_equal();
     // [number, number % 2 == 0]
     procedure.jump_if_true(is_even);
 
     // [number]
-    procedure.load_integer(3);
+    procedure.load_int64(3);
     procedure.multiply();
     // [number * 3]
-    procedure.load_integer(1);
+    procedure.load_int64(1);
     procedure.add();
     // [(number * 3) + 1]
 
@@ -71,14 +71,14 @@ main(int argc, char **argv)
 
     procedure.use_label(is_even);
     // [number]
-    procedure.load_integer(2);
+    procedure.load_int64(2);
     procedure.divide();
     // [number / 2]
     procedure.jump(loop);
 
     procedure.use_label(finished);
     procedure.pop();
-    procedure.load_integer(0);
+    procedure.load_int64(0);
     procedure.return_value();
 
     procedure.print_instructions();

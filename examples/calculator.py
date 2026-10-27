@@ -34,8 +34,8 @@ def process_line() -> None:
         return
 
     procedure = unit.Procedure("expr", optimize_translation=False)
-    procedure.load_integer(left)
-    procedure.load_integer(right)
+    procedure.load_int64(left)
+    procedure.load_int64(right)
 
     if op == "+":
         procedure.add()

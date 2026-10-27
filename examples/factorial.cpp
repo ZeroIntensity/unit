@@ -30,7 +30,7 @@ main(int argc, char **argv)
     auto base_case = factorial.create_jump_label("base_case");
     factorial.load_argument(0);
     // [n]
-    factorial.load_integer(1);
+    factorial.load_int64(1);
     factorial.compare_less_equal();
     // [n <= 1]
     factorial.jump_if_true(base_case);
@@ -38,7 +38,7 @@ main(int argc, char **argv)
 
     factorial.load_argument(0);
     factorial.copy(0);
-    factorial.load_integer(1);
+    factorial.load_int64(1);
     factorial.subtract();
     // [n, n - 1]
     factorial.call_procedure(factorial, 1);
@@ -47,17 +47,17 @@ main(int argc, char **argv)
     factorial.return_value();
 
     factorial.use_label(base_case);
-    factorial.load_integer(1);
+    factorial.load_int64(1);
     factorial.return_value();
 
     procedure.load_string("%ld\n");
-    procedure.load_integer(number);
+    procedure.load_int64(number);
     procedure.call_procedure(factorial, 1);
     // ["factorial 5: %ld\n", factorial(5)]
     procedure.call_name("printf", 2);
     procedure.pop();
 
-    procedure.load_integer(0);
+    procedure.load_int64(0);
     procedure.return_value();
 
     factorial.optimize();

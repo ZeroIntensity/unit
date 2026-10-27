@@ -101,8 +101,17 @@ UNIT_Procedure_OptimizeFold(UNIT_Procedure *procedure)
         }
 
         switch (op->instruction) {
-            case UNIT_OP_LOAD_INTEGER: {
-                PUSH(STACK_CONSTANT, op->argument);
+            case UNIT_OP_LOAD_INT8:
+            case UNIT_OP_LOAD_INT16:
+            case UNIT_OP_LOAD_INT32:
+            case UNIT_OP_LOAD_INT64:
+            case UNIT_OP_LOAD_UINT8:
+            case UNIT_OP_LOAD_UINT16:
+            case UNIT_OP_LOAD_UINT32:
+            case UNIT_OP_LOAD_UINT64: {
+                PUSH(STACK_CONSTANT,
+                     _UNIT_IntegerType_Convert(_UNIT_OperationCode_GetIntegerType(op->instruction),
+                                               op->argument));
                 break;
             }
 
@@ -187,7 +196,7 @@ UNIT_Procedure_OptimizeFold(UNIT_Procedure *procedure)
                     ADD_NEW_INSTRUCTION(UNIT_OP_POP, 0);
                     ADD_NEW_INSTRUCTION(UNIT_OP_POP, 0);
 
-                    ADD_NEW_INSTRUCTION(UNIT_OP_LOAD_INTEGER, result);
+                    ADD_NEW_INSTRUCTION(UNIT_OP_LOAD_INT64, result);
                     PUSH(STACK_CONSTANT, result);
                     CONTINUE_AND_DISCARD();
                 } else {
@@ -281,7 +290,14 @@ UNIT_Procedure_OptimizeFold(UNIT_Procedure *procedure)
                 assert(previous != NULL);
                 UNIT_OperationCode kind = previous->instruction;
                 switch (kind) {
-                    case UNIT_OP_LOAD_INTEGER:
+                    case UNIT_OP_LOAD_INT8:
+                    case UNIT_OP_LOAD_INT16:
+                    case UNIT_OP_LOAD_INT32:
+                    case UNIT_OP_LOAD_INT64:
+                    case UNIT_OP_LOAD_UINT8:
+                    case UNIT_OP_LOAD_UINT16:
+                    case UNIT_OP_LOAD_UINT32:
+                    case UNIT_OP_LOAD_UINT64:
                     case UNIT_OP_ADD:
                     case UNIT_OP_SUBTRACT:
                     case UNIT_OP_MULTIPLY:
@@ -758,6 +774,7 @@ typedef struct {
     UNIT_Size load_count;
     int8_t constant_value_known;
     int64_t constant_value;
+    UNIT_OperationCode constant_instruction;
     int8_t address_taken;
 } LocalInfo;
 
@@ -815,10 +832,11 @@ gather_local_info(_UNIT_Vector *instructions,
                 if (index > 0) {
                     _UNIT_Operation *previous = _UNIT_Vector_GET(instructions,
                                                                  index - 1);
-                    if (previous->instruction == UNIT_OP_LOAD_INTEGER
+                    if (_UNIT_OperationCode_IsIntegerLoad(previous->instruction)
                         && info[local_index].store_count == 1) {
                         info[local_index].constant_value_known = 1;
                         info[local_index].constant_value = previous->argument;
+                        info[local_index].constant_instruction = previous->instruction;
                     } else {
                         info[local_index].constant_value_known = 0;
                     }
@@ -943,7 +961,7 @@ UNIT_Procedure_OptimizeLocals(UNIT_Procedure *procedure)
                     && info[local_index].constant_value_known
                     && !info[local_index].address_taken) {
                     // Propagate constant
-                    ADD_NEW_INSTRUCTION(UNIT_OP_LOAD_INTEGER,
+                    ADD_NEW_INSTRUCTION(info[local_index].constant_instruction,
                                         info[local_index].constant_value);
                     CONTINUE_AND_DISCARD();
                 }

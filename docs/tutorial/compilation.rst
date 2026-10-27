@@ -60,7 +60,7 @@ Now, our code looks like this:
 
     #define ADDOP(op) ADDOP_INT(op, 0)
 
-        ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
+        ADDOP_INT(UNIT_OP_LOAD_INT64, 0);
         ADDOP(UNIT_OP_RETURN_VALUE);
 
     #undef ADDOP_INT
@@ -222,8 +222,8 @@ Output:
 .. code-block::
 
     procedure "main":
-        0    LOAD_INTEGER  0
-        [0]
+        0    LOAD_INT64  0
+        [i64(0)]
         1    RETURN_VALUE
         []
 
@@ -299,7 +299,7 @@ the guessing game since it needs to be the real ``main`` function:
 
         #define ADDOP(op) ADDOP_INT(op, 0)
 
-        ADDOP_INT(UNIT_OP_LOAD_INTEGER, 0);
+        ADDOP_INT(UNIT_OP_LOAD_INT64, 0);
         ADDOP(UNIT_OP_RETURN_VALUE);
 
         if (UNIT_FAILED(UNIT_Procedure_Optimize(&procedure))) {

@@ -8,7 +8,9 @@
 static _UNIT_MachineItem
 item(_UNIT_MachineItem_Type type, int64_t value)
 {
-    return (_UNIT_MachineItem) { .type = type, .value = value };
+    return (_UNIT_MachineItem) {
+               .type = type, .integer_type = UNIT_TYPE_INT64, .value = value
+    };
 }
 
 static _UNIT_MachineOperation

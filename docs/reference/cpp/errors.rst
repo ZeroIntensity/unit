@@ -23,7 +23,7 @@ Errors
       try {
           unit::Context ctx;
           unit::Procedure proc(ctx, "main");
-          proc.load_integer(42);
+          proc.load_int64(42);
           proc.return_value();
           auto compiled = proc.compile(unit::Platform::host());
       } catch (const unit::error &e) {

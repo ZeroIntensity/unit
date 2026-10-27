@@ -16,7 +16,15 @@ extern "C" {
 typedef enum {
     // Constants
     UNIT_OP_LOAD_STRING,
-    UNIT_OP_LOAD_INTEGER,
+    // Keep integer loads in UNIT_IntegerType order.
+    UNIT_OP_LOAD_INT8,
+    UNIT_OP_LOAD_INT16,
+    UNIT_OP_LOAD_INT32,
+    UNIT_OP_LOAD_INT64,
+    UNIT_OP_LOAD_UINT8,
+    UNIT_OP_LOAD_UINT16,
+    UNIT_OP_LOAD_UINT32,
+    UNIT_OP_LOAD_UINT64,
 
     // Variables
     UNIT_OP_LOAD_LOCAL,
@@ -99,6 +107,28 @@ typedef enum {
     UNIT_TYPE_UINT32,
     UNIT_TYPE_UINT64,
 } UNIT_IntegerType;
+
+static inline int8_t
+_UNIT_OperationCode_IsIntegerLoad(UNIT_OperationCode instruction)
+{
+    return instruction >= UNIT_OP_LOAD_INT8 && instruction <= UNIT_OP_LOAD_UINT64;
+}
+
+static inline UNIT_IntegerType
+_UNIT_OperationCode_GetIntegerType(UNIT_OperationCode instruction)
+{
+    assert(_UNIT_OperationCode_IsIntegerLoad(instruction));
+    return (UNIT_IntegerType)(instruction - UNIT_OP_LOAD_INT8);
+}
+
+int64_t
+_UNIT_IntegerType_Convert(UNIT_IntegerType type, int64_t value);
+
+UNIT_Status
+_UNIT_IntegerType_Print(UNIT_Context *context,
+                        FILE *stream,
+                        UNIT_IntegerType type,
+                        int64_t value);
 
 typedef uint32_t UNIT_Flags;
 

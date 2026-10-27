@@ -6,6 +6,45 @@
 #include <unit/internal/ir/procedure.h>
 #include <unit/internal/allocation.h>
 
+int64_t
+_UNIT_IntegerType_Convert(UNIT_IntegerType type, int64_t value)
+{
+    switch (type) {
+        case UNIT_TYPE_INT8: {return (int8_t)value;}
+        case UNIT_TYPE_INT16: {return (int16_t)value;}
+        case UNIT_TYPE_INT32: {return (int32_t)value;}
+        case UNIT_TYPE_INT64: {return value;}
+        case UNIT_TYPE_UINT8: {return (uint8_t)value;}
+        case UNIT_TYPE_UINT16: {return (uint16_t)value;}
+        case UNIT_TYPE_UINT32: {return (uint32_t)value;}
+        case UNIT_TYPE_UINT64: {return value;}
+    }
+    _UNIT_Unreachable();
+}
+
+UNIT_Status
+_UNIT_IntegerType_Print(UNIT_Context *context,
+                        FILE *stream,
+                        UNIT_IntegerType type,
+                        int64_t value)
+{
+    static const char *const names[] = {"i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64"};
+    assert(type >= UNIT_TYPE_INT8 && type <= UNIT_TYPE_UINT64);
+    int result;
+    if (type >= UNIT_TYPE_UINT8) {
+        result = fprintf(stream, "%s(%llu)", names[type], (unsigned long long)value);
+    } else {
+        result = fprintf(stream, "%s(%lld)", names[type], (long long)value);
+    }
+
+    if (result < 0) {
+        _UNIT_SetOSError(context, "printing integer");
+        return _UNIT_FAIL;
+    }
+
+    return _UNIT_OK;
+}
+
 void
 _UNIT_JumpLabel_Free(UNIT_Context *context,
                      void *ptr)
@@ -347,7 +386,14 @@ UNIT_OperationCode_GetName(UNIT_OperationCode instruction)
             return #name
     switch (instruction) {
         NAME(LOAD_STRING);
-        NAME(LOAD_INTEGER);
+        NAME(LOAD_INT8);
+        NAME(LOAD_INT16);
+        NAME(LOAD_INT32);
+        NAME(LOAD_INT64);
+        NAME(LOAD_UINT8);
+        NAME(LOAD_UINT16);
+        NAME(LOAD_UINT32);
+        NAME(LOAD_UINT64);
 
         case _UNIT_OP_LOAD_LOCAL_NAME: {
             NAME(LOAD_LOCAL);
@@ -413,6 +459,7 @@ typedef enum {
 
 typedef struct {
     DebugStackType type;
+    UNIT_IntegerType integer_type;
     union {
         int64_t value;
         const char *string;
@@ -436,8 +483,7 @@ print_debug_item(UNIT_Context *context,
 
     switch (item->type) {
         case DEBUG_TYPE_INT: {
-            PRINT("%lld", (long long)item->value);
-            break;
+            return _UNIT_IntegerType_Print(context, stream, item->integer_type, item->value);
         }
 
         case DEBUG_TYPE_STRING: {
@@ -590,8 +636,19 @@ deduce_stack_effect(const UNIT_Procedure *procedure,
     int64_t oparg = op->argument;
 
     switch (op->instruction) {
-        case UNIT_OP_LOAD_INTEGER: {
-            PUSH(DEBUG_TYPE_INT, oparg);
+        case UNIT_OP_LOAD_INT8:
+        case UNIT_OP_LOAD_INT16:
+        case UNIT_OP_LOAD_INT32:
+        case UNIT_OP_LOAD_INT64:
+        case UNIT_OP_LOAD_UINT8:
+        case UNIT_OP_LOAD_UINT16:
+        case UNIT_OP_LOAD_UINT32:
+        case UNIT_OP_LOAD_UINT64: {
+            UNIT_IntegerType type = _UNIT_OperationCode_GetIntegerType(op->instruction);
+            PUSH(DEBUG_TYPE_INT, _UNIT_IntegerType_Convert(type, oparg));
+            DebugStackItem *item = _UNIT_Vector_GET(debug_stack,
+                                                    _UNIT_Vector_SIZE(debug_stack) - 1);
+            item->integer_type = type;
             break;
         }
 
@@ -861,14 +918,20 @@ UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure,
         PRINT("    %td    %s",
               index,
               UNIT_OperationCode_GetName(operation->instruction));
-        if (operation->argument != 0
-            || operation->instruction == UNIT_OP_LOAD_INTEGER
-            || operation->instruction == UNIT_OP_LOAD_ARGUMENT
-            || operation->instruction == UNIT_OP_STORE_LOCAL
-            || operation->instruction == UNIT_OP_LOAD_LOCAL
-            || operation->instruction == _UNIT_OP_STORE_LOCAL_NAME
-            || operation->instruction == _UNIT_OP_LOAD_LOCAL_NAME
-            || operation->instruction == UNIT_OP_ADDRESS_OF) {
+        if (_UNIT_OperationCode_IsIntegerLoad(operation->instruction)) {
+            UNIT_IntegerType type = _UNIT_OperationCode_GetIntegerType(operation->instruction);
+            if (type >= UNIT_TYPE_UINT8) {
+                PRINT("  %llu", (unsigned long long)(uint64_t)operation->argument);
+            } else {
+                PRINT("  %lld", (long long)operation->argument);
+            }
+        } else if (operation->argument != 0
+                   || operation->instruction == UNIT_OP_LOAD_ARGUMENT
+                   || operation->instruction == UNIT_OP_STORE_LOCAL
+                   || operation->instruction == UNIT_OP_LOAD_LOCAL
+                   || operation->instruction == _UNIT_OP_STORE_LOCAL_NAME
+                   || operation->instruction == _UNIT_OP_LOAD_LOCAL_NAME
+                   || operation->instruction == UNIT_OP_ADDRESS_OF) {
             PRINT("  %lld", (long long)operation->argument);
         }
 

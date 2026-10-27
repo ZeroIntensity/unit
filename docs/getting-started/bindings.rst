@@ -29,7 +29,7 @@ C
 
    UNIT_Procedure proc;
    UNIT_Procedure_Init(&proc, &ctx, "main");
-   UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INTEGER, 42);
+   UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INT64, 42);
    UNIT_Procedure_AddOperation(&proc, UNIT_OP_RETURN_VALUE, 0);
 
    UNIT_Procedure_Optimize(&proc);
@@ -53,7 +53,7 @@ C++
 
    unit::Context ctx;
    unit::Procedure proc(ctx, "main");
-   proc.load_integer(42);
+   proc.load_int64(42);
    proc.return_value();
 
    proc.optimize();
@@ -72,7 +72,7 @@ Python
    import unit
 
    proc = unit.Procedure("main")
-   proc.load_integer(42)
+   proc.load_int64(42)
    proc.return_value()
 
    proc.optimize()
@@ -163,15 +163,15 @@ C
    UNIT_JumpLabel *nope = UNIT_Procedure_CreateJumpLabel(&proc, "nope");
 
    UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_ARGUMENT, 0);
-   UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INTEGER, 0);
+   UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INT64, 0);
    UNIT_Procedure_AddOperation(&proc, UNIT_OP_COMPARE_LESS_EQUAL, 0);
    UNIT_Procedure_AddJump(&proc, UNIT_OP_JUMP_IF_TRUE, nope);
 
-   UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INTEGER, 1);
+   UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INT64, 1);
    UNIT_Procedure_AddOperation(&proc, UNIT_OP_RETURN_VALUE, 0);
 
    UNIT_Procedure_UseLabel(&proc, nope);
-   UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INTEGER, 0);
+   UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INT64, 0);
    UNIT_Procedure_AddOperation(&proc, UNIT_OP_RETURN_VALUE, 0);
 
 
@@ -184,15 +184,15 @@ C++
    auto nope = proc.create_jump_label("nope");
 
    proc.load_argument(0);
-   proc.load_integer(0);
+   proc.load_int64(0);
    proc.compare_less_equal();
    proc.jump_if_true(nope);
 
-   proc.load_integer(1);
+   proc.load_int64(1);
    proc.return_value();
 
    proc.use_label(nope);
-   proc.load_integer(0);
+   proc.load_int64(0);
    proc.return_value();
 
 
@@ -205,15 +205,15 @@ Python
    nope = proc.create_jump_label("nope")
 
    proc.load_argument(0)
-   proc.load_integer(0)
+   proc.load_int64(0)
    proc.compare_less_equal()
    proc.jump_if_true(nope)
 
-   proc.load_integer(1)
+   proc.load_int64(1)
    proc.return_value()
 
    proc.use_label(nope)
-   proc.load_integer(0)
+   proc.load_int64(0)
    proc.return_value()
 
 
@@ -238,7 +238,7 @@ C
    UNIT_JumpLabel *end = UNIT_Procedure_CreateJumpLabel(&proc, "end");
 
    // sum = 0; i = n;
-   UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INTEGER, 0);
+   UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INT64, 0);
    UNIT_Procedure_AddOperation(&proc, UNIT_OP_STORE_LOCAL, 0);
    UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_ARGUMENT, 0);
    UNIT_Procedure_AddOperation(&proc, UNIT_OP_STORE_LOCAL, 1);
@@ -246,7 +246,7 @@ C
    // loop:
    UNIT_Procedure_UseLabel(&proc, loop);
    UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_LOCAL, 1);
-   UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INTEGER, 0);
+   UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INT64, 0);
    UNIT_Procedure_AddOperation(&proc, UNIT_OP_COMPARE_EQUAL, 0);
    UNIT_Procedure_AddJump(&proc, UNIT_OP_JUMP_IF_TRUE, end);
 
@@ -256,7 +256,7 @@ C
    UNIT_Procedure_AddOperation(&proc, UNIT_OP_ADD, 0);
    UNIT_Procedure_AddOperation(&proc, UNIT_OP_STORE_LOCAL, 0);
    UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_LOCAL, 1);
-   UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INTEGER, 1);
+   UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INT64, 1);
    UNIT_Procedure_AddOperation(&proc, UNIT_OP_SUBTRACT, 0);
    UNIT_Procedure_AddOperation(&proc, UNIT_OP_STORE_LOCAL, 1);
    UNIT_Procedure_AddJump(&proc, UNIT_OP_JUMP, loop);
@@ -278,14 +278,14 @@ C++
    auto loop = proc.create_jump_label("loop");
    auto end = proc.create_jump_label("end");
 
-   proc.load_integer(0);
+   proc.load_int64(0);
    proc.store_local(0);
    proc.load_argument(0);
    proc.store_local(1);
 
    proc.use_label(loop);
    proc.load_local(1);
-   proc.load_integer(0);
+   proc.load_int64(0);
    proc.compare_equal();
    proc.jump_if_true(end);
 
@@ -294,7 +294,7 @@ C++
    proc.add();
    proc.store_local(0);
    proc.load_local(1);
-   proc.load_integer(1);
+   proc.load_int64(1);
    proc.subtract();
    proc.store_local(1);
    proc.jump_to(loop);
@@ -315,14 +315,14 @@ Python
    loop = proc.create_jump_label("loop")
    end = proc.create_jump_label("end")
 
-   proc.load_integer(0)
+   proc.load_int64(0)
    proc.store_local(0)
    proc.load_argument(0)
    proc.store_local(1)
 
    proc.use_label(loop)
    proc.load_local(1)
-   proc.load_integer(0)
+   proc.load_int64(0)
    proc.compare_equal()
    proc.jump_if_true(end)
 
@@ -331,7 +331,7 @@ Python
    proc.add()
    proc.store_local(0)
    proc.load_local(1)
-   proc.load_integer(1)
+   proc.load_int64(1)
    proc.subtract()
    proc.store_local(1)
    proc.jump(loop)

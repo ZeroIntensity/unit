@@ -54,17 +54,57 @@ Procedures
 
    **Stack Operations**
 
-   .. cpp:function:: void load_integer(int64_t value)
+   Integer loads use the specified width and signedness. Values are
+   sign-extended or zero-extended to a 64-bit stack value. Debug IR displays
+   the type, for example ``i64(42)`` or ``u8(255)``. Subsequent arithmetic
+   operates on 64-bit values.
 
-      Push an integer constant onto the stack.
-      See :c:macro:`UNIT_OP_LOAD_INTEGER`.
+   .. cpp:function:: void load_int8(int8_t value)
 
-      **Stack effect:** ``-- value``
+      Push a signed 8-bit integer constant.
+      See :c:enumerator:`UNIT_OP_LOAD_INT8`.
 
-      .. code-block:: cpp
-         :caption: :iconify:`devicon-plain:cplusplus` Example
+   .. cpp:function:: void load_int16(int16_t value)
 
-         proc.load_integer(42); // stack: [42]
+      Push a signed 16-bit integer constant.
+      See :c:enumerator:`UNIT_OP_LOAD_INT16`.
+
+   .. cpp:function:: void load_int32(int32_t value)
+
+      Push a signed 32-bit integer constant.
+      See :c:enumerator:`UNIT_OP_LOAD_INT32`.
+
+   .. cpp:function:: void load_int64(int64_t value)
+
+      Push a signed 64-bit integer constant.
+      See :c:enumerator:`UNIT_OP_LOAD_INT64`.
+
+   .. cpp:function:: void load_uint8(uint8_t value)
+
+      Push an unsigned 8-bit integer constant.
+      See :c:enumerator:`UNIT_OP_LOAD_UINT8`.
+
+   .. cpp:function:: void load_uint16(uint16_t value)
+
+      Push an unsigned 16-bit integer constant.
+      See :c:enumerator:`UNIT_OP_LOAD_UINT16`.
+
+   .. cpp:function:: void load_uint32(uint32_t value)
+
+      Push an unsigned 32-bit integer constant.
+      See :c:enumerator:`UNIT_OP_LOAD_UINT32`.
+
+   .. cpp:function:: void load_uint64(uint64_t value)
+
+      Push an unsigned 64-bit integer constant.
+      See :c:enumerator:`UNIT_OP_LOAD_UINT64`.
+
+   **Stack effect:** ``-- value``
+
+   .. code-block:: cpp
+      :caption: :iconify:`devicon-plain:cplusplus` Example
+
+      proc.load_int64(42); // stack: [i64(42)]
 
    .. cpp:function:: void load_string(const std::string &value)
 
@@ -126,8 +166,8 @@ Procedures
 
       .. code-block:: cpp
 
-         proc.load_integer(10);   // stack: [10]
-         proc.load_integer(20);   // stack: [10, 20]
+         proc.load_int64(10);   // stack: [10]
+         proc.load_int64(20);   // stack: [10, 20]
          proc.copy(1);            // stack: [10, 20, 10]
 
    .. cpp:function:: void swap(int64_t offset)
@@ -253,8 +293,8 @@ Procedures
       :caption: :iconify:`devicon-plain:cplusplus` Example
 
       auto end = proc.create_jump_label("end");
-      proc.load_integer(5);
-      proc.load_integer(5);
+      proc.load_int64(5);
+      proc.load_int64(5);
       proc.compare_equal();
       proc.jump_if_true(end);
       // ... not-equal path ...
@@ -276,7 +316,7 @@ Procedures
          :caption: :iconify:`devicon-plain:cplusplus` Example
 
          proc.load_string("%d\n");
-         proc.load_integer(42);
+         proc.load_int64(42);
          proc.call_name("printf", 2);
          proc.pop();  // discard printf return value
 
