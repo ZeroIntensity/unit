@@ -358,6 +358,52 @@ fold_binary(_UNIT_MachineInstruction instruction, int64_t left, int64_t right, i
     }
 }
 
+static int8_t
+fold_conditional_jump(_UNIT_MachineOperation *op, int8_t *taken)
+{
+    _UNIT_MachineItem *left = op->argument_1;
+    _UNIT_MachineItem *right = op->argument_2;
+    int8_t constants = left->type == _UNIT_TYPE_CONSTANT && right->type == _UNIT_TYPE_CONSTANT;
+    int8_t same_register = left->type == _UNIT_TYPE_REGISTER && compare_items(left, right);
+    if (!constants && !same_register) {
+        return 0;
+    }
+
+    // Match the signed 64-bit comparisons emitted by the backend. Equal
+    // register IDs stand for equal runtime values even if those are unknown.
+    switch (op->instruction) {
+        case _UNIT_I_JUMP_IF_EQUAL: {
+            *taken = left->value == right->value;
+            break;
+        }
+        case _UNIT_I_JUMP_IF_NOT_EQUAL: {
+            *taken = left->value != right->value;
+            break;
+        }
+        case _UNIT_I_JUMP_IF_LESS: {
+            *taken = left->value < right->value;
+            break;
+        }
+        case _UNIT_I_JUMP_IF_LESS_EQUAL: {
+            *taken = left->value <= right->value;
+            break;
+        }
+        case _UNIT_I_JUMP_IF_GREATER: {
+            *taken = left->value > right->value;
+            break;
+        }
+        case _UNIT_I_JUMP_IF_GREATER_EQUAL: {
+            *taken = left->value >= right->value;
+            break;
+        }
+        default: {
+            _UNIT_Unreachable();
+        }
+    }
+
+    return 1;
+}
+
 static UNIT_Status
 optimize_block_folds(_UNIT_BasicBlock *block,
                      int8_t num_registers,
@@ -387,9 +433,16 @@ optimize_block_folds(_UNIT_BasicBlock *block,
 
 #define APPEND(op) _UNIT_Vector_APPEND(&new_instructions, op)
 
+    int8_t terminated = 0;
     for (UNIT_Size index = 0; index < size; ++index) {
         _UNIT_MachineOperation *op = _UNIT_Vector_STEAL(instructions, index);
         assert(op != NULL);
+
+        if (terminated) {
+            _UNIT_Dealloc(block->context, op);
+            *did_change = 1;
+            continue;
+        }
 
 #define FOLD_REGISTER_VALUE(name)                         \
         if (fold_register_value(register_values, name)) { \
@@ -449,6 +502,32 @@ optimize_block_folds(_UNIT_BasicBlock *block,
                     continue;
                 }
 
+                break;
+            }
+
+            case _UNIT_I_JUMP_IF_EQUAL:
+            case _UNIT_I_JUMP_IF_NOT_EQUAL:
+            case _UNIT_I_JUMP_IF_LESS:
+            case _UNIT_I_JUMP_IF_LESS_EQUAL:
+            case _UNIT_I_JUMP_IF_GREATER:
+            case _UNIT_I_JUMP_IF_GREATER_EQUAL: {
+                int8_t taken;
+                if (!fold_conditional_jump(op, &taken)) {
+                    break;
+                }
+
+                *did_change = 1;
+                if (!taken) {
+                    _UNIT_Dealloc(block->context, op);
+                    continue;
+                }
+
+                op->instruction = _UNIT_I_JUMP;
+                op->destination = _UNIT_MachineDestination_NULL;
+                op->argument_1 = destination;
+                op->argument_2 = NULL;
+                // Discard the explicit fallthrough jump after a taken branch.
+                terminated = 1;
                 break;
             }
             default: {
@@ -589,6 +668,109 @@ replace_block_reference(_UNIT_Vector *blocks,
     blocks->length = length;
 }
 
+static void
+prune_successors(_UNIT_Translation *translation)
+{
+    for (UNIT_Size b = 0; b < _UNIT_Vector_SIZE(&translation->blocks); ++b) {
+        _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks, b);
+        UNIT_Size length = 0;
+        for (UNIT_Size s = 0; s < _UNIT_Vector_SIZE(&block->successors); ++s) {
+            _UNIT_BasicBlock *successor = _UNIT_Vector_GET(&block->successors, s);
+            int8_t referenced = 0;
+            for (UNIT_Size i = 0; i < _UNIT_Vector_SIZE(&block->instructions); ++i) {
+                _UNIT_MachineOperation *op = _UNIT_Vector_GET(&block->instructions, i);
+                _UNIT_MachineItem *target = jump_target(op);
+                if (target != NULL && target->value == successor->label_id) {
+                    referenced = 1;
+                    break;
+                }
+            }
+
+            if (referenced) {
+                block->successors.items[length++] = successor;
+            } else {
+                replace_block_reference(&successor->predecessors, block, NULL);
+            }
+        }
+
+        block->successors.length = length;
+    }
+}
+
+static UNIT_Status
+remove_unreachable_blocks(_UNIT_Translation *translation)
+{
+    UNIT_Size count = _UNIT_Vector_SIZE(&translation->blocks);
+    if (count == 0) {
+        return _UNIT_OK;
+    }
+
+    _UNIT_Set reachable;
+    if (UNIT_FAILED(_UNIT_Set_Init(&reachable, translation->context, count))) {
+        return _UNIT_FAIL;
+    }
+
+    _UNIT_Vector pending;
+    if (UNIT_FAILED(_UNIT_Vector_Init(&pending, translation->context, count, NULL))) {
+        _UNIT_Set_Clear(&reachable);
+        return _UNIT_FAIL;
+    }
+
+    _UNIT_BasicBlock *entry = _UNIT_Vector_GET(&translation->blocks, 0);
+    if (UNIT_FAILED(_UNIT_Set_Add(&reachable, entry))) {
+        goto error;
+    }
+
+    _UNIT_Vector_APPEND(&pending, entry);
+    for (UNIT_Size i = 0; i < _UNIT_Vector_SIZE(&pending); ++i) {
+        _UNIT_BasicBlock *block = _UNIT_Vector_GET(&pending, i);
+        for (UNIT_Size s = 0; s < _UNIT_Vector_SIZE(&block->successors); ++s) {
+            _UNIT_BasicBlock *successor = _UNIT_Vector_GET(&block->successors, s);
+            if (!_UNIT_Set_Contains(&reachable, successor)) {
+                if (UNIT_FAILED(_UNIT_Set_Add(&reachable, successor))) {
+                    goto error;
+                }
+
+                _UNIT_Vector_APPEND(&pending, successor);
+            }
+        }
+    }
+
+    // Remove incoming references before freeing any blocks, including dead loops.
+    for (UNIT_Size i = 0; i < _UNIT_Vector_SIZE(&pending); ++i) {
+        _UNIT_BasicBlock *block = _UNIT_Vector_GET(&pending, i);
+        UNIT_Size length = 0;
+        for (UNIT_Size p = 0; p < _UNIT_Vector_SIZE(&block->predecessors); ++p) {
+            _UNIT_BasicBlock *predecessor = _UNIT_Vector_GET(&block->predecessors, p);
+            if (_UNIT_Set_Contains(&reachable, predecessor)) {
+                block->predecessors.items[length++] = predecessor;
+            }
+        }
+
+        block->predecessors.length = length;
+    }
+
+    UNIT_Size length = 0;
+    for (UNIT_Size i = 0; i < count; ++i) {
+        _UNIT_BasicBlock *block = _UNIT_Vector_GET(&translation->blocks, i);
+        if (_UNIT_Set_Contains(&reachable, block)) {
+            translation->blocks.items[length++] = block;
+        } else {
+            _UNIT_BasicBlock_Free(translation->context, block);
+        }
+    }
+
+    translation->blocks.length = length;
+    _UNIT_Vector_Clear(&pending);
+    _UNIT_Set_Clear(&reachable);
+    return _UNIT_OK;
+
+error:
+    _UNIT_Vector_Clear(&pending);
+    _UNIT_Set_Clear(&reachable);
+    return _UNIT_FAIL;
+}
+
 static UNIT_Status
 optimize_jump_blocks(_UNIT_Translation *translation)
 {
@@ -698,6 +880,11 @@ _UNIT_Translation_Optimize(_UNIT_Translation *translation,
                            int8_t num_registers)
 {
     assert(translation != NULL);
+    // Folding branches must not turn a fallthrough into a different layout edge.
+    if (UNIT_FAILED(make_fallthroughs_explicit(translation))) {
+        return _UNIT_FAIL;
+    }
+
     UNIT_Size block_count = _UNIT_Vector_SIZE(&translation->blocks);
 
     for (UNIT_Size i = 0; i < block_count; ++i) {
@@ -726,7 +913,9 @@ _UNIT_Translation_Optimize(_UNIT_Translation *translation,
         } while (any_did_change);
     }
 
-    if (UNIT_FAILED(optimize_jump_blocks(translation))) {
+    prune_successors(translation);
+    if (UNIT_FAILED(remove_unreachable_blocks(translation))
+        || UNIT_FAILED(optimize_jump_blocks(translation))) {
         return _UNIT_FAIL;
     }
 

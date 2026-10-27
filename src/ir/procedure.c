@@ -459,6 +459,7 @@ typedef enum {
 
 typedef struct {
     DebugStackType type;
+    int8_t is_unknown;
     UNIT_IntegerType integer_type;
     union {
         int64_t value;
@@ -481,9 +482,20 @@ print_debug_item(UNIT_Context *context,
             return _UNIT_FAIL;                           \
         }
 
+    if (item->is_unknown) {
+        PRINT("unknown (");
+    }
+
     switch (item->type) {
         case DEBUG_TYPE_INT: {
-            return _UNIT_IntegerType_Print(context, stream, item->integer_type, item->value);
+            if (UNIT_FAILED(_UNIT_IntegerType_Print(context,
+                                                    stream,
+                                                    item->integer_type,
+                                                    item->value))) {
+                return _UNIT_FAIL;
+            }
+
+            break;
         }
 
         case DEBUG_TYPE_STRING: {
@@ -537,6 +549,10 @@ print_debug_item(UNIT_Context *context,
             PRINT("call_%s_result", item->string);
             break;
         }
+    }
+
+    if (item->is_unknown) {
+        PRINT(")");
     }
 
 #undef PRINT
@@ -627,6 +643,7 @@ deduce_stack_effect(const UNIT_Procedure *procedure,
                 return _UNIT_FAIL;                                      \
             }                                                           \
             item->type = tp;                                            \
+            item->is_unknown = 0;                                       \
             item->value = (int64_t)(the_value);                         \
             if (UNIT_FAILED(_UNIT_Vector_Append(debug_stack, item))) {  \
                 return _UNIT_FAIL;                                      \
@@ -893,6 +910,26 @@ UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure,
         return _UNIT_FAIL;
     }
 
+    int8_t *jump_targets = NULL;
+    UNIT_Size size = _UNIT_Vector_SIZE(&procedure->_instructions);
+    UNIT_Size label_count = _UNIT_Vector_SIZE(&procedure->_jump_labels);
+    if (visualize_stack_effect && label_count > 0) {
+        jump_targets = _UNIT_Calloc(procedure->context, label_count, sizeof(*jump_targets));
+        if (jump_targets == NULL) {
+            goto error;
+        }
+
+        for (UNIT_Size index = 0; index < size; ++index) {
+            _UNIT_Operation *operation = _UNIT_Vector_GET(&procedure->_instructions, index);
+            if ((operation->instruction == UNIT_OP_JUMP
+                 || operation->instruction == UNIT_OP_JUMP_IF_TRUE
+                 || operation->instruction == UNIT_OP_JUMP_IF_FALSE)
+                && _UNIT_Vector_INDEX_IS_VALID(&procedure->_jump_labels, operation->argument)) {
+                jump_targets[operation->argument] = 1;
+            }
+        }
+    }
+
 #define PRINT(...)                                            \
         if (fprintf(stream, __VA_ARGS__) < 0) {               \
             _UNIT_SetOSError(procedure->context, "printing"); \
@@ -900,7 +937,6 @@ UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure,
         }
 
     PRINT("procedure \"%s\":\n", procedure->name);
-    UNIT_Size size = _UNIT_Vector_SIZE(&procedure->_instructions);
     for (UNIT_Size index = 0; index < size; ++index) {
         _UNIT_Operation *operation =
             _UNIT_Vector_GET(&procedure->_instructions,
@@ -912,6 +948,15 @@ UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure,
             assert(label != NULL);
             assert(label->name != NULL);
             PRINT("    label %s [%d]:\n", label->name, label->id);
+            if (jump_targets != NULL && jump_targets[operation->argument]) {
+                // Other incoming paths, including loop backedges, can supply
+                // different values than the preceding instruction in layout.
+                for (UNIT_Size i = 0; i < _UNIT_Vector_SIZE(&debug_stack); ++i) {
+                    DebugStackItem *item = _UNIT_Vector_GET(&debug_stack, i);
+                    item->is_unknown = 1;
+                }
+            }
+
             continue;
         }
 
@@ -1007,9 +1052,17 @@ UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure,
         }
     }
 
+    if (jump_targets != NULL) {
+        _UNIT_Dealloc(procedure->context, jump_targets);
+    }
+
     _UNIT_Vector_Clear(&debug_stack);
     return _UNIT_OK;
 error:
+    if (jump_targets != NULL) {
+        _UNIT_Dealloc(procedure->context, jump_targets);
+    }
+
     _UNIT_Vector_Clear(&debug_stack);
     return _UNIT_FAIL;
 }
