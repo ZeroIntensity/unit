@@ -14,14 +14,15 @@
 static const AMD64_Register *
 get_platform_register_map(UNIT_Platform platform)
 {
+    // Keep the return register and early ABI argument registers last.
     static const AMD64_Register systemv[] = {
-        REG_RAX, REG_RCX, REG_RDX, REG_RSI, REG_RDI,
-        REG_R8, REG_R9, REG_R10,
+        REG_R10, REG_R9, REG_R8, REG_RCX, REG_RDX,
+        REG_RSI, REG_RDI, REG_RAX,
     };
 
     static const AMD64_Register win64[] = {
-        REG_RAX, REG_RCX, REG_RDX,
-        REG_R8, REG_R9, REG_R10,
+        REG_R10, REG_R9, REG_R8,
+        REG_RDX, REG_RCX, REG_RAX,
     };
 
     UNIT_ABI abi = UNIT_Platform_GET_ABI(platform);
@@ -66,6 +67,33 @@ item_register(const _UNIT_CompileContext *context, const _UNIT_MachineItem *item
 {
     assert(item != NULL && item->type == _UNIT_TYPE_REGISTER);
     return get_platform_register_map(context->target)[item->value];
+}
+
+static int8_t
+register_is_live_across_operation(const _UNIT_CompileContext *context,
+                                  const _UNIT_BasicBlock *block,
+                                  UNIT_Size instruction_index,
+                                  const _UNIT_MachineItem *destination,
+                                  AMD64_Register reg)
+{
+    const AMD64_Register *register_map = get_platform_register_map(context->target);
+    UNIT_Size num_registers = UNIT_Platform_GET_ABI(context->target) == UNIT_ABI_WIN64 ? 6 : 8;
+    for (UNIT_Size index = 0; index < num_registers; ++index) {
+        if (register_map[index] == reg) {
+            return !(destination != NULL && destination->type == _UNIT_TYPE_REGISTER
+                     && destination->value == index)
+                   && _UNIT_RegisterAllocator_IsLive(&context->register_allocator,
+                                                     block,
+                                                     instruction_index,
+                                                     index)
+                   && _UNIT_RegisterAllocator_IsLive(&context->register_allocator,
+                                                     block,
+                                                     instruction_index + 1,
+                                                     index);
+        }
+    }
+
+    return 0;
 }
 
 static AMD64_StackSlot
@@ -255,10 +283,13 @@ lower_operation(_UNIT_CompileContext *compile_context,
             AMD64_StackSlot saved[8];
             int8_t saved_registers[8] = {0};
             _UNIT_RegisterAllocator *allocator = &compile_context->register_allocator;
-            // Save live locals and all register arguments before arranging them.
-            // An argument may occupy the result register or another argument's target.
+            // Arguments that die at the call can move directly to their ABI registers.
             for (UNIT_Size index = 0; index < num_registers; ++index) {
-                if (_UNIT_RegisterAllocator_IsLive(allocator, block, instruction_index, index)) {
+                if (register_is_live_across_operation(compile_context,
+                                                      block,
+                                                      instruction_index,
+                                                      destination,
+                                                      register_map[index])) {
                     EMIT(save_register(compile_context, register_map[index], &saved[index]));
                     saved_registers[index] = 1;
                 }
@@ -266,13 +297,30 @@ lower_operation(_UNIT_CompileContext *compile_context,
 
             for (UNIT_Size index = 0; index < num_arguments; ++index) {
                 _UNIT_MachineItem *argument = _UNIT_Vector_GET(arguments, index);
-                if (argument->type == _UNIT_TYPE_REGISTER) {
-                    assert(saved_registers[argument->value]);
+                AMD64_Register target = argument_registers[index];
+                if (argument->type == _UNIT_TYPE_REGISTER
+                    && item_register(compile_context, argument) == target) {
+                    continue;
+                }
+
+                // Preserve a later argument before overwriting its source register.
+                for (UNIT_Size next = index + 1; next < num_arguments; ++next) {
+                    _UNIT_MachineItem *pending = _UNIT_Vector_GET(arguments, next);
+                    if (pending->type == _UNIT_TYPE_REGISTER
+                        && item_register(compile_context, pending) == target
+                        && !saved_registers[pending->value]) {
+                        EMIT(save_register(compile_context, target, &saved[pending->value]));
+                        saved_registers[pending->value] = 1;
+                        break;
+                    }
+                }
+
+                if (argument->type == _UNIT_TYPE_REGISTER && saved_registers[argument->value]) {
                     EMIT(AMD64_Move_RegStack(buffer,
-                                             argument_registers[index],
+                                             target,
                                              saved[argument->value]));
                 } else {
-                    EMIT(load_to_register(compile_context, argument_registers[index], argument));
+                    EMIT(load_to_register(compile_context, target, argument));
                 }
             }
 
@@ -422,8 +470,24 @@ lower_operation(_UNIT_CompileContext *compile_context,
         case _UNIT_I_DIV:
         case _UNIT_I_MOD: {
             AMD64_StackSlot saved_rax, saved_rdx;
-            EMIT(save_register(compile_context, REG_RAX, &saved_rax));
-            EMIT(save_register(compile_context, REG_RDX, &saved_rdx));
+            int8_t save_rax = register_is_live_across_operation(compile_context,
+                                                                block,
+                                                                instruction_index,
+                                                                destination,
+                                                                REG_RAX);
+            int8_t save_rdx = register_is_live_across_operation(compile_context,
+                                                                block,
+                                                                instruction_index,
+                                                                destination,
+                                                                REG_RDX);
+            if (save_rax) {
+                EMIT(save_register(compile_context, REG_RAX, &saved_rax));
+            }
+
+            if (save_rdx) {
+                EMIT(save_register(compile_context, REG_RDX, &saved_rdx));
+            }
+
             // Capture the divisor before RAX and RDX are overwritten.
             EMIT(load_to_register(compile_context, REG_SCRATCH, right));
             EMIT(load_to_register(compile_context, REG_RAX, left));
@@ -432,8 +496,14 @@ lower_operation(_UNIT_CompileContext *compile_context,
             EMIT(AMD64_Move_RegReg(buffer,
                                    REG_SCRATCH,
                                    operation->instruction == _UNIT_I_MOD ? REG_RDX : REG_RAX));
-            EMIT(restore_register(compile_context, REG_RDX, saved_rdx));
-            EMIT(restore_register(compile_context, REG_RAX, saved_rax));
+            if (save_rdx) {
+                EMIT(restore_register(compile_context, REG_RDX, saved_rdx));
+            }
+
+            if (save_rax) {
+                EMIT(restore_register(compile_context, REG_RAX, saved_rax));
+            }
+
             EMIT(store_to_register(compile_context, destination, REG_SCRATCH));
             break;
         }
