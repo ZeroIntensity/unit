@@ -90,9 +90,9 @@ compile_procedure(const UNIT_Procedure *procedure,
         return NULL;
     }
 
-    int8_t num_registers = UNIT_Platform_GET_ABI(platform) == UNIT_ABI_WIN64 ? 6 : 8;
+    int8_t num_registers = UNIT_Platform_GET_ABI(platform) == UNIT_ABI_WIN64 ? 5 : 7;
     if ((!(procedure->flags & UNIT_FLAG_NO_OPTIMIZE_TRANSLATION)
-         && UNIT_FAILED(_UNIT_Translation_SinkConstants(&compiled_procedure->_translation)))
+         && UNIT_FAILED(_UNIT_Translation_SinkLoads(&compiled_procedure->_translation)))
         || UNIT_FAILED(_UNIT_Translation_AllocateRegisters(&compiled_procedure->_translation,
                                                            &compiled_procedure->_compile_context,
                                                            num_registers))

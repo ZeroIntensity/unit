@@ -89,6 +89,10 @@ print_machine_item(FILE *stream,
                                                 colorize))) {
             return _UNIT_FAIL;
         }
+    } else if (item->type == _UNIT_TYPE_RESULT) {
+        PRINT("%sresult_register%s",
+              _UNIT_COLOR(colorize, RESULT),
+              _UNIT_COLOR(colorize, FOREGROUND));
     } else if (item->type == _UNIT_TYPE_LOCATION) {
         PRINT("%slocation_%lld%s",
               _UNIT_COLOR(colorize, RESULT),
@@ -1131,7 +1135,14 @@ translate_block(Builder *builder, BlockState *state)
                     return invalid(builder, "call requires prepared arguments");
                 }
 
-                RESULT(_UNIT_I_CALL_SYMBOL, symbol, arguments);
+                ITEM(call_result, _UNIT_TYPE_RESULT, 0, NULL);
+                EMIT(_UNIT_I_CALL_SYMBOL,
+                     _UNIT_MachineDestination_FromDestination(call_result),
+                     symbol,
+                     arguments);
+                // Capture the value in SSA. Coalescing can use result_register
+                // directly, retaining this copy when a later call clobbers it.
+                RESULT(_UNIT_I_LOAD, call_result, NULL);
                 break;
             }
             case UNIT_OP_COMPARE_EQUAL:
