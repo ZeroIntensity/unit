@@ -562,6 +562,7 @@ static PyType_Spec JumpLabelType_spec = {
 typedef struct {
     PyObject_HEAD
     PyObject *context;
+    PyObject *subprocedures;
     UNIT_Procedure procedure;
 } ProcedureObject;
 
@@ -598,6 +599,12 @@ ProcedureObject_new(PyTypeObject *cls, PyObject *args, PyObject *kwds)
     }
 
     procedure->context = Py_NewRef(context_op);
+    procedure->subprocedures = PyList_New(0);
+    if (procedure->subprocedures == NULL) {
+        Py_DECREF(op);
+        return NULL;
+    }
+
     return op;
 }
 
@@ -764,6 +771,38 @@ ProcedureObject_add_call_name(PyObject *op, PyObject *args)
 }
 
 static PyObject *
+ProcedureObject_add_call_procedure(PyObject *op, PyObject *args)
+{
+    _unit_state *state = get_state_from_object(op);
+    PyObject *target_op;
+    uint8_t nargs;
+
+    if (!PyArg_ParseTuple(args,
+                          "O!b",
+                          state->ProcedureType,
+                          &target_op,
+                          &nargs)) {
+        return NULL;
+    }
+
+    ProcedureObject *self = ProcedureObject_CAST(op);
+    ProcedureObject *target = ProcedureObject_CAST(target_op);
+    // We need to keep a strong reference to the subprocedure
+    if (PyList_Append(self->subprocedures, target_op) < 0) {
+        return NULL;
+    }
+
+    if (UNIT_FAILED(UNIT_Procedure_AddCallProcedure(&self->procedure,
+                                                    &target->procedure,
+                                                    nargs))) {
+        set_py_error_from_context(state, self->procedure.context);
+        return NULL;
+    }
+
+    Py_RETURN_NONE;
+}
+
+static PyObject *
 ProcedureObject_compile(PyObject *op, PyObject *platform_obj)
 {
     assert(op != NULL);
@@ -869,6 +908,7 @@ ProcedureObject_traverse(PyObject *op, visitproc visit, void *arg)
     assert(op != NULL);
     ProcedureObject *procedure = ProcedureObject_CAST(op);
     Py_VISIT(procedure->context);
+    Py_VISIT(procedure->subprocedures);
     Py_VISIT(Py_TYPE(op));
     return 0;
 }
@@ -878,7 +918,12 @@ ProcedureObject_clear(PyObject *op)
 {
     assert(op != NULL);
     ProcedureObject *procedure = ProcedureObject_CAST(op);
-    Py_CLEAR(procedure->context);
+    if (procedure->context != NULL) {
+        UNIT_Procedure_Clear(&procedure->procedure);
+        Py_CLEAR(procedure->context);
+    }
+
+    Py_CLEAR(procedure->subprocedures);
     return 0;
 }
 
@@ -886,9 +931,7 @@ static void
 ProcedureObject_dealloc(PyObject *op)
 {
     assert(op != NULL);
-    ProcedureObject *procedure = ProcedureObject_CAST(op);
     PyObject_GC_UnTrack(op);
-    UNIT_Procedure_Clear(&procedure->procedure);
     (void)ProcedureObject_clear(op);
     PyTypeObject *cls = Py_TYPE(op);
     cls->tp_free(op);
@@ -900,6 +943,8 @@ static PyMethodDef ProcedureObject_methods[] = {
     {"add_jump", ProcedureObject_add_jump, METH_VARARGS, NULL},
     {"use_label", ProcedureObject_use_label, METH_O, NULL},
     {"add_call_name", ProcedureObject_add_call_name, METH_VARARGS, NULL},
+    {"add_call_procedure", ProcedureObject_add_call_procedure, METH_VARARGS,
+     NULL},
     {"add_operation", ProcedureObject_add_operation, METH_VARARGS, NULL},
     {"add_string_load", ProcedureObject_load_string, METH_O, NULL},
     {"compile", ProcedureObject_compile, METH_O, NULL},

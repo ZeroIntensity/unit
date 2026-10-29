@@ -36,7 +36,8 @@ enum class Flag : std::uint32_t {
     PRINT_TRANSLATION_POSTOP = UNIT_FLAG_PRINT_TRANSLATION_POSTOP
 };
 
-inline Flag operator|(Flag a, Flag b)
+inline Flag
+operator|(Flag a, Flag b)
 {
     return static_cast<Flag>(static_cast<uint32_t>(a) |
                              static_cast<uint32_t>(b));
@@ -167,7 +168,8 @@ ExecutableBuffer(ExecutableBuffer &&other) noexcept
 }
 
 template <typename ... Args>
-auto operator()(Args... args) const
+auto
+operator()(Args... args) const
 {
     return reinterpret_cast<Function>(UNIT_ExecutableBuffer_GetPointer(
                                           buffer))(args ...);

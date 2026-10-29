@@ -353,6 +353,22 @@ Procedures
          proc.call_name("printf", 2)
          proc.pop()  # discard printf return value
 
+   .. py:method:: call_procedure(target, num_args) -> None
+
+      Call another UNIT procedure, passing the top *num_args* stack items
+      as arguments (first argument pushed first). The return value is
+      pushed onto the stack. The target is kept alive and compiled with
+      the calling procedure.
+      See :c:func:`UNIT_Procedure_AddCallProcedure`.
+
+      **Stack effect:** ``arg1 arg2 ... argN -- result``
+
+      :param Procedure target: The procedure to call.
+      :param int num_args: Number of arguments, from 0 to 255.
+      :raises TypeError: If *target* is not a Procedure or *num_args* is not an int.
+      :raises ValueError: If *num_args* is negative.
+      :raises OverflowError: If *num_args* exceeds 255.
+
    .. py:method:: return_value() -> None
 
       Pop the top of the stack and return it to the caller.

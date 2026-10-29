@@ -334,6 +334,21 @@ class Procedure:
         with Error.capture_internal_errors():
             self._procedure.add_call_name(name, num_args)
 
+    def call_procedure(self, target: Procedure, num_args: int, /) -> None:
+        if __debug__ and not isinstance(target, Procedure):
+            raise TypeError(f"Expected a Procedure object, but got {target!r}")
+
+        if __debug__ and not isinstance(num_args, int):
+            raise TypeError(
+                f"Expected an integer for the number of arguments, but got {num_args!r}"
+            )
+
+        if num_args < 0:
+            raise ValueError("Cannot have a negative number of arguments")
+
+        with Error.capture_internal_errors():
+            self._procedure.add_call_procedure(target._procedure, num_args)
+
     def compare_equal(self) -> None:
         self._add_op(OpCode.COMPARE_EQUAL)
 
