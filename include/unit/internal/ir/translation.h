@@ -18,7 +18,6 @@ typedef enum {
     _UNIT_TYPE_CONSTANT,
     _UNIT_TYPE_LOCATION,
     _UNIT_TYPE_REGISTER,
-    _UNIT_TYPE_RESULT, // Fixed call result register; excluded from allocation
     _UNIT_TYPE_CALL_ARGS,
     _UNIT_TYPE_PHI_ARGS,
     _UNIT_TYPE_COMPARISON,
@@ -46,12 +45,6 @@ typedef struct _UNIT_MachineItem {
         UNIT_Size index;
     } created_by;
 } _UNIT_MachineItem;
-
-static inline int8_t
-_UNIT_MachineItem_IsRegister(const _UNIT_MachineItem *item)
-{
-    return item != NULL && (item->type == _UNIT_TYPE_REGISTER || item->type == _UNIT_TYPE_RESULT);
-}
 
 struct _UNIT_BasicBlock;
 
@@ -194,7 +187,7 @@ UNIT_Status
 _UNIT_Translation_AnalyzeLiveness(_UNIT_Translation *translation);
 
 UNIT_Status
-_UNIT_Translation_SinkLoads(_UNIT_Translation *translation);
+_UNIT_Translation_SinkConstants(_UNIT_Translation *translation);
 
 // Run after allocation: PHIs become parallel copies on their incoming edges.
 struct _UNIT_CompileContext;

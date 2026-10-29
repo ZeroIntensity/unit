@@ -92,15 +92,6 @@ operation_references_item(_UNIT_MachineOperation *op, _UNIT_MachineItem *item)
 }
 
 static int8_t
-operation_writes_item(_UNIT_MachineOperation *op, _UNIT_MachineItem *item)
-{
-    return !_UNIT_MachineDestination_IsInput(op->destination)
-           && item_matches_or_contains(
-        _UNIT_MachineDestination_GetPointerNullable(op->destination),
-        item);
-}
-
-static int8_t
 is_control_flow(_UNIT_MachineInstruction instruction)
 {
     return instruction == _UNIT_I_EXIT || instruction == _UNIT_I_RETURN_VALUE
@@ -108,7 +99,7 @@ is_control_flow(_UNIT_MachineInstruction instruction)
 }
 
 UNIT_Status
-_UNIT_Translation_SinkLoads(_UNIT_Translation *translation)
+_UNIT_Translation_SinkConstants(_UNIT_Translation *translation)
 {
     assert(translation != NULL);
     int8_t moved_locations = 0;
@@ -119,13 +110,9 @@ _UNIT_Translation_SinkLoads(_UNIT_Translation *translation)
             _UNIT_MachineOperation *op = _UNIT_Vector_GET(&origin->instructions, i - 1);
             _UNIT_MachineItem *destination =
                 _UNIT_MachineDestination_GetPointerNullable(op->destination);
-            int8_t result_copy = op->instruction == _UNIT_I_LOAD
-                                 && op->argument_1 != NULL
-                                 && op->argument_1->type == _UNIT_TYPE_RESULT;
             if ((op->instruction != _UNIT_I_LOAD && op->instruction != _UNIT_I_LOAD_STRING)
                 || op->argument_1 == NULL
-                || (op->argument_1->type != _UNIT_TYPE_CONSTANT && !result_copy)
-                || destination == NULL
+                || op->argument_1->type != _UNIT_TYPE_CONSTANT || destination == NULL
                 || _UNIT_MachineDestination_IsInput(op->destination)
                 || (destination->type != _UNIT_TYPE_LOCATION
                     && destination->type != _UNIT_TYPE_REGISTER)) {
@@ -140,16 +127,15 @@ _UNIT_Translation_SinkLoads(_UNIT_Translation *translation)
                 while (end < _UNIT_Vector_SIZE(instructions)) {
                     _UNIT_MachineOperation *next = _UNIT_Vector_GET(instructions, end);
                     if (is_control_flow(next->instruction)
-                        || operation_references_item(next, destination)
-                        || (result_copy && operation_writes_item(next, op->argument_1))) {
+                        || operation_references_item(next, destination)) {
                         break;
                     }
 
                     ++end;
                 }
 
-                // Constants have no input dependencies. A result capture also
-                // stops before the next call overwrites result_register.
+                // A constant has no input dependencies, but cannot cross a read
+                // or overwrite of its destination, including call arguments.
                 if (end > position + 1) {
                     memmove(&instructions->items[position],
                             &instructions->items[position + 1],
@@ -283,7 +269,7 @@ item_dead_in_block_recursive(_UNIT_BasicBlock *block,
         }
 
         if (item_matches_or_contains(destination, item)) {
-            if (_UNIT_MachineItem_IsRegister(item)
+            if (item->type == _UNIT_TYPE_REGISTER
                 && !_UNIT_MachineDestination_IsInput(operation->destination)) {
                 return 1;
             }
@@ -357,66 +343,6 @@ has_discardable_result(_UNIT_MachineInstruction instruction)
     }
 }
 
-static int8_t
-replace_register_reads(_UNIT_MachineItem *item,
-                       _UNIT_MachineItem *from,
-                       _UNIT_MachineItem *to)
-{
-    if (item == NULL) {
-        return 0;
-    }
-
-    if (item->type == from->type && item->value == from->value) {
-        // Allocated operand occurrences are independent. Update this use rather
-        // than sharing an item that a later folding pass might mutate.
-        item->type = to->type;
-        item->value = to->value;
-        item->integer_type = to->integer_type;
-        return 1;
-    }
-
-    int8_t changed = 0;
-    if (item->type == _UNIT_TYPE_CALL_ARGS) {
-        for (UNIT_Size i = 0; i < _UNIT_Vector_SIZE(item->call_args); ++i) {
-            changed |= replace_register_reads(_UNIT_Vector_GET(item->call_args, i), from, to);
-        }
-    } else if (item->type == _UNIT_TYPE_COMPARISON) {
-        changed |= replace_register_reads(item->comparison.left, from, to);
-        changed |= replace_register_reads(item->comparison.right, from, to);
-    }
-
-    return changed;
-}
-
-static int8_t
-coalesce_result_reads(_UNIT_Vector *instructions,
-                      UNIT_Size start,
-                      _UNIT_MachineItem *destination,
-                      _UNIT_MachineItem *result)
-{
-    int8_t changed = 0;
-    for (UNIT_Size i = start; i < _UNIT_Vector_SIZE(instructions); ++i) {
-        _UNIT_MachineOperation *op = _UNIT_Vector_GET(instructions, i);
-        // Call arguments consume the previous result before the call defines
-        // its new result. Rewrite those reads before stopping at the clobber.
-        changed |= replace_register_reads(op->argument_1, destination, result);
-        changed |= replace_register_reads(op->argument_2, destination, result);
-        if (_UNIT_MachineDestination_IsInput(op->destination)) {
-            changed |= replace_register_reads(
-                _UNIT_MachineDestination_GetPointer(op->destination),
-                destination,
-                result);
-        }
-
-        if (operation_writes_item(op, result) || operation_writes_item(op, destination)
-            || is_control_flow(op->instruction)) {
-            break;
-        }
-    }
-
-    return changed;
-}
-
 static UNIT_Status
 optimize_block_loads(_UNIT_BasicBlock *block,
                      int8_t *did_change)
@@ -446,13 +372,7 @@ optimize_block_loads(_UNIT_BasicBlock *block,
 
         _UNIT_MachineItem *destination =
             _UNIT_MachineDestination_GetPointerNullable(op->destination);
-        if (op->instruction == _UNIT_I_LOAD && destination != NULL
-            && destination->type == _UNIT_TYPE_REGISTER
-            && op->argument_1->type == _UNIT_TYPE_RESULT) {
-            *did_change |= coalesce_result_reads(instrs, index + 1, destination, op->argument_1);
-        }
-
-        if (_UNIT_MachineItem_IsRegister(destination)
+        if (destination != NULL && destination->type == _UNIT_TYPE_REGISTER
             && !_UNIT_MachineDestination_IsInput(op->destination)
             && has_discardable_result(op->instruction)) {
             int8_t destination_never_used = item_dead_in_block(block,
@@ -534,8 +454,7 @@ optimize_block_loads(_UNIT_BasicBlock *block,
             continue;
         }
 
-        if (_UNIT_MachineDestination_IsInput(previous->destination)
-            || previous->instruction == _UNIT_I_CALL_SYMBOL) {
+        if (_UNIT_MachineDestination_IsInput(previous->destination)) {
             APPEND(op);
             continue;
         }
@@ -633,7 +552,7 @@ fold_conditional_jump(_UNIT_MachineOperation *op, int8_t *taken)
     _UNIT_MachineItem *left = op->argument_1;
     _UNIT_MachineItem *right = op->argument_2;
     int8_t constants = left->type == _UNIT_TYPE_CONSTANT && right->type == _UNIT_TYPE_CONSTANT;
-    int8_t same_register = _UNIT_MachineItem_IsRegister(left) && compare_items(left, right);
+    int8_t same_register = left->type == _UNIT_TYPE_REGISTER && compare_items(left, right);
     if (!constants && !same_register) {
         return 0;
     }
@@ -1267,7 +1186,7 @@ _UNIT_Translation_Optimize(_UNIT_Translation *translation,
         }
     } while (merged);
 
-    if (UNIT_FAILED(_UNIT_Translation_SinkLoads(translation))) {
+    if (UNIT_FAILED(_UNIT_Translation_SinkConstants(translation))) {
         return _UNIT_FAIL;
     }
 

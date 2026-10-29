@@ -14,14 +14,13 @@
 static const AMD64_Register *
 get_platform_register_map(UNIT_Platform platform)
 {
-    // RAX belongs exclusively to result_register, outside ordinary allocation.
     static const AMD64_Register systemv[] = {
-        REG_RCX, REG_RDX, REG_RSI, REG_RDI,
+        REG_RAX, REG_RCX, REG_RDX, REG_RSI, REG_RDI,
         REG_R8, REG_R9, REG_R10,
     };
 
     static const AMD64_Register win64[] = {
-        REG_RCX, REG_RDX,
+        REG_RAX, REG_RCX, REG_RDX,
         REG_R8, REG_R9, REG_R10,
     };
 
@@ -65,11 +64,7 @@ get_argument_registers(UNIT_Platform platorm)
 static AMD64_Register
 item_register(const _UNIT_CompileContext *context, const _UNIT_MachineItem *item)
 {
-    assert(_UNIT_MachineItem_IsRegister(item));
-    if (item->type == _UNIT_TYPE_RESULT) {
-        return REG_RAX;
-    }
-
+    assert(item != NULL && item->type == _UNIT_TYPE_REGISTER);
     return get_platform_register_map(context->target)[item->value];
 }
 
@@ -87,10 +82,8 @@ load_register(_UNIT_CompileContext *context,
 {
     assert(src != NULL);
     switch (src->type) {
-        case _UNIT_TYPE_REGISTER:
-        case _UNIT_TYPE_RESULT: {
-            AMD64_Register source = item_register(context, src);
-            return dst == source ? _UNIT_OK : AMD64_Move_RegReg(&context->buffer, dst, source);
+        case _UNIT_TYPE_REGISTER: {
+            return AMD64_Move_RegReg(&context->buffer, dst, item_register(context, src));
         }
         case _UNIT_TYPE_CONSTANT: {
             return AMD64_Move_RegImmediate(&context->buffer,
@@ -112,10 +105,8 @@ store_register(_UNIT_CompileContext *context,
                AMD64_Register src)
 {
     assert(dst != NULL);
-    if (_UNIT_MachineItem_IsRegister(dst)) {
-        AMD64_Register destination = item_register(context, dst);
-        return destination == src ? _UNIT_OK
-                                  : AMD64_Move_RegReg(&context->buffer, destination, src);
+    if (dst->type == _UNIT_TYPE_REGISTER) {
+        return AMD64_Move_RegReg(&context->buffer, item_register(context, dst), src);
     }
 
     return AMD64_Move_StackReg(&context->buffer, item_stack_slot(dst), src);
@@ -174,7 +165,7 @@ compare_items(_UNIT_CompileContext *context,
 {
     _UNIT_CodeBuffer *buffer = &context->buffer;
     EMIT(load_register(context, REG_SCRATCH, left));
-    if (_UNIT_MachineItem_IsRegister(right)) {
+    if (right->type == _UNIT_TYPE_REGISTER) {
         return AMD64_Compare_RegReg(buffer, REG_SCRATCH, item_register(context, right));
     }
 
@@ -222,7 +213,7 @@ lower_operation(_UNIT_CompileContext *compile_context,
             return _UNIT_FAIL;
         }
         case _UNIT_I_LOAD: {
-            if (_UNIT_MachineItem_IsRegister(destination)) {
+            if (destination->type == _UNIT_TYPE_REGISTER) {
                 EMIT(load_register(compile_context,
                                    item_register(compile_context, destination),
                                    left));
@@ -235,7 +226,6 @@ lower_operation(_UNIT_CompileContext *compile_context,
         }
 
         case _UNIT_I_CALL_SYMBOL: {
-            assert(destination != NULL && destination->type == _UNIT_TYPE_RESULT);
             assert(right->type == _UNIT_TYPE_CALL_ARGS);
             _UNIT_Vector *arguments = right->call_args;
             UNIT_Size num_arguments = _UNIT_Vector_SIZE(arguments);
@@ -243,10 +233,9 @@ lower_operation(_UNIT_CompileContext *compile_context,
             const AMD64_Register *register_map = get_platform_register_map(compile_context->target);
             const AMD64_Register *argument_registers =
                 get_argument_registers(compile_context->target);
-            UNIT_Size num_registers = abi == UNIT_ABI_WIN64 ? 5 : 7;
-            AMD64_StackSlot saved[7];
-            // Save allocated registers before arranging arguments. RAX is
-            // reserved for result_register and is intentionally clobbered.
+            UNIT_Size num_registers = abi == UNIT_ABI_WIN64 ? 6 : 8;
+            AMD64_StackSlot saved[8];
+            // Save every source before arranging arguments, including the result register.
             for (UNIT_Size index = 0; index < num_registers; ++index) {
                 EMIT(save_register(compile_context, register_map[index], &saved[index]));
             }
@@ -258,8 +247,6 @@ lower_operation(_UNIT_CompileContext *compile_context,
                                              argument_registers[index],
                                              saved[argument->value]));
                 } else {
-                    // ABI argument registers exclude RAX, so the previous
-                    // result stays readable until all arguments are arranged.
                     EMIT(load_register(compile_context, argument_registers[index], argument));
                 }
             }
@@ -277,8 +264,17 @@ lower_operation(_UNIT_CompileContext *compile_context,
                 EMIT(AMD64_Add_RegImmediate(buffer, REG_RSP, (AMD64_Immediate) {32}));
             }
 
+            if (destination != NULL) {
+                EMIT(store_register(compile_context, destination, REG_RAX));
+            }
+
             for (UNIT_Size index = 0; index < num_registers; ++index) {
-                EMIT(restore_register(compile_context, register_map[index], saved[index]));
+                if (destination != NULL && destination->type == _UNIT_TYPE_REGISTER
+                    && item_register(compile_context, destination) == register_map[index]) {
+                    _UNIT_StackFrame_FreeSlot(&compile_context->stack_frame, saved[index].offset);
+                } else {
+                    EMIT(restore_register(compile_context, register_map[index], saved[index]));
+                }
             }
 
             break;
@@ -354,7 +350,7 @@ lower_operation(_UNIT_CompileContext *compile_context,
 #define BINARY_OP(inst, helper)                                                      \
         case inst: {                                                                 \
                 EMIT(load_register(compile_context, REG_SCRATCH, left));             \
-                if (_UNIT_MachineItem_IsRegister(right)) {                           \
+                if (right->type == _UNIT_TYPE_REGISTER) {                            \
                     EMIT(helper ## _RegReg(buffer,                                   \
                                            REG_SCRATCH,                              \
                                            item_register(compile_context, right)));  \
