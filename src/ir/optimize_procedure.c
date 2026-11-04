@@ -188,6 +188,13 @@ UNIT_Procedure_OptimizeFold(UNIT_Procedure *procedure)
             case UNIT_OP_STORE_LOCAL:
             case _UNIT_OP_STORE_LOCAL_NAME: {
                 POP();
+                for (UNIT_Size i = 0; i < stack_depth; ++i) {
+                    if (stack[i].kind == STACK_LOCAL
+                        && stack[i].value == op->argument) {
+                        stack[i].kind = STACK_UNKNOWN;
+                    }
+                }
+
                 break;
             }
 

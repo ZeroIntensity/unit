@@ -410,6 +410,12 @@ optimize_block_loads(_UNIT_BasicBlock *block,
             CONTINUE_AND_DISCARD(op);
         }
 
+        if (source->type != _UNIT_TYPE_REGISTER
+            && source->type != _UNIT_TYPE_LOCATION) {
+            APPEND(op);
+            continue;
+        }
+
         // If the previous instruction produced src, and src is dead after this load,
         // change the previous instruction's destination and delete the load.
         //
