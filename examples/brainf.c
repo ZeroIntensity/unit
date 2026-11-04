@@ -320,17 +320,11 @@ main(int argc, char **argv)
         goto error;
     }
 
-    if (UNIT_FAILED(UNIT_Procedure_PrintInstructions(&procedure, stdout, 1, 1))) {
-        goto error;
-    }
-
     UNIT_CompiledProcedure *compiled = UNIT_Compile(&procedure,
                                                     UNIT_HOST_PLATFORM);
     if (compiled == NULL) {
         goto error;
     }
-
-    UNIT_CompiledProcedure_PrintTranslatedIR(compiled, stdout, 1);
 
     if (UNIT_FAILED(UNIT_CompiledProcedure_WriteObjectFile(compiled,
                                                            "test.o",
