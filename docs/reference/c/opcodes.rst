@@ -11,19 +11,66 @@ Operation codes
 Constants
 ---------
 
-.. c:enumerator:: UNIT_OP_LOAD_INTEGER
+Integer loads truncate the operand to the specified width, then sign-extend
+signed integers or zero-extend unsigned integers to a 64-bit stack value.
+Arithmetic continues to operate on 64-bit values; the load type does not change
+subsequent arithmetic or comparison instructions.
 
-   Push a constant integer onto the stack.
+**Stack effect:** ``-- value``
 
-   **Stack effect:** ``-- value``
+.. c:enumerator:: UNIT_OP_LOAD_INT8
 
-   The operand is the integer value to push.
+   Push a signed 8-bit integer constant.
+   Debug IR displays it as ``i8(42)``.
 
-   .. code-block:: c
-      :caption: :iconify:`streamline-logos:c-language-logo-solid` Example
+.. c:enumerator:: UNIT_OP_LOAD_INT16
 
-      // Push 42 onto the stack
-      UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INTEGER, 42);
+   Push a signed 16-bit integer constant.
+   Debug IR displays it as ``i16(42)``.
+
+.. c:enumerator:: UNIT_OP_LOAD_INT32
+
+   Push a signed 32-bit integer constant.
+   Debug IR displays it as ``i32(42)``.
+
+.. c:enumerator:: UNIT_OP_LOAD_INT64
+
+   Push a signed 64-bit integer constant.
+   Debug IR displays it as ``i64(42)``.
+
+.. c:enumerator:: UNIT_OP_LOAD_UINT8
+
+   Push an unsigned 8-bit integer constant.
+   Debug IR displays it as ``u8(42)``.
+
+.. c:enumerator:: UNIT_OP_LOAD_UINT16
+
+   Push an unsigned 16-bit integer constant.
+   Debug IR displays it as ``u16(42)``.
+
+.. c:enumerator:: UNIT_OP_LOAD_UINT32
+
+   Push an unsigned 32-bit integer constant.
+   Debug IR displays it as ``u32(42)``.
+
+.. c:enumerator:: UNIT_OP_LOAD_UINT64
+
+   Push an unsigned 64-bit integer constant.
+   Debug IR displays it as ``u64(42)``.
+
+The operand of :c:func:`UNIT_Procedure_AddOperation` stores the constant's
+bits in an ``int64_t``. For ``UNIT_OP_LOAD_UINT64`` values above ``INT64_MAX``,
+cast the ``uint64_t`` value to ``int64_t`` when passing the operand. Debug IR
+prints the unsigned decimal value.
+
+.. code-block:: c
+   :caption: :iconify:`streamline-logos:c-language-logo-solid` Example
+
+   UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INT64, 42);
+   // stack: [i64(42)]
+
+   UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_UINT8, 255);
+   // stack: [i64(42), u8(255)]
 
 .. c:enumerator:: UNIT_OP_LOAD_STRING
 
@@ -51,8 +98,8 @@ The first value pushed is the left operand.
 
    .. code-block:: c
 
-      UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INTEGER, 10);
-      UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INTEGER, 20);
+      UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INT64, 10);
+      UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INT64, 20);
       UNIT_Procedure_AddOperation(&proc, UNIT_OP_ADD, 0);
       // stack: [30]
 
@@ -95,7 +142,7 @@ and :c:func:`UNIT_Procedure_AddLoadName`.
    .. code-block:: c
       :caption: :iconify:`streamline-logos:c-language-logo-solid` Example
 
-      UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INTEGER, 42);
+      UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INT64, 42);
       UNIT_Procedure_AddOperation(&proc, UNIT_OP_STORE_LOCAL, 0);
 
 .. c:enumerator:: UNIT_OP_LOAD_LOCAL
@@ -174,8 +221,8 @@ operand.
    .. code-block:: c
       :caption: :iconify:`streamline-logos:c-language-logo-solid` Example
 
-      UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INTEGER, 5);
-      UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INTEGER, 5);
+      UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INT64, 5);
+      UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INT64, 5);
       UNIT_Procedure_AddOperation(&proc, UNIT_OP_COMPARE_EQUAL, 0);
       // result: true (5 == 5)
 
@@ -270,7 +317,7 @@ Function Calls
 
       // printf("%d\n", 42)
       UNIT_Procedure_AddStringLoad(&proc, "%d\n");
-      UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INTEGER, 42);
+      UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INT64, 42);
       UNIT_Procedure_AddCallName(&proc, "printf", 2);
       UNIT_Procedure_AddOperation(&proc, UNIT_OP_POP, 0); // discard return
 
@@ -309,7 +356,7 @@ Function Calls
    .. code-block:: c
       :caption: :iconify:`streamline-logos:c-language-logo-solid` Example
 
-      UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INTEGER, 0);
+      UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INT64, 0);
       UNIT_Procedure_AddOperation(&proc, UNIT_OP_RETURN_VALUE, 0);
 
 .. c:enumerator:: UNIT_OP_EXIT
@@ -341,8 +388,8 @@ Stack Manipulation
    .. code-block:: c
       :caption: :iconify:`streamline-logos:c-language-logo-solid` Example
 
-      UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INTEGER, 10);
-      UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INTEGER, 20);
+      UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INT64, 10);
+      UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INT64, 20);
       // stack: [10, 20]
       UNIT_Procedure_AddOperation(&proc, UNIT_OP_COPY, 1);
       // stack: [10, 20, 20]
@@ -358,8 +405,8 @@ Stack Manipulation
    .. code-block:: c
       :caption: :iconify:`streamline-logos:c-language-logo-solid` Example
 
-      UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INTEGER, 10);
-      UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INTEGER, 20);
+      UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INT64, 10);
+      UNIT_Procedure_AddOperation(&proc, UNIT_OP_LOAD_INT64, 20);
       // stack: [10, 20]
       UNIT_Procedure_AddOperation(&proc, UNIT_OP_SWAP, 1);
       // stack: [20, 10]

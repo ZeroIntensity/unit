@@ -71,7 +71,7 @@ class Constant[T](Expression):
 
     def codegen_unit(self, procedure: unit.Procedure) -> None:
         if isinstance(self.value, int):
-            procedure.load_integer(self.value)
+            procedure.load_int64(self.value)
         else:
             assert isinstance(self.value, str)
             procedure.load_string(self.value)
@@ -275,7 +275,7 @@ class Function:
         compiled = procedure.compile()
 
         print(f"SPECIALIZED {self.name}{arguments}:", file=sys.stderr)
-        print(compiled.translation_text(), file=sys.stderr)
+        print(compiled.translation_text(colorize=True), file=sys.stderr)
 
         trampoline_addresses: dict[str, int] = {}
         for name, trampoline in self.trampolines.items():

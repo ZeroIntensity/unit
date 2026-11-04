@@ -168,6 +168,8 @@ allocated_item(_UNIT_RegisterAllocator *allocator, _UNIT_MachineItem *original)
         return NULL;
     }
 
+    item->integer_type = original->integer_type;
+
     if (original->type == _UNIT_TYPE_CALL_ARGS || original->type == _UNIT_TYPE_PHI_ARGS) {
         _UNIT_Vector *source = original->call_args;
         _UNIT_Vector *args = _UNIT_Vector_New(translation->context,

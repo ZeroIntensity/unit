@@ -46,7 +46,8 @@ UNIT_CompiledProcedure_WriteObjectFile(const UNIT_CompiledProcedure *compiled,
 UNIT_Status
 UNIT_CompiledProcedure_PrintTranslatedIR(
     const UNIT_CompiledProcedure *compiled,
-    FILE *stream);
+    FILE *stream,
+    int8_t colorize);
 
 void
 UNIT_CompiledProcedure_Free(UNIT_CompiledProcedure *compiled);

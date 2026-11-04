@@ -26,6 +26,7 @@ typedef enum {
 
 typedef struct _UNIT_MachineItem {
     _UNIT_MachineItem_Type type;
+    UNIT_IntegerType integer_type; // Width and signedness of a constant
     union {
         int64_t value;
         _UNIT_Vector *call_args;
@@ -185,6 +186,9 @@ _UNIT_Translation_Emit(struct _UNIT_BasicBlock *block,
 UNIT_Status
 _UNIT_Translation_AnalyzeLiveness(_UNIT_Translation *translation);
 
+UNIT_Status
+_UNIT_Translation_SinkConstants(_UNIT_Translation *translation);
+
 // Run after allocation: PHIs become parallel copies on their incoming edges.
 struct _UNIT_CompileContext;
 UNIT_Status
@@ -201,7 +205,8 @@ _UNIT_Translation_Clear(_UNIT_Translation *translation);
 UNIT_Status
 _UNIT_Translation_PrintInstructions(const _UNIT_Translation *translation,
                                     const char *name,
-                                    FILE *stream);
+                                    FILE *stream,
+                                    int8_t colorize);
 
 UNIT_Status
 _UNIT_Translation_Optimize(_UNIT_Translation *translation,

@@ -381,10 +381,15 @@ CompiledProcedureObject_jit(PyObject *op, PyObject *raw_symbols)
 }
 
 static PyObject *
-CompiledProcedureObject_print_translation(PyObject *op, PyObject *unused)
+CompiledProcedureObject_print_translation(PyObject *op, PyObject *args)
 {
     assert(op != NULL);
     CompiledProcedureObject *self = CompiledProcedureObject_CAST(op);
+
+    int colorize = 0;
+    if (!PyArg_ParseTuple(args, "|p", &colorize)) {
+        return NULL;
+    }
 
     FILE *stream = tmpfile();
     if (stream == NULL) {
@@ -394,7 +399,9 @@ CompiledProcedureObject_print_translation(PyObject *op, PyObject *unused)
 
     if (UNIT_FAILED(UNIT_CompiledProcedure_PrintTranslatedIR(
                         self->compiled_procedure,
-                        stream))) {
+                        stream,
+                        colorize))) {
+        fclose(stream);
         set_py_error_from_context(get_state_from_object(op),
                                   self->compiled_procedure->context);
         return NULL;
@@ -429,7 +436,7 @@ static PyMethodDef CompiledProcedureObject_methods[] = {
      METH_VARARGS, NULL},
     {"jit", CompiledProcedureObject_jit, METH_O, NULL},
     {"print_translation", CompiledProcedureObject_print_translation,
-     METH_NOARGS, NULL},
+     METH_VARARGS, NULL},
     {NULL},
 };
 
@@ -608,8 +615,19 @@ ProcedureObject_add_operation(PyObject *op, PyObject *args)
     ProcedureObject *self = ProcedureObject_CAST(op);
     UNIT_OperationCode instruction;
     int64_t oparg;
+    PyObject *argument;
 
-    if (!PyArg_ParseTuple(args, "iL", &instruction, &oparg)) {
+    if (!PyArg_ParseTuple(args, "iO", &instruction, &argument)) {
+        return NULL;
+    }
+
+    if (instruction >= UNIT_OP_LOAD_UINT8 && instruction <= UNIT_OP_LOAD_UINT64) {
+        oparg = (int64_t)PyLong_AsUnsignedLongLong(argument);
+    } else {
+        oparg = PyLong_AsLongLong(argument);
+    }
+
+    if (oparg == -1 && PyErr_Occurred()) {
         return NULL;
     }
 
@@ -854,11 +872,13 @@ ProcedureObject_print_instructions(PyObject *op, PyObject *args)
 
     int visualize_stack_effect;
     int ignore_errors;
+    int colorize = 0;
 
     if (!PyArg_ParseTuple(args,
-                          "ii",
+                          "ii|p",
                           &visualize_stack_effect,
-                          &ignore_errors)) {
+                          &ignore_errors,
+                          &colorize)) {
         return NULL;
     }
 
@@ -870,7 +890,8 @@ ProcedureObject_print_instructions(PyObject *op, PyObject *args)
 
     if (UNIT_FAILED(UNIT_Procedure_PrintInstructions(&self->procedure,
                                                      stream,
-                                                     visualize_stack_effect))
+                                                     visualize_stack_effect,
+                                                     colorize))
         && !ignore_errors) {
         fclose(stream);
         set_py_error_from_context(get_state_from_object(op),
@@ -991,7 +1012,14 @@ _unit_modexec(PyObject *module)
         }
 
     EXPORT_CONST(UNIT_OP_LOAD_STRING);
-    EXPORT_CONST(UNIT_OP_LOAD_INTEGER);
+    EXPORT_CONST(UNIT_OP_LOAD_INT8);
+    EXPORT_CONST(UNIT_OP_LOAD_INT16);
+    EXPORT_CONST(UNIT_OP_LOAD_INT32);
+    EXPORT_CONST(UNIT_OP_LOAD_INT64);
+    EXPORT_CONST(UNIT_OP_LOAD_UINT8);
+    EXPORT_CONST(UNIT_OP_LOAD_UINT16);
+    EXPORT_CONST(UNIT_OP_LOAD_UINT32);
+    EXPORT_CONST(UNIT_OP_LOAD_UINT64);
 
     EXPORT_CONST(UNIT_OP_LOAD_LOCAL);
     EXPORT_CONST(UNIT_OP_STORE_LOCAL);

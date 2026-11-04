@@ -33,12 +33,13 @@ translate them to register machine instructions.
 .. code-block::
    :caption: :iconify:`ri:stack-fill` Stack machine
 
-   LOAD_INTEGER 1
-   LOAD_INTEGER 2
+   LOAD_INT64 1
+   LOAD_INT64 2
    ADD
 
-After the first two instructions, the stack is ``[1, 2]``. ``1`` and ``2``
-are constant values, so ``ADD`` will use them directly as operands. However,
+After the first two instructions, the stack is ``[i64(1), i64(2)]``.
+``i64(1)`` and ``i64(2)`` are constant values, so ``ADD`` will use them
+directly as operands. However,
 ``ADD`` is not considered constant (because constant folding happens during a
 later optimization pass instead of during translation), so it has to write to
 a register.
@@ -49,18 +50,24 @@ operands:
 .. code-block::
    :caption: :iconify:`ri:cpu-line` Register machine
 
-   location_1 = ADD 1, 2
+   location_0 = ADD(i64(1), i64(2))
+
+Integer constants retain the width and signedness from their load instruction
+in debug IR: signed constants use ``i8(...)`` through ``i64(...)``, and unsigned
+constants use ``u8(...)`` through ``u64(...)``. A narrow load truncates its
+operand and sign-extends or zero-extends it to the 64-bit values used by
+arithmetic. Folded arithmetic results use ``i64(...)``.
 
 Now, let's extend this to use the result of ``ADD`` so we can see how
-``location_1`` flows to the next instruction:
+``location_0`` flows to the next instruction:
 
 .. code-block::
    :caption: :iconify:`ri:stack-fill` Stack machine
 
-   LOAD_INTEGER 1
-   LOAD_INTEGER 2
+   LOAD_INT64 1
+   LOAD_INT64 2
    ADD
-   LOAD_INTEGER 3
+   LOAD_INT64 3
    MULTIPLY
 
 ``ADD`` writes to ``location_0``, so ``MULTIPLY`` will use that as one of its
@@ -69,8 +76,8 @@ operands.
 .. code-block::
    :caption: :iconify:`ri:cpu-line` Register machine
 
-   location_0 = ADD 1, 2
-   location_1 = MULTIPLY location_0, 3
+   location_0 = ADD(i64(1), i64(2))
+   location_1 = MUL(location_0, i64(3))
 
 
 Special destination types
@@ -85,9 +92,9 @@ cleanly:
 .. code-block::
    :caption: :iconify:`ri:stack-fill` Stack machine
 
-   LOAD_INTEGER 1
-   LOAD_INTEGER 2
-   LOAD_INTEGER 3
+   LOAD_INT64 1
+   LOAD_INT64 2
+   LOAD_INT64 3
    PREPARE_CALL 3  # This is a special instruction for calls
    CALL_NAME add
 
@@ -96,7 +103,7 @@ cleanly:
 
    # We can't fit all three arguments into a three-operand instruction,
    # because one of the operands has to contain the name!
-   location_0 = CALL_NAME add, 1, 2
+   location_0 = CALL_SYMBOL(add, i64(1), i64(2))
 
 
 For calls, UNIT solves this by introducing a special "call arguments" type,
@@ -106,7 +113,7 @@ for the above is as follows:
 .. code-block::
    :caption: :iconify:`ri:cpu-line` Register machine
 
-   location_0 = CALL_NAME add, [1, 2, 3]
+   location_0 = CALL_SYMBOL(add, [i64(1), i64(2), i64(3)])
 
 Cases like these are eventually resolved during compilation. We won't cover all
 of the special cases in UNIT's translation step, but if you're confused about
@@ -127,11 +134,11 @@ stack entry, the receiving block defines a new location with a ``PHI`` node:
 .. code-block::
 
    block 1:
-       location_0 = LOAD(10)
-       JUMP(3)
+       location_0 = LOAD(i64(10))
+       JUMP(i64(3))
    block 2:
-       location_1 = LOAD(20)
-       JUMP(3)
+       location_1 = LOAD(i64(20))
+       JUMP(i64(3))
    block 3:
        location_2 = PHI([block 1: location_0], [block 2: location_1])
        RETURN_VALUE(location_2)
@@ -171,28 +178,28 @@ to the first and second register:
 .. code-block::
    :caption: :iconify:`ri:cpu-line` Register machine
 
-   register_0 = ADD 1, 2
-   register_1 = MULTIPLY register_0, 3
+   register_0 = ADD(i64(1), i64(2))
+   register_1 = MUL(register_0, i64(3))
 
 For a more complicated example, let's add a ``SUBTRACT`` instruction:
 
 .. code-block::
    :caption: :iconify:`ri:stack-fill` Stack machine
 
-   LOAD_INTEGER 1
-   LOAD_INTEGER 2
+   LOAD_INT64 1
+   LOAD_INT64 2
    ADD
-   LOAD_INTEGER 3
+   LOAD_INT64 3
    MULTIPLY
-   LOAD_INTEGER 4
+   LOAD_INT64 4
    SUBTRACT
 
 .. code-block::
    :caption: :iconify:`ri:cpu-line` Register machine
 
-   register_0 = ADD 1, 2
-   register_1 = MULTIPLY register_0, 3
-   location_2 = SUBTRACT register_1, 4
+   register_0 = ADD(i64(1), i64(2))
+   register_1 = MUL(register_0, i64(3))
+   location_2 = SUB(register_1, i64(4))
 
 For example's sake, let's limit ourselves to just two registers. This means
 that we can't simply assign ``location_2`` to a third register. So what do we do?
@@ -205,21 +212,21 @@ To visualize:
 .. code-block::
    :caption: :iconify:`ri:cpu-line` Register machine
 
-   location_0 = ADD 1, 2
-   location_1 = MULTIPLY location_0, 3
+   location_0 = ADD(i64(1), i64(2))
+   location_1 = MUL(location_0, i64(3))
    # location_0 is not used after this point, so its register can be used for
    # something else.
-   location_2 = SUBTRACT location_1, 4
+   location_2 = SUB(location_1, i64(4))
 
 
 .. code-block::
    :caption: :iconify:`ri:cpu-line` Register machine
 
-   register_0 = ADD 1, 2
-   register_1 = MULTIPLY register_0, 3
+   register_0 = ADD(i64(1), i64(2))
+   register_1 = MUL(register_0, i64(3))
    # The value from ADD is lost here, but that's okay because we know it won't
    # be used again.
-   register_0 = SUBTRACT register_1, 4
+   register_0 = SUB(register_1, i64(4))
 
 
 But, what happens if we do want to use ``location_0`` again later? Or, more
@@ -236,9 +243,9 @@ To demonstrate, let's limit our example to just a single register:
 .. code-block::
    :caption: :iconify:`ri:cpu-line` Register machine
 
-   register_0 = ADD 1, 2
-   stack_slot_0 = MULTIPLY register_0, 3
-   register_0 = SUBTRACT stack_slot_0, 4
+   register_0 = ADD(i64(1), i64(2))
+   stack_slot_0 = MUL(register_0, i64(3))
+   register_0 = SUB(stack_slot_0, i64(4))
 
 We repeat this process of assigning, reusing, and spilling for every location
 in the translation until there are no locations left. At this point, the

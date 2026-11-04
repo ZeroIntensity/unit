@@ -34,8 +34,8 @@ def process_line() -> None:
         return
 
     procedure = unit.Procedure("expr", optimize_translation=False)
-    procedure.load_integer(left)
-    procedure.load_integer(right)
+    procedure.load_int64(left)
+    procedure.load_int64(right)
 
     if op == "+":
         procedure.add()
@@ -56,7 +56,7 @@ def process_line() -> None:
 
     procedure.return_value()
     compiled = procedure.compile()
-    print(compiled.translation_text())
+    print(compiled.translation_text(colorize=True))
     executable = compiled.jit()
     print(executable())
 

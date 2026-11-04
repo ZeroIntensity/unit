@@ -23,7 +23,7 @@ Procedures
 
       # Simple usage
       proc = unit.Procedure("main")
-      proc.load_integer(42)
+      proc.load_int64(42)
       proc.return_value()
 
       # With explicit options
@@ -75,15 +75,57 @@ Procedures
 
    **Stack Operations**
 
-   .. py:method:: load_integer(value) -> None
+   Integer loads truncate to their specified width, then sign-extend or
+   zero-extend to a 64-bit stack value. Debug IR preserves the load type,
+   for example ``i64(42)`` or ``u8(255)``. Subsequent arithmetic operates
+   on 64-bit values.
 
-      Push an integer constant onto the stack.
-      See :c:macro:`UNIT_OP_LOAD_INTEGER`.
+   .. py:method:: load_int8(value) -> None
 
-      **Stack effect:** ``-- value``
+      Push a signed 8-bit integer constant.
+      See :c:enumerator:`UNIT_OP_LOAD_INT8`.
 
-      :param int value: The integer to push.
-      :raises TypeError: If *value* is not an int.
+   .. py:method:: load_int16(value) -> None
+
+      Push a signed 16-bit integer constant.
+      See :c:enumerator:`UNIT_OP_LOAD_INT16`.
+
+   .. py:method:: load_int32(value) -> None
+
+      Push a signed 32-bit integer constant.
+      See :c:enumerator:`UNIT_OP_LOAD_INT32`.
+
+   .. py:method:: load_int64(value) -> None
+
+      Push a signed 64-bit integer constant.
+      See :c:enumerator:`UNIT_OP_LOAD_INT64`.
+
+   .. py:method:: load_uint8(value) -> None
+
+      Push an unsigned 8-bit integer constant.
+      See :c:enumerator:`UNIT_OP_LOAD_UINT8`.
+
+   .. py:method:: load_uint16(value) -> None
+
+      Push an unsigned 16-bit integer constant.
+      See :c:enumerator:`UNIT_OP_LOAD_UINT16`.
+
+   .. py:method:: load_uint32(value) -> None
+
+      Push an unsigned 32-bit integer constant.
+      See :c:enumerator:`UNIT_OP_LOAD_UINT32`.
+
+   .. py:method:: load_uint64(value) -> None
+
+      Push an unsigned 64-bit integer constant.
+      See :c:enumerator:`UNIT_OP_LOAD_UINT64`.
+
+   **Stack effect:** ``-- value``
+
+   All integer load methods require an ``int``. Signed loads accept operands
+   in the signed 64-bit range; unsigned loads accept operands from ``0`` to
+   ``2**64 - 1``. Values outside those ranges raise ``OverflowError`` before
+   narrowing to the chosen width. Other argument types raise ``TypeError``.
 
    .. py:method:: load_string(value) -> None
 
@@ -142,8 +184,8 @@ Procedures
 
       .. code-block:: python
 
-         proc.load_integer(10)   # stack: [10]
-         proc.load_integer(20)   # stack: [10, 20]
+         proc.load_int64(10)   # stack: [10]
+         proc.load_int64(20)   # stack: [10, 20]
          proc.copy(1)            # stack: [10, 20, 10]
 
    .. py:method:: swap(offset_from_top) -> None
@@ -279,8 +321,8 @@ Procedures
    .. code-block:: python
 
       end = proc.create_jump_label("end")
-      proc.load_integer(5)
-      proc.load_integer(5)
+      proc.load_int64(5)
+      proc.load_int64(5)
       proc.compare_equal()
       proc.jump_if_true(end)
       # ... not-equal path ...
@@ -307,7 +349,7 @@ Procedures
       .. code-block:: python
 
          proc.load_string("%d\n")
-         proc.load_integer(42)
+         proc.load_int64(42)
          proc.call_name("printf", 2)
          proc.pop()  # discard printf return value
 

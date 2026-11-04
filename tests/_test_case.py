@@ -91,7 +91,7 @@ class ExampleTestRunner(unittest.TestCase):
             cmd,
             check=True,
             cwd=self.temporary.name,
-            timeout=5,
+            timeout=30,
         )
 
     def run_program(

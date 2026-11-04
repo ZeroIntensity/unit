@@ -76,7 +76,8 @@ compile_procedure(const UNIT_Procedure *procedure,
     if (procedure->flags & UNIT_FLAG_PRINT_TRANSLATION_PREOP) {
         _UNIT_Translation_PrintInstructions(&compiled_procedure->_translation,
                                             procedure->name,
-                                            stdout);
+                                            stdout,
+                                            0);
     }
 
     if (UNIT_FAILED(_UNIT_CompileContext_Init(&compiled_procedure->_compile_context,
@@ -90,9 +91,11 @@ compile_procedure(const UNIT_Procedure *procedure,
     }
 
     int8_t num_registers = UNIT_Platform_GET_ABI(platform) == UNIT_ABI_WIN64 ? 6 : 8;
-    if (UNIT_FAILED(_UNIT_Translation_AllocateRegisters(&compiled_procedure->_translation,
-                                                        &compiled_procedure->_compile_context,
-                                                        num_registers))
+    if ((!(procedure->flags & UNIT_FLAG_NO_OPTIMIZE_TRANSLATION)
+         && UNIT_FAILED(_UNIT_Translation_SinkConstants(&compiled_procedure->_translation)))
+        || UNIT_FAILED(_UNIT_Translation_AllocateRegisters(&compiled_procedure->_translation,
+                                                           &compiled_procedure->_compile_context,
+                                                           num_registers))
         || UNIT_FAILED(_UNIT_Translation_LowerPhis(&compiled_procedure->_translation,
                                                    &compiled_procedure->_compile_context))) {
         goto error;
@@ -107,7 +110,8 @@ compile_procedure(const UNIT_Procedure *procedure,
     if (procedure->flags & UNIT_FLAG_PRINT_TRANSLATION_POSTOP) {
         _UNIT_Translation_PrintInstructions(&compiled_procedure->_translation,
                                             procedure->name,
-                                            stdout);
+                                            stdout,
+                                            0);
     }
 
     if (UNIT_FAILED(build_constant_data(
@@ -529,11 +533,13 @@ UNIT_CompiledProcedure_WriteObjectFile(const UNIT_CompiledProcedure *compiled,
 UNIT_Status
 UNIT_CompiledProcedure_PrintTranslatedIR(
     const UNIT_CompiledProcedure *compiled,
-    FILE *stream)
+    FILE *stream,
+    int8_t colorize)
 {
     assert(compiled != NULL);
     assert(stream != NULL);
     return _UNIT_Translation_PrintInstructions(&compiled->_translation,
                                                compiled->name,
-                                               stream);
+                                               stream,
+                                               colorize);
 }

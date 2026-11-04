@@ -6,6 +6,60 @@
 #include <unit/internal/ir/procedure.h>
 #include <unit/internal/allocation.h>
 
+int64_t
+_UNIT_IntegerType_Convert(UNIT_IntegerType type, int64_t value)
+{
+    switch (type) {
+        case UNIT_TYPE_INT8: {return (int8_t)value;}
+        case UNIT_TYPE_INT16: {return (int16_t)value;}
+        case UNIT_TYPE_INT32: {return (int32_t)value;}
+        case UNIT_TYPE_INT64: {return value;}
+        case UNIT_TYPE_UINT8: {return (uint8_t)value;}
+        case UNIT_TYPE_UINT16: {return (uint16_t)value;}
+        case UNIT_TYPE_UINT32: {return (uint32_t)value;}
+        case UNIT_TYPE_UINT64: {return value;}
+    }
+    _UNIT_Unreachable();
+}
+
+UNIT_Status
+_UNIT_IntegerType_Print(UNIT_Context *context,
+                        FILE *stream,
+                        UNIT_IntegerType type,
+                        int64_t value,
+                        int8_t colorize)
+{
+    static const char *const names[] = {"i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64"};
+    assert(type >= UNIT_TYPE_INT8 && type <= UNIT_TYPE_UINT64);
+    int result;
+    if (type >= UNIT_TYPE_UINT8) {
+        result = fprintf(stream,
+                         "%s%s%s(%s%llu%s)",
+                         _UNIT_COLOR(colorize, TYPE),
+                         names[type],
+                         _UNIT_COLOR(colorize, FOREGROUND),
+                         _UNIT_COLOR(colorize, INTEGER),
+                         (unsigned long long)value,
+                         _UNIT_COLOR(colorize, FOREGROUND));
+    } else {
+        result = fprintf(stream,
+                         "%s%s%s(%s%lld%s)",
+                         _UNIT_COLOR(colorize, TYPE),
+                         names[type],
+                         _UNIT_COLOR(colorize, FOREGROUND),
+                         _UNIT_COLOR(colorize, INTEGER),
+                         (long long)value,
+                         _UNIT_COLOR(colorize, FOREGROUND));
+    }
+
+    if (result < 0) {
+        _UNIT_SetOSError(context, "printing integer");
+        return _UNIT_FAIL;
+    }
+
+    return _UNIT_OK;
+}
+
 void
 _UNIT_JumpLabel_Free(UNIT_Context *context,
                      void *ptr)
@@ -347,7 +401,14 @@ UNIT_OperationCode_GetName(UNIT_OperationCode instruction)
             return #name
     switch (instruction) {
         NAME(LOAD_STRING);
-        NAME(LOAD_INTEGER);
+        NAME(LOAD_INT8);
+        NAME(LOAD_INT16);
+        NAME(LOAD_INT32);
+        NAME(LOAD_INT64);
+        NAME(LOAD_UINT8);
+        NAME(LOAD_UINT16);
+        NAME(LOAD_UINT32);
+        NAME(LOAD_UINT64);
 
         case _UNIT_OP_LOAD_LOCAL_NAME: {
             NAME(LOAD_LOCAL);
@@ -413,6 +474,8 @@ typedef enum {
 
 typedef struct {
     DebugStackType type;
+    int8_t is_unknown;
+    UNIT_IntegerType integer_type;
     union {
         int64_t value;
         const char *string;
@@ -422,7 +485,8 @@ typedef struct {
 static UNIT_Status
 print_debug_item(UNIT_Context *context,
                  DebugStackItem *item,
-                 FILE *stream)
+                 FILE *stream,
+                 int8_t colorize)
 {
     assert(context != NULL);
     assert(item != NULL);
@@ -434,15 +498,36 @@ print_debug_item(UNIT_Context *context,
             return _UNIT_FAIL;                           \
         }
 
+    if (item->is_unknown) {
+        PRINT("unknown (");
+    }
+
+    if (item->type != DEBUG_TYPE_INT) {
+        PRINT("%s",
+              item->type == DEBUG_TYPE_STRING
+                    ? _UNIT_COLOR(colorize, STRING)
+                    : _UNIT_COLOR(colorize, RESULT));
+    }
+
     switch (item->type) {
         case DEBUG_TYPE_INT: {
-            PRINT("%lld", (long long)item->value);
+            if (UNIT_FAILED(_UNIT_IntegerType_Print(context,
+                                                    stream,
+                                                    item->integer_type,
+                                                    item->value,
+                                                    colorize))) {
+                return _UNIT_FAIL;
+            }
+
             break;
         }
 
         case DEBUG_TYPE_STRING: {
             PRINT("\"");
-            _UNIT_PrintString(context, item->string, stream);
+            if (UNIT_FAILED(_UNIT_PrintString(context, item->string, stream))) {
+                return _UNIT_FAIL;
+            }
+
             PRINT("\"");
             break;
         }
@@ -493,6 +578,14 @@ print_debug_item(UNIT_Context *context,
         }
     }
 
+    if (item->type != DEBUG_TYPE_INT) {
+        PRINT("%s", _UNIT_COLOR(colorize, FOREGROUND));
+    }
+
+    if (item->is_unknown) {
+        PRINT(")");
+    }
+
 #undef PRINT
 
     return _UNIT_OK;
@@ -500,7 +593,8 @@ print_debug_item(UNIT_Context *context,
 
 static UNIT_Status
 print_debug_stack(_UNIT_Vector *debug_stack,
-                  FILE *stream)
+                  FILE *stream,
+                  int8_t colorize)
 {
     assert(debug_stack != NULL);
     assert(stream != NULL);
@@ -519,7 +613,8 @@ print_debug_stack(_UNIT_Vector *debug_stack,
         assert(item != NULL);
         if (UNIT_FAILED(print_debug_item(debug_stack->context,
                                          item,
-                                         stream))) {
+                                         stream,
+                                         colorize))) {
             return _UNIT_FAIL;
         }
 
@@ -581,6 +676,7 @@ deduce_stack_effect(const UNIT_Procedure *procedure,
                 return _UNIT_FAIL;                                      \
             }                                                           \
             item->type = tp;                                            \
+            item->is_unknown = 0;                                       \
             item->value = (int64_t)(the_value);                         \
             if (UNIT_FAILED(_UNIT_Vector_Append(debug_stack, item))) {  \
                 return _UNIT_FAIL;                                      \
@@ -590,8 +686,19 @@ deduce_stack_effect(const UNIT_Procedure *procedure,
     int64_t oparg = op->argument;
 
     switch (op->instruction) {
-        case UNIT_OP_LOAD_INTEGER: {
-            PUSH(DEBUG_TYPE_INT, oparg);
+        case UNIT_OP_LOAD_INT8:
+        case UNIT_OP_LOAD_INT16:
+        case UNIT_OP_LOAD_INT32:
+        case UNIT_OP_LOAD_INT64:
+        case UNIT_OP_LOAD_UINT8:
+        case UNIT_OP_LOAD_UINT16:
+        case UNIT_OP_LOAD_UINT32:
+        case UNIT_OP_LOAD_UINT64: {
+            UNIT_IntegerType type = _UNIT_OperationCode_GetIntegerType(op->instruction);
+            PUSH(DEBUG_TYPE_INT, _UNIT_IntegerType_Convert(type, oparg));
+            DebugStackItem *item = _UNIT_Vector_GET(debug_stack,
+                                                    _UNIT_Vector_SIZE(debug_stack) - 1);
+            item->integer_type = type;
             break;
         }
 
@@ -823,7 +930,8 @@ deduce_stack_effect(const UNIT_Procedure *procedure,
 UNIT_Status
 UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure,
                                  FILE *stream,
-                                 int8_t visualize_stack_effect)
+                                 int8_t visualize_stack_effect,
+                                 int8_t colorize)
 {
     assert(procedure != NULL);
     assert(stream != NULL);
@@ -836,14 +944,36 @@ UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure,
         return _UNIT_FAIL;
     }
 
+    int8_t *jump_targets = NULL;
+    UNIT_Size size = _UNIT_Vector_SIZE(&procedure->_instructions);
+    UNIT_Size label_count = _UNIT_Vector_SIZE(&procedure->_jump_labels);
+    if (visualize_stack_effect && label_count > 0) {
+        jump_targets = _UNIT_Calloc(procedure->context, label_count, sizeof(*jump_targets));
+        if (jump_targets == NULL) {
+            goto error;
+        }
+
+        for (UNIT_Size index = 0; index < size; ++index) {
+            _UNIT_Operation *operation = _UNIT_Vector_GET(&procedure->_instructions, index);
+            if ((operation->instruction == UNIT_OP_JUMP
+                 || operation->instruction == UNIT_OP_JUMP_IF_TRUE
+                 || operation->instruction == UNIT_OP_JUMP_IF_FALSE)
+                && _UNIT_Vector_INDEX_IS_VALID(&procedure->_jump_labels, operation->argument)) {
+                jump_targets[operation->argument] = 1;
+            }
+        }
+    }
+
 #define PRINT(...)                                            \
         if (fprintf(stream, __VA_ARGS__) < 0) {               \
             _UNIT_SetOSError(procedure->context, "printing"); \
             goto error;                                       \
         }
 
-    PRINT("procedure \"%s\":\n", procedure->name);
-    UNIT_Size size = _UNIT_Vector_SIZE(&procedure->_instructions);
+    PRINT("procedure \"%s%s%s\":\n",
+          _UNIT_COLOR(colorize, LABEL),
+          procedure->name,
+          _UNIT_COLOR(colorize, FOREGROUND));
     for (UNIT_Size index = 0; index < size; ++index) {
         _UNIT_Operation *operation =
             _UNIT_Vector_GET(&procedure->_instructions,
@@ -854,22 +984,53 @@ UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure,
                                                      operation->argument);
             assert(label != NULL);
             assert(label->name != NULL);
-            PRINT("    label %s [%d]:\n", label->name, label->id);
+            PRINT("    %slabel %s [%d]:%s\n",
+                  _UNIT_COLOR(colorize, LABEL),
+                  label->name,
+                  label->id,
+                  _UNIT_COLOR(colorize, FOREGROUND));
+            if (jump_targets != NULL && jump_targets[operation->argument]) {
+                // Other incoming paths, including loop backedges, can supply
+                // different values than the preceding instruction in layout.
+                for (UNIT_Size i = 0; i < _UNIT_Vector_SIZE(&debug_stack); ++i) {
+                    DebugStackItem *item = _UNIT_Vector_GET(&debug_stack, i);
+                    item->is_unknown = 1;
+                }
+            }
+
             continue;
         }
 
-        PRINT("    %td    %s",
+        PRINT("%s    %td    %s%s%s",
+              _UNIT_COLOR(colorize, BACKGROUND),
               index,
-              UNIT_OperationCode_GetName(operation->instruction));
-        if (operation->argument != 0
-            || operation->instruction == UNIT_OP_LOAD_INTEGER
-            || operation->instruction == UNIT_OP_LOAD_ARGUMENT
-            || operation->instruction == UNIT_OP_STORE_LOCAL
-            || operation->instruction == UNIT_OP_LOAD_LOCAL
-            || operation->instruction == _UNIT_OP_STORE_LOCAL_NAME
-            || operation->instruction == _UNIT_OP_LOAD_LOCAL_NAME
-            || operation->instruction == UNIT_OP_ADDRESS_OF) {
-            PRINT("  %lld", (long long)operation->argument);
+              _UNIT_COLOR(colorize, INSTRUCTION),
+              UNIT_OperationCode_GetName(operation->instruction),
+              _UNIT_COLOR(colorize, FOREGROUND));
+        if (_UNIT_OperationCode_IsIntegerLoad(operation->instruction)) {
+            UNIT_IntegerType type = _UNIT_OperationCode_GetIntegerType(operation->instruction);
+            if (type >= UNIT_TYPE_UINT8) {
+                PRINT("  %s%llu%s",
+                      _UNIT_COLOR(colorize, INTEGER),
+                      (unsigned long long)(uint64_t)operation->argument,
+                      _UNIT_COLOR(colorize, FOREGROUND));
+            } else {
+                PRINT("  %s%lld%s",
+                      _UNIT_COLOR(colorize, INTEGER),
+                      (long long)operation->argument,
+                      _UNIT_COLOR(colorize, FOREGROUND));
+            }
+        } else if (operation->argument != 0
+                   || operation->instruction == UNIT_OP_LOAD_ARGUMENT
+                   || operation->instruction == UNIT_OP_STORE_LOCAL
+                   || operation->instruction == UNIT_OP_LOAD_LOCAL
+                   || operation->instruction == _UNIT_OP_STORE_LOCAL_NAME
+                   || operation->instruction == _UNIT_OP_LOAD_LOCAL_NAME
+                   || operation->instruction == UNIT_OP_ADDRESS_OF) {
+            PRINT("  %s%lld%s",
+                  _UNIT_COLOR(colorize, INTEGER),
+                  (long long)operation->argument,
+                  _UNIT_COLOR(colorize, FOREGROUND));
         }
 
         switch (operation->instruction) {
@@ -877,7 +1038,10 @@ UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure,
                 const char *name = _UNIT_Vector_GET(&procedure->_symbols,
                                                     operation->argument);
                 assert(name != NULL);
-                PRINT(" (%s)", name);
+                PRINT(" (%s%s%s)",
+                      _UNIT_COLOR(colorize, LABEL),
+                      name,
+                      _UNIT_COLOR(colorize, FOREGROUND));
                 break;
             }
 
@@ -886,7 +1050,11 @@ UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure,
                     _UNIT_Vector_GET(&procedure->_subprocedures,
                                      operation->argument);
                 assert(subprocedure != NULL);
-                PRINT(" (%p: %s)", subprocedure, subprocedure->name);
+                PRINT(" (%p: %s%s%s)",
+                      subprocedure,
+                      _UNIT_COLOR(colorize, LABEL),
+                      subprocedure->name,
+                      _UNIT_COLOR(colorize, FOREGROUND));
                 break;
             }
             case UNIT_OP_LOAD_STRING: {
@@ -894,9 +1062,12 @@ UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure,
                     _UNIT_Vector_GET(&procedure->_global_strings,
                                      operation->argument);
                 assert(text != NULL);
-                PRINT(" (");
-                _UNIT_PrintString(procedure->context, text, stream);
-                PRINT(")");
+                PRINT(" (%s", _UNIT_COLOR(colorize, STRING));
+                if (UNIT_FAILED(_UNIT_PrintString(procedure->context, text, stream))) {
+                    goto error;
+                }
+
+                PRINT("%s)", _UNIT_COLOR(colorize, FOREGROUND));
                 break;
             }
             case _UNIT_OP_STORE_LOCAL_NAME:
@@ -915,7 +1086,11 @@ UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure,
                     _UNIT_Vector_GET(&procedure->_jump_labels,
                                      operation->argument);
                 assert(label != NULL);
-                PRINT(" (%s [%d])", label->name, label->id);
+                PRINT(" (%s%s [%d]%s)",
+                      _UNIT_COLOR(colorize, LABEL),
+                      label->name,
+                      label->id,
+                      _UNIT_COLOR(colorize, FOREGROUND));
                 break;
 
             }
@@ -925,7 +1100,7 @@ UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure,
             }
         }
 
-        PRINT("\n");
+        PRINT("%s\n", _UNIT_COLOR(colorize, RESET));
 
         if (visualize_stack_effect) {
             PRINT("      ");
@@ -936,7 +1111,7 @@ UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure,
                 goto error;
             }
 
-            if (UNIT_FAILED(print_debug_stack(&debug_stack, stream))) {
+            if (UNIT_FAILED(print_debug_stack(&debug_stack, stream, colorize))) {
                 goto error;
             }
 
@@ -944,9 +1119,17 @@ UNIT_Procedure_PrintInstructions(const UNIT_Procedure *procedure,
         }
     }
 
+    if (jump_targets != NULL) {
+        _UNIT_Dealloc(procedure->context, jump_targets);
+    }
+
     _UNIT_Vector_Clear(&debug_stack);
     return _UNIT_OK;
 error:
+    if (jump_targets != NULL) {
+        _UNIT_Dealloc(procedure->context, jump_targets);
+    }
+
     _UNIT_Vector_Clear(&debug_stack);
     return _UNIT_FAIL;
 }
