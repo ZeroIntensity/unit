@@ -1,7 +1,10 @@
+import io
 import subprocess
 import sys
 import unittest
 from pathlib import Path
+
+from examples.language_with_jit import Interpreter, Parser
 
 
 class TestLanguageWithJIT(unittest.TestCase):
@@ -158,6 +161,17 @@ class TestLanguageWithJIT(unittest.TestCase):
         print parameters(42, 24)
         """
         self.assert_output(source, "123", "42", "24", "24")
+
+    def test_repeated_interpretation(self):
+        output = io.StringIO()
+        interpreter = Interpreter(out_file=output)
+        for source in (
+            "func identity(n) { return n }",
+            "print identity(42)",
+            "print identity(43)",
+        ):
+            interpreter.interpret(list(Parser.parse(source).codegen()))
+        self.assertEqual(output.getvalue(), "42\n43\n")
 
     def test_factorial(self):
         source = """

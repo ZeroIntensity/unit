@@ -809,6 +809,7 @@ class Interpreter:
                 item.index = index
 
     def interpret(self, code: Sequence[Code]) -> None:
+        self._index = 0
         self._populate_jump_label_indices(code)
 
         while self._index < len(code):
