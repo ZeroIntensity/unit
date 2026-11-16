@@ -38,9 +38,12 @@ Procedures
       :returns: A compiled procedure ready for JIT or object file output.
       :throws unit::error: If compilation fails.
 
-   .. cpp:function:: void print_instructions(FILE *stream = stdout)
+   .. cpp:function:: void print_instructions(FILE *stream = stdout, bool colorize = false)
 
       Print the stack IR to a file stream. Useful for debugging.
+
+      :param stream: The output stream.
+      :param colorize: Whether to use colored output.
 
    .. cpp:function:: void set_flags(Flag flags)
 
@@ -496,9 +499,12 @@ Compiled procedures
       :param format: Object file format (e.g., ``ExecutableFormat::ELF``).
       :throws unit::error: If writing fails.
 
-   .. cpp:function:: void print_translated(FILE *stream = stdout)
+   .. cpp:function:: void print_translated(FILE *stream = stdout, bool colorize = false)
 
       Print the register IR to a file stream. Useful for debugging.
+
+      :param stream: The output stream.
+      :param colorize: Whether to use colored output.
 
    .. cpp:function:: UNIT_CompiledProcedure *raw() const
 
